@@ -16,7 +16,7 @@ conversion_dict = {"R": [1, 0, 0],
                    }
 
 # Couleurs voulues pour l'affichage
-colors = ["C", "Y"]
+colors = ["R", "G"]
 
 for i, folder in enumerate(folders):
     files = next(walk(path + folder + "/"))[2]
@@ -44,7 +44,7 @@ for i, folder in enumerate(folders):
 
     # Affichage d'un channel en format Matplotlib
     plt.imshow(single_int)
-    plt.show()
+    # plt.show()
 
 stack += single
 stack_int = np.array(np.round(stack), dtype = np.uint8)
