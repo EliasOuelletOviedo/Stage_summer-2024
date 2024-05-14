@@ -2,9 +2,10 @@ from PIL import Image as Im
 from os import walk
 import numpy as np
 
-path = "/Users/eliasouellet-oviedo/Documents/Stage 2/Données/2024-05-13/VMS/2024-05-13_pollen/pollen-001/Bliq VMS/"
+path = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-05-13/VMS/Pollen/"
 folders = next(walk(path))[1]
 
+# Dictionnaire de correspondance entre les valeurs RGB et CMY
 conversion_dict = {"R": [1, 0, 0],
                    "G": [0, 1, 0],
                    "B": [0, 0, 1],
@@ -13,6 +14,7 @@ conversion_dict = {"R": [1, 0, 0],
                    "Y": [0.5, 0.5, 0],
                    }
 
+# Couleurs voulues pour l'affichage
 colors = ["R", "G"]
 
 for i, folder in enumerate(folders):
@@ -33,12 +35,13 @@ for i, folder in enumerate(folders):
         for j, v in enumerate(conversion_dict[colors[i]]):
             single[..., j] = single[..., j] + v*single_arr/N
 
+    # Affichage d'un channel
     single_int = np.array(np.round(single), dtype = np.uint8)
     single_im = Im.fromarray(single_int, mode = "RGB")
     single_im.show()
 
+# Affichage de la superposition des channels
 stack += single
 stack_int = np.array(np.round(stack), dtype = np.uint8)
-
 stack_im = Im.fromarray(stack_int, mode = "RGB")
 stack_im.show()
