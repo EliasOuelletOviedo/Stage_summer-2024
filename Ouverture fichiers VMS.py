@@ -1,6 +1,7 @@
 from PIL import Image as Im
 from os import walk
 import numpy as np
+import matplotlib.pyplot as plt
 
 path = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-05-13/VMS/Pollen/"
 folders = next(walk(path))[1]
@@ -15,7 +16,7 @@ conversion_dict = {"R": [1, 0, 0],
                    }
 
 # Couleurs voulues pour l'affichage
-colors = ["R", "G"]
+colors = ["C", "Y"]
 
 for i, folder in enumerate(folders):
     files = next(walk(path + folder + "/"))[2]
@@ -35,13 +36,23 @@ for i, folder in enumerate(folders):
         for j, v in enumerate(conversion_dict[colors[i]]):
             single[..., j] = single[..., j] + v*single_arr/N
 
-    # Affichage d'un channel
     single_int = np.array(np.round(single), dtype = np.uint8)
+
+    # Affichage d'un channel en format PNG
     single_im = Im.fromarray(single_int, mode = "RGB")
     single_im.show()
 
-# Affichage de la superposition des channels
+    # Affichage d'un channel en format Matplotlib
+    plt.imshow(single_int)
+    plt.show()
+
 stack += single
 stack_int = np.array(np.round(stack), dtype = np.uint8)
+
+# Affichage de la superposition des channels en format PNG
 stack_im = Im.fromarray(stack_int, mode = "RGB")
 stack_im.show()
+
+# Affichage de la superposition des channels en format Matplotlib
+plt.imshow(stack_int)
+plt.show()
