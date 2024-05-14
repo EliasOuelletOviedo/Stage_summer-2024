@@ -40,7 +40,7 @@ for i, folder in enumerate(folders):
 
     # Affichage d'un channel en format PNG
     single_im = Im.fromarray(single_int, mode = "RGB")
-    single_im.show()
+    # single_im.show()
 
     # Affichage d'un channel en format Matplotlib
     plt.imshow(single_int)
@@ -51,7 +51,7 @@ stack_int = np.array(np.round(stack), dtype = np.uint8)
 
 # Affichage de la superposition des channels en format PNG
 stack_im = Im.fromarray(stack_int, mode = "RGB")
-stack_im.show()
+# stack_im.show()
 
 # Affichage de la superposition des channels en format Matplotlib
 plt.imshow(stack_int)
