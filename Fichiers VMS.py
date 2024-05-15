@@ -53,10 +53,10 @@ for i, path in enumerate(paths):
     single = np.zeros((h, w),float)
 
     for file in files:
-        stack[...,i] = stack[...,i] + np.array(Im.open(path + "/" + file), dtype = float)
+        stack[...,i] = stack[...,i] + np.array(Im.open(path + "/" + file), dtype = float)/N
 
-    for k, v in enumerate(normal_conversion_dict[colors[i]]):
-        RGB_stack[...,k] = RGB_stack[...,k] + v*stack[...,i]/N
+    for k, v in enumerate(conversion_dict[colors[i]]):
+        RGB_stack[...,k] = RGB_stack[...,k] + v*stack[...,i]
 
     # Affichage d'un channel en format Matplotlib
     cmap = LSC.from_list("Custom", [(0, 0, 0), conversion_dict[colors[i]]])
@@ -66,6 +66,7 @@ for i, path in enumerate(paths):
 stack = stack[...,0] - stack[...,1]
 cmap = LSC.from_list("Custom", [conversion_dict[colors[1]], (0, 0, 0), conversion_dict[colors[0]]])
 im = axes[1, 1].imshow(stack, cmap = cmap)
+im.set_clim(-200,200)
 plt.colorbar(im, ax = axes[1, 1])
 
 RGB_stack_int = np.array(np.round(RGB_stack), dtype = np.uint8)
