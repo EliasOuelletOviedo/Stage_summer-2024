@@ -21,7 +21,6 @@ def openfile():
     plot = fig.add_subplot(111) 
   
     plot.imshow(np.matrix(array), cmap='gray')
-    plt.colorbar(plot)
 
     canvas = FigureCanvasTkAgg(fig, master = root)   
     canvas.draw() 
