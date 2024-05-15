@@ -16,4 +16,3 @@ array = array[-513:-1:,]
 plt.imshow(np.matrix(array), cmap='gray')
 plt.colorbar()
 plt.show()
-
