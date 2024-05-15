@@ -9,19 +9,29 @@ path = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-05-13/
 
 file = SdtFile(path)
 
-if len(file.data[0]) == 1048576:
-    array = np.squeeze(np.array(file.data)).reshape((1024, 1024, 256))
+# if len(file.data[0]) == 1048576:
+#     array = np.squeeze(np.array(file.data)).reshape((1024, 1024, 256))
 
-    plt.imshow(np.matrix(array.mean(2)[::2,:]), cmap='gray')
-    plt.colorbar()
-    plt.show()
+#     plt.imshow(np.matrix(array.sum(2)[::2,:]), cmap='gray')
+#     plt.colorbar()
+#     plt.show()
 
-elif len(file.data[0]) == 2097152:
-    array = np.squeeze(np.array(file.data)).reshape((2048, 1024, 256))
+# elif len(file.data[0]) == 2097152:
+#     array = np.squeeze(np.array(file.data)).reshape((2048, 1024, 256))
 
-    plt.imshow(np.matrix(array.mean(2)[24:1047:2,:]), cmap='gray')
-    plt.colorbar()
-    plt.show()
+#     plt.imshow(np.matrix(array.sum(2)[24:1047:2,:]), cmap='gray')
+#     plt.colorbar()
+#     plt.show()
 
-else:
-    print("Erreur de format d'image")
+# else:
+#     print("Erreur de format d'image")
+
+
+array = np.squeeze(np.array(file.data)).reshape((-1, 1024, 256)).sum(2)[::2,]
+array = array[~np.all(array == 0, axis=1)]
+array = array[-513:-1:,]
+
+plt.imshow(np.matrix(array), cmap='gray')
+plt.colorbar()
+plt.show()
+
