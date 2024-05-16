@@ -42,7 +42,7 @@ for n in range(nb):
 fig, axes = plt.subplots(nrows=nb, ncols=nb)
 
 for i, path in enumerate(paths):
-    files = next(walk(path))[2]
+    files = sorted(next(walk(path))[2])
     N = len(files)
 
     if i == 0:

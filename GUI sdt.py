@@ -20,7 +20,8 @@ def openfile():
 
     plot = fig.add_subplot(111) 
   
-    plot.imshow(np.matrix(array), cmap='gray')
+    im = plot.imshow(np.matrix(array), cmap='gray')
+    plt.colorbar(im)
 
     canvas = FigureCanvasTkAgg(fig, master = root)   
     canvas.draw() 
@@ -35,6 +36,7 @@ def openfile():
 root = Tk()
 root.geometry("1440x900")
 
-ttk.Button(root, text="Open", command=openfile).pack(side = BOTTOM, pady = 10)
+ttk.Button(root, text="Delete", command=openfile).pack(side = BOTTOM, pady = 10)
+ttk.Button(root, text="Open", command=openfile).pack(side = BOTTOM, pady = 0)
 
 root.mainloop()
