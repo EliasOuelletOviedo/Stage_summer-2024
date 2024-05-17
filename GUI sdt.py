@@ -33,10 +33,11 @@ def openfile():
   
     canvas.get_tk_widget().pack(pady = 10)
 
+
 root = Tk()
 root.geometry("1440x900")
 
-ttk.Button(root, text="Delete", command=openfile).pack(side = BOTTOM, pady = 10)
+# ttk.Button(root, text="Delete", command=delete).pack(side = BOTTOM, pady = 10)
 ttk.Button(root, text="Open", command=openfile).pack(side = BOTTOM, pady = 0)
 
 root.mainloop()
