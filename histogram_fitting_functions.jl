@@ -3,6 +3,7 @@ using PyCall
 using FFTW
 using Statistics
 using Distributed
+using DelimitedFiles
 
 @everywhere sp_o = pyimport("scipy.optimize")
 
@@ -405,7 +406,86 @@ end
     end
 end
 
-counts = [6, 9, 9, 8, 10, 10, 13, 11, 11, 8, 11, 7, 15, 6, 7, 11, 7, 12, 9, 14, 12, 12, 9, 14, 13, 12, 9, 109, 504, 908, 1180, 1363, 1448, 1476, 1365, 1427, 1350, 1384, 1352, 1244, 1252, 1207, 1155, 1116, 996, 1033, 1004, 908, 874, 917, 873, 807, 764, 705, 772, 662, 618, 670, 626, 598, 557, 547, 531, 540, 529, 459, 462, 464, 402, 391, 393, 402, 344, 350, 312, 315, 319, 309, 339, 286, 287, 270, 282, 217, 232, 238, 233, 211, 181, 204, 198, 184, 181, 185, 187, 135, 164, 129, 169, 124, 136, 117, 132, 116, 98, 102, 115, 111, 99, 105, 97, 90, 85, 74, 71, 83, 76, 61, 53, 72, 66, 77, 83, 49, 47, 59, 55, 66, 44, 48, 45, 48, 44, 37, 46, 40, 29, 36, 39, 39, 41, 43, 35, 37, 33, 26, 39, 32, 29, 24, 28, 22, 33, 31, 21, 41, 27, 24, 23, 25, 19, 17, 21, 19, 23, 25, 25, 16, 15, 15, 18, 13, 12, 16, 22, 18, 19, 20, 12, 22, 13, 15, 13, 21, 16, 17, 17, 11, 9, 17, 8, 12, 9, 10, 13, 9, 18, 14, 13, 5, 12, 11, 10, 14, 25, 11, 15, 14, 10, 13, 11, 12, 12, 11, 11, 10, 16, 8, 21, 16, 12, 8, 6, 14, 8, 11, 10, 11, 15, 19, 14, 13, 8, 13, 10, 10, 14, 20, 9, 10, 11, 12, 6, 11, 14, 11, 12, 12, 10, 14, 9, 9, 9, 12, 7, 8]
+@everywhere function get_file()
+    if isfile("file_filepath.txt")
+        filepath = open(f->read(f, String), "file_filepath.txt")
+    else
+        filepath = open_dialog("File: Choose .sdt file to open.")
+        open("file_filepath.txt", "w") do io
+            write(io, filepath)
+        end
+    end
+
+    py"""
+    from sdtfile import SdtFile
+    import numpy as np
+
+    filepath = $filepath
+
+    file = SdtFile(filepath)
+    pyarray = np.squeeze(np.array(file.data)).reshape((-1, 1024, 256))[::2,:,:]
+    pyarray = pyarray[:512]
+    """
+
+    pyarray = py"pyarray"
+    julia_array = pyarray
+
+    return julia_array
+end
+
+@everywhere function get_lifetime(file; bin_size=3.9088729e-2, hist_size_threshold=100, method="MLE", broadcast_call=false, guess=[2.0, 1.0], laser_pulse_period=12.5, histogram_resolution=256, number_of_previous_pulses=5, tcspc_window_size=10, tac_low_cut=5.0980392, tac_high_cut=94.901962)
+    lifetimes = zeros(Float64, (512, 1024))
+    time = zeros(Float64, 1024)
+    
+    t_0 = round(time())
+
+    for x in 1:1024
+        for y in 1:512
+            lifetimes[y, x] = vec_to_lifetime(file[y,x,:])[1][1]
+            if lifetimes[y, x] == NaN
+                lifetimes[y, x] = 0
+            end
+        end
+        t = round(Int, time()) - t_0
+        t_max = round(Int, t*1024/x)
+
+        time[x] = t
+
+        println(rpad("Itération $x/1024 ($(round(100*x/1024; digits=2))%)", 32, " ") * "Temps écoulé : " * lpad("$(round(Int,t÷60))", 2, "0") * " min " * lpad("$(round(Int,t%60))", 2, "0") * " sec    Temps approximatif : " * lpad("$(round(Int,t_max÷60))", 2, "0") * " min " * lpad("$(round(Int,t_max%60))", 2, "0") * " sec    Temps restant : " * lpad("$(round(Int,(t_max-t)÷60))", 2, "0") * " min " * lpad("$(round(Int,(t_max-t)%60))", 2, "0") * " sec")
+    end
+    
+    writedlm("time.csv", time, ",")
+    writedlm("lifetimes.csv", lifetimes, ",")
+
+    return lifetimes
+end
+
+# counts = [6, 9, 9, 8, 10, 10, 13, 11, 11, 8, 11, 7, 15, 6, 7, 11, 7, 12, 9, 14, 12, 12, 9, 14, 13, 12, 9, 109, 504, 908, 1180, 1363, 1448, 1476, 1365, 1427, 1350, 1384, 1352, 1244, 1252, 1207, 1155, 1116, 996, 1033, 1004, 908, 874, 917, 873, 807, 764, 705, 772, 662, 618, 670, 626, 598, 557, 547, 531, 540, 529, 459, 462, 464, 402, 391, 393, 402, 344, 350, 312, 315, 319, 309, 339, 286, 287, 270, 282, 217, 232, 238, 233, 211, 181, 204, 198, 184, 181, 185, 187, 135, 164, 129, 169, 124, 136, 117, 132, 116, 98, 102, 115, 111, 99, 105, 97, 90, 85, 74, 71, 83, 76, 61, 53, 72, 66, 77, 83, 49, 47, 59, 55, 66, 44, 48, 45, 48, 44, 37, 46, 40, 29, 36, 39, 39, 41, 43, 35, 37, 33, 26, 39, 32, 29, 24, 28, 22, 33, 31, 21, 41, 27, 24, 23, 25, 19, 17, 21, 19, 23, 25, 25, 16, 15, 15, 18, 13, 12, 16, 22, 18, 19, 20, 12, 22, 13, 15, 13, 21, 16, 17, 17, 11, 9, 17, 8, 12, 9, 10, 13, 9, 18, 14, 13, 5, 12, 11, 10, 14, 25, 11, 15, 14, 10, 13, 11, 12, 12, 11, 11, 10, 16, 8, 21, 16, 12, 8, 6, 14, 8, 11, 10, 11, 15, 19, 14, 13, 8, 13, 10, 10, 14, 20, 9, 10, 11, 12, 6, 11, 14, 11, 12, 12, 10, 14, 9, 9, 9, 12, 7, 8]
 @everywhere global irf = get_irf()
 @everywhere global irf_bin_size = get_irf_bin_size()
-vec_to_lifetime(counts, bin_size=irf_bin_size)
+
+file = get_file()
+
+lifetimes = get_lifetime(file, bin_size=irf_bin_size)
+
+# print(size(lifetimes))
+# print(lifetimes)
+
+# print(size(file[:,:,1]))
+
+py"""
+import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+data = $lifetimes
+plt.figure()
+ax = plt.gca()
+im = ax.imshow(np.matrix(data), cmap='gray')
+
+divider = make_axes_locatable(ax)
+cax = divider.append_axes("right", size="4%", pad=0.2)
+
+plt.colorbar(im, cax=cax)
+plt.show()
+"""
