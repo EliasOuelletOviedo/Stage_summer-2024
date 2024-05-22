@@ -433,28 +433,29 @@ end
     return julia_array
 end
 
-@everywhere function get_lifetime(file; bin_size=3.9088729e-2, hist_size_threshold=100, method="MLE", broadcast_call=false, guess=[2.0, 1.0], laser_pulse_period=12.5, histogram_resolution=256, number_of_previous_pulses=5, tcspc_window_size=10, tac_low_cut=5.0980392, tac_high_cut=94.901962)
-    lifetimes = zeros(Float64, (512, 1024))
-    time = zeros(Float64, 1024)
+@everywhere function get_lifetime(file; x_region=1:1024, y_region=1:512, bin_size=3.9088729e-2, hist_size_threshold=100, method="MLE", broadcast_call=false, guess=[2.0, 1.0], laser_pulse_period=12.5, histogram_resolution=256, number_of_previous_pulses=5, tcspc_window_size=10, tac_low_cut=5.0980392, tac_high_cut=94.901962)
+    lifetimes = zeros(Float64, (length(y_region), length(x_region)))
+    times = zeros(Float64, length(x_region))
     
     t_0 = round(time())
 
-    for x in 1:1024
-        for y in 1:512
-            lifetimes[y, x] = vec_to_lifetime(file[y,x,:])[1][1]
-            if lifetimes[y, x] == NaN
-                lifetimes[y, x] = 0
+    for (i, x) in enumerate(x_region)
+        for (j, y) in enumerate(y_region)
+            if isnan(vec_to_lifetime(file[y,x,:])[1][1])
+                lifetimes[j, i] = 0
+            else
+                lifetimes[j, i] = vec_to_lifetime(file[y,x,:])[1][1]
             end
         end
         t = round(Int, time()) - t_0
-        t_max = round(Int, t*1024/x)
+        t_max = round(Int, t*length(x_region)/(i))
 
-        time[x] = t
+        times[i] = t
 
-        println(rpad("Itération $x/1024 ($(round(100*x/1024; digits=2))%)", 32, " ") * "Temps écoulé : " * lpad("$(round(Int,t÷60))", 2, "0") * " min " * lpad("$(round(Int,t%60))", 2, "0") * " sec    Temps approximatif : " * lpad("$(round(Int,t_max÷60))", 2, "0") * " min " * lpad("$(round(Int,t_max%60))", 2, "0") * " sec    Temps restant : " * lpad("$(round(Int,(t_max-t)÷60))", 2, "0") * " min " * lpad("$(round(Int,(t_max-t)%60))", 2, "0") * " sec")
+        println(rpad("Itération $(i)/$(length(x_region)) ($(round(100*(i)/length(x_region); digits=2))%)", 32, " ") * "Temps écoulé : " * lpad("$(round(Int,t÷3600))", 1, "0") * " h " * lpad("$(round(Int,(t÷60)%60))", 2, "0") * " min " * lpad("$(round(Int,t%60))", 2, "0") * " sec    Temps approximatif : " * lpad("$(round(Int,t_max÷3600))", 1, "0") * " h " * lpad("$(round(Int,(t_max÷60)%60))", 2, "0") * " min " * lpad("$(round(Int,t_max%60))", 2, "0") * " sec    Temps restant : " * lpad("$(round(Int,(t_max-t)÷3600))", 1, "0") * " h " * lpad("$(round(Int,((t_max-t)÷60)%60))", 2, "0") * " min " * lpad("$(round(Int,(t_max-t)%60))", 2, "0") * " sec")
     end
-    
-    writedlm("time.csv", time, ",")
+
+    writedlm("times.csv", times, ",")
     writedlm("lifetimes.csv", lifetimes, ",")
 
     return lifetimes
@@ -466,7 +467,9 @@ end
 
 file = get_file()
 
-lifetimes = get_lifetime(file, bin_size=irf_bin_size)
+lifetimes = get_lifetime(file, x_region = 492:532, y_region=236:276, bin_size=irf_bin_size)
+# lifetimes = get_lifetime(file, bin_size=irf_bin_size)
+
 
 # print(size(lifetimes))
 # print(lifetimes)
@@ -478,6 +481,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
+# data = $file
 data = $lifetimes
 plt.figure()
 ax = plt.gca()
