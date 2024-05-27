@@ -4,6 +4,7 @@ using FFTW
 using Statistics
 using Distributed
 using DelimitedFiles
+using ProgressBars
 
 @everywhere sp_o = pyimport("scipy.optimize")
 
@@ -433,13 +434,29 @@ end
     return julia_array
 end
 
+@everywhere function bin(file, binsize)
+    if binsize == "3x3"
+        binned = zeros(Float64, size(file))
+
+        for i in tqdm(2:size(file)[2]-1)
+            for j in 2:size(file)[1]-1
+                for k in 2:size(file)[3]
+                    binned[j, i, k] = (file[j-1, i-1, k] + file[j, i-1, k] + file[j+1, i-1, k] + file[j-1, i, k] + file[j, i, k] + file[j+1, i, k] + file[j-1, i+1, k] + file[j, i+1, k] + file[j+1, i+1, k])/9
+                end
+            end
+        end
+    else
+        binned = file
+    end
+    
+    return binned
+end
+
 @everywhere function get_lifetime(file; x_region=1:1024, y_region=1:512, bin_size=3.9088729e-2, hist_size_threshold=100, method="MLE", broadcast_call=false, guess=[2.0, 1.0], laser_pulse_period=12.5, histogram_resolution=256, number_of_previous_pulses=5, tcspc_window_size=10, tac_low_cut=5.0980392, tac_high_cut=94.901962)
     lifetimes = zeros(Float64, (length(y_region), length(x_region)))
-    times = zeros(Float64, length(x_region))
-    
-    t_0 = round(time())
 
-    for (i, x) in enumerate(x_region)
+    for i in tqdm(1:length(x_region))
+        x = x_region[i]
         for (j, y) in enumerate(y_region)
             if isnan(vec_to_lifetime(file[y,x,:])[1][1])
                 lifetimes[j, i] = 0
@@ -447,18 +464,28 @@ end
                 lifetimes[j, i] = vec_to_lifetime(file[y,x,:])[1][1]
             end
         end
-        t = round(Int, time()) - t_0
-        t_max = round(Int, t*length(x_region)/(i))
-
-        times[i] = t
-
-        println(rpad("Itération $(i)/$(length(x_region)) ($(round(100*(i)/length(x_region); digits=2))%)", 32, " ") * "Temps écoulé : " * lpad("$(round(Int,t÷3600))", 1, "0") * " h " * lpad("$(round(Int,(t÷60)%60))", 2, "0") * " min " * lpad("$(round(Int,t%60))", 2, "0") * " sec    Temps approximatif : " * lpad("$(round(Int,t_max÷3600))", 1, "0") * " h " * lpad("$(round(Int,(t_max÷60)%60))", 2, "0") * " min " * lpad("$(round(Int,t_max%60))", 2, "0") * " sec    Temps restant : " * lpad("$(round(Int,(t_max-t)÷3600))", 1, "0") * " h " * lpad("$(round(Int,((t_max-t)÷60)%60))", 2, "0") * " min " * lpad("$(round(Int,(t_max-t)%60))", 2, "0") * " sec")
     end
 
-    writedlm("times.csv", times, ",")
+    # for i in tqdm(0:length(x_region)*length(y_region) - 1)
+    #     x = x_region[i%length(x_region) + 1]
+    #     y = x_region[i÷length(x_region) + 1]
+
+    #     println(x)
+
+    #     if isnan(vec_to_lifetime(file[y,x,:])[1][1])
+    #         lifetimes[i÷length(x_region) + 1, i%length(x_region) + 1] = 0
+    #     else
+    #         lifetimes[i÷length(x_region) + 1, i%length(x_region) + 1] = vec_to_lifetime(file[y,x,:])[1][1]
+    #     end
+    # end
+
     writedlm("lifetimes.csv", lifetimes, ",")
 
     return lifetimes
+end
+
+@everywhere function get_region_lifetime(file, x_region, y_region; bin_size=3.9088729e-2, hist_size_threshold=100, method="MLE", broadcast_call=false, guess=[2.0, 1.0], laser_pulse_period=12.5, histogram_resolution=256, number_of_previous_pulses=5, tcspc_window_size=10, tac_low_cut=5.0980392, tac_high_cut=94.901962)
+    return vec_to_lifetime(sum(sum(file[y_region,x_region,:], dims=2), dims=1)[1, 1, :])[1][1]
 end
 
 # counts = [6, 9, 9, 8, 10, 10, 13, 11, 11, 8, 11, 7, 15, 6, 7, 11, 7, 12, 9, 14, 12, 12, 9, 14, 13, 12, 9, 109, 504, 908, 1180, 1363, 1448, 1476, 1365, 1427, 1350, 1384, 1352, 1244, 1252, 1207, 1155, 1116, 996, 1033, 1004, 908, 874, 917, 873, 807, 764, 705, 772, 662, 618, 670, 626, 598, 557, 547, 531, 540, 529, 459, 462, 464, 402, 391, 393, 402, 344, 350, 312, 315, 319, 309, 339, 286, 287, 270, 282, 217, 232, 238, 233, 211, 181, 204, 198, 184, 181, 185, 187, 135, 164, 129, 169, 124, 136, 117, 132, 116, 98, 102, 115, 111, 99, 105, 97, 90, 85, 74, 71, 83, 76, 61, 53, 72, 66, 77, 83, 49, 47, 59, 55, 66, 44, 48, 45, 48, 44, 37, 46, 40, 29, 36, 39, 39, 41, 43, 35, 37, 33, 26, 39, 32, 29, 24, 28, 22, 33, 31, 21, 41, 27, 24, 23, 25, 19, 17, 21, 19, 23, 25, 25, 16, 15, 15, 18, 13, 12, 16, 22, 18, 19, 20, 12, 22, 13, 15, 13, 21, 16, 17, 17, 11, 9, 17, 8, 12, 9, 10, 13, 9, 18, 14, 13, 5, 12, 11, 10, 14, 25, 11, 15, 14, 10, 13, 11, 12, 12, 11, 11, 10, 16, 8, 21, 16, 12, 8, 6, 14, 8, 11, 10, 11, 15, 19, 14, 13, 8, 13, 10, 10, 14, 20, 9, 10, 11, 12, 6, 11, 14, 11, 12, 12, 10, 14, 9, 9, 9, 12, 7, 8]
@@ -467,29 +494,28 @@ end
 
 file = get_file()
 
-lifetimes = get_lifetime(file, x_region = 492:532, y_region=236:276, bin_size=irf_bin_size)
+# lifetimes = get_lifetime(file, x_region = 628:672, y_region=40:122, bin_size=irf_bin_size)
 # lifetimes = get_lifetime(file, bin_size=irf_bin_size)
+# print(get_region_lifetime(file, 628:672, 40:122))
 
-
-# print(size(lifetimes))
-# print(lifetimes)
-
-# print(size(file[:,:,1]))
+file = bin(file, "3x3")
 
 py"""
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-# data = $file
-data = $lifetimes
+data = $file
+# data = $lifetimes
 plt.figure()
 ax = plt.gca()
-im = ax.imshow(np.matrix(data), cmap='gray')
+
+# im = ax.imshow(np.matrix(data), cmap='gray')
+im = ax.imshow(np.sum(pyarray, axis=2), cmap='gray')
 
 divider = make_axes_locatable(ax)
 cax = divider.append_axes("right", size="4%", pad=0.2)
 
 plt.colorbar(im, cax=cax)
-plt.show()
+# plt.show()
 """
