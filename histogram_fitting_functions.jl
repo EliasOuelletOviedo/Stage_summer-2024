@@ -5,6 +5,10 @@ using Statistics
 using Distributed
 using DelimitedFiles
 using ProgressBars
+using DSP
+using Plots
+
+gr()
 
 @everywhere sp_o = pyimport("scipy.optimize")
 
@@ -25,6 +29,9 @@ using ProgressBars
     """
     Loads an .sdt IRF file. If irf_filepath.txt exists, load the IRF from this filepath, otherwise, open a file dialog create irf_filepath.txt
     """
+
+    println("Getting IRF file...")
+
     if isfile("irf_filepath.txt")
         filepath = open(f->read(f, String), "irf_filepath.txt")
     else
@@ -41,14 +48,18 @@ using ProgressBars
     data[data .<= 0] .= 0 # set negative values to 0
     times = convert.(Float64, vec(file.times[1]).*1e9) # convert from seconds to nanoseconds
     data = [times, vec(data)]
+
+    println("Done")
+    println()
+
     return data
 end
 
-@everywhere function get_irf_bin_size()
+@everywhere function get_irf_bin_size(irf)
     """
     Gets the bin size in nanoseconds from the IRF.
     """
-    irf = get_irf()
+    # irf = get_irf()
     h = Inf
     for (i, t) in enumerate(irf[1])
         if i == 1
@@ -417,6 +428,8 @@ end
         end
     end
 
+    println("Getting SDT file...")
+
     py"""
     from sdtfile import SdtFile
     import numpy as np
@@ -431,91 +444,117 @@ end
     pyarray = py"pyarray"
     julia_array = pyarray
 
+    println("Done")
+    println()
+
     return julia_array
 end
 
 @everywhere function bin(file, binsize)
-    if binsize == "3x3"
-        binned = zeros(Float64, size(file))
+    # binned = zeros(size(file)[1], size(file)[2], size(file)[3])
+    # for i in tqdm(1:size(file)[3])
+    #     binned[:,:,i] = conv(file[:,:,i], ones(3, 3))[2:size(file)[1]+1,2:size(file)[2]+1]
+    # end
+    # return binned
 
-        for i in tqdm(2:size(file)[2]-1)
-            for j in 2:size(file)[1]-1
-                for k in 2:size(file)[3]
-                    binned[j, i, k] = (file[j-1, i-1, k] + file[j, i-1, k] + file[j+1, i-1, k] + file[j-1, i, k] + file[j, i, k] + file[j+1, i, k] + file[j-1, i+1, k] + file[j, i+1, k] + file[j+1, i+1, k])/9
-                end
-            end
-        end
-    else
-        binned = file
-    end
     
+
+    if binsize == 1
+        binned = file
+    else
+        println("Convoluting...")
+
+        binned = conv(file, ones(binsize, binsize))
+
+        println("Done")
+        println()
+    end
+
     return binned
 end
 
-@everywhere function get_lifetime(file; x_region=1:1024, y_region=1:512, bin_size=3.9088729e-2, hist_size_threshold=100, method="MLE", broadcast_call=false, guess=[2.0, 1.0], laser_pulse_period=12.5, histogram_resolution=256, number_of_previous_pulses=5, tcspc_window_size=10, tac_low_cut=5.0980392, tac_high_cut=94.901962)
+@everywhere function get_lifetime(file; x_region=1:size(file)[2], y_region=1:size(file)[1], bin_size=3.9088729e-2, hist_size_threshold=100, method="MLE", broadcast_call=false, guess=[2.0, 1.0], laser_pulse_period=12.5, histogram_resolution=256, number_of_previous_pulses=5, tcspc_window_size=10, tac_low_cut=5.0980392, tac_high_cut=94.901962)
     lifetimes = zeros(Float64, (length(y_region), length(x_region)))
 
-    for i in tqdm(1:length(x_region))
-        x = x_region[i]
-        for (j, y) in enumerate(y_region)
-            if isnan(vec_to_lifetime(file[y,x,:])[1][1])
-                lifetimes[j, i] = 0
-            else
-                lifetimes[j, i] = vec_to_lifetime(file[y,x,:])[1][1]
-            end
-        end
-    end
+    # for i in tqdm(1:length(x_region))
+    #     x = x_region[i]
+    #     for (j, y) in enumerate(y_region)
+    #         lifetime = vec_to_lifetime(file[y,x,:])[1][1]
 
-    # for i in tqdm(0:length(x_region)*length(y_region) - 1)
-    #     x = x_region[i%length(x_region) + 1]
-    #     y = x_region[i÷length(x_region) + 1]
-
-    #     println(x)
-
-    #     if isnan(vec_to_lifetime(file[y,x,:])[1][1])
-    #         lifetimes[i÷length(x_region) + 1, i%length(x_region) + 1] = 0
-    #     else
-    #         lifetimes[i÷length(x_region) + 1, i%length(x_region) + 1] = vec_to_lifetime(file[y,x,:])[1][1]
+    #         if isnan(lifetime)
+    #             lifetimes[j, i] = 0
+    #         else
+    #             lifetimes[j, i] = lifetime
+    #         end
     #     end
     # end
 
+    println("Getting lifetimes...")
+
+    x_min = x_region[1] - 1
+    y_min = y_region[1] - 1
+
+    Threads.@threads for i in tqdm(CartesianIndices(lifetimes))
+        lifetime = vec_to_lifetime(file[y_min + i[1], x_min + i[2], :])[1][1]
+
+        if isnan(lifetime)
+            lifetimes[i] = 0
+        else
+            lifetimes[i] = lifetime
+        end
+    end
+
     writedlm("lifetimes.csv", lifetimes, ",")
+
+    println("Done")
+    println()
 
     return lifetimes
 end
 
 @everywhere function get_region_lifetime(file, x_region, y_region; bin_size=3.9088729e-2, hist_size_threshold=100, method="MLE", broadcast_call=false, guess=[2.0, 1.0], laser_pulse_period=12.5, histogram_resolution=256, number_of_previous_pulses=5, tcspc_window_size=10, tac_low_cut=5.0980392, tac_high_cut=94.901962)
-    return vec_to_lifetime(sum(sum(file[y_region,x_region,:], dims=2), dims=1)[1, 1, :])[1][1]
+    return vec_to_lifetime(dropdims(sum(file[y_region,x_region,:], dims=(1, 2)), dims=(1, 2)))
 end
 
 # counts = [6, 9, 9, 8, 10, 10, 13, 11, 11, 8, 11, 7, 15, 6, 7, 11, 7, 12, 9, 14, 12, 12, 9, 14, 13, 12, 9, 109, 504, 908, 1180, 1363, 1448, 1476, 1365, 1427, 1350, 1384, 1352, 1244, 1252, 1207, 1155, 1116, 996, 1033, 1004, 908, 874, 917, 873, 807, 764, 705, 772, 662, 618, 670, 626, 598, 557, 547, 531, 540, 529, 459, 462, 464, 402, 391, 393, 402, 344, 350, 312, 315, 319, 309, 339, 286, 287, 270, 282, 217, 232, 238, 233, 211, 181, 204, 198, 184, 181, 185, 187, 135, 164, 129, 169, 124, 136, 117, 132, 116, 98, 102, 115, 111, 99, 105, 97, 90, 85, 74, 71, 83, 76, 61, 53, 72, 66, 77, 83, 49, 47, 59, 55, 66, 44, 48, 45, 48, 44, 37, 46, 40, 29, 36, 39, 39, 41, 43, 35, 37, 33, 26, 39, 32, 29, 24, 28, 22, 33, 31, 21, 41, 27, 24, 23, 25, 19, 17, 21, 19, 23, 25, 25, 16, 15, 15, 18, 13, 12, 16, 22, 18, 19, 20, 12, 22, 13, 15, 13, 21, 16, 17, 17, 11, 9, 17, 8, 12, 9, 10, 13, 9, 18, 14, 13, 5, 12, 11, 10, 14, 25, 11, 15, 14, 10, 13, 11, 12, 12, 11, 11, 10, 16, 8, 21, 16, 12, 8, 6, 14, 8, 11, 10, 11, 15, 19, 14, 13, 8, 13, 10, 10, 14, 20, 9, 10, 11, 12, 6, 11, 14, 11, 12, 12, 10, 14, 9, 9, 9, 12, 7, 8]
 @everywhere global irf = get_irf()
-@everywhere global irf_bin_size = get_irf_bin_size()
+@everywhere global irf_bin_size = get_irf_bin_size(irf)
+@everywhere global filearray = get_file()
 
-file = get_file()
+# @everywhere global filearray = bin(filearray, 2)
 
-# lifetimes = get_lifetime(file, x_region = 628:672, y_region=40:122, bin_size=irf_bin_size)
-# lifetimes = get_lifetime(file, bin_size=irf_bin_size)
-# print(get_region_lifetime(file, 628:672, 40:122))
+# @everywhere global lifetimes = get_lifetime(filearray, x_region = 394:432, y_region=385:423, bin_size=irf_bin_size)
+# @everywhere global lifetimes = get_lifetime(filearray, x_region = 620:680, y_region=30:140, bin_size=irf_bin_size)
+lifetimes = get_lifetime(filearray, bin_size=irf_bin_size)
+# print(get_region_lifetime(filearray, 628:672, 40:122))
+# print(get_region_lifetime(filearray, 394:432, 385:423)[1][1])
 
-file = bin(file, "3x3")
+# heatmap(sum(filearray, dims = 3)[:,:,1], c=cgrad([:black, :white]), yflip = true)
+heatmap(lifetimes, c=cgrad([:black, :white]), yflip = true)
+# plot(sum(filearray[30:140, 620:680, :], dims=(1, 2))[1, 1, :])
 
-py"""
-import numpy as np
-import matplotlib.pyplot as plt
-from mpl_toolkits.axes_grid1 import make_axes_locatable
+# t_0 = time()
+# for i in tqdm(1:1000)
+#     get_region_lifetime(filearray, 394:432, 385:423)
+# end
+# println(time() - t_0)
 
-data = $file
+# py"""
+# import numpy as np
+# import matplotlib.pyplot as plt
+# from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+# # data = $filearray
 # data = $lifetimes
-plt.figure()
-ax = plt.gca()
+# plt.figure()
+# ax = plt.gca()
 
 # im = ax.imshow(np.matrix(data), cmap='gray')
-im = ax.imshow(np.sum(pyarray, axis=2), cmap='gray')
+# # im = ax.imshow(np.sum(data, axis=2), cmap='gray')
 
-divider = make_axes_locatable(ax)
-cax = divider.append_axes("right", size="4%", pad=0.2)
+# divider = make_axes_locatable(ax)
+# cax = divider.append_axes("right", size="4%", pad=0.2)
 
-plt.colorbar(im, cax=cax)
+# plt.colorbar(im, cax=cax)
 # plt.show()
-"""
+# """
