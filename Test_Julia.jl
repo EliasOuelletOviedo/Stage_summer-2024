@@ -1,7 +1,9 @@
-using Distributed
+using Plots
 
-Threads.@threads for i in 1:Threads.nthreads()
-    println("i: ", i, "\t Thread ID: ", Threads.threadid())
-end
+gr()
 
+file = open("lifetimes.csv", "r")
 
+data = read(file)
+
+heatmap(data, c=cgrad([:black, :white]), yflip = true)

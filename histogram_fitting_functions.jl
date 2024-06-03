@@ -525,12 +525,12 @@ end
 
 # @everywhere global lifetimes = get_lifetime(filearray, x_region = 394:432, y_region=385:423, bin_size=irf_bin_size)
 # @everywhere global lifetimes = get_lifetime(filearray, x_region = 620:680, y_region=30:140, bin_size=irf_bin_size)
-lifetimes = get_lifetime(filearray, bin_size=irf_bin_size)
+# lifetimes = get_lifetime(filearray, bin_size=irf_bin_size)
 # print(get_region_lifetime(filearray, 628:672, 40:122))
-# print(get_region_lifetime(filearray, 394:432, 385:423)[1][1])
+print(get_region_lifetime(filearray, 500:700, 100:120)[1][1])
 
 # heatmap(sum(filearray, dims = 3)[:,:,1], c=cgrad([:black, :white]), yflip = true)
-heatmap(lifetimes, c=cgrad([:black, :white]), yflip = true)
+# heatmap(lifetimes, c=cgrad([:black, :white]), yflip = true)
 # plot(sum(filearray[30:140, 620:680, :], dims=(1, 2))[1, 1, :])
 
 # t_0 = time()

@@ -6,8 +6,8 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 # path = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-05-13/FLIM/Billes/billes.sdt"
 # path = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-05-13/FLIM/Pollen_1/pollen.sdt"
-# path = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-05-13/FLIM/Pollen_2/pollen_2.sdt"
-path = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-05-24/Neurone1/2024-05-24-neurone_1.sdt"
+path = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-05-13/FLIM/Pollen_2/pollen_2.sdt"
+# path = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-05-24/Neurone1/2024-05-24-neurone_1.sdt"
 
 file = SdtFile(path)
 
