@@ -10,6 +10,9 @@ using StructTypes
 using Base64
 using ZipFile
 using BenchmarkTools
+using Plots
+
+gr()
 
 @everywhere sp_o = pyimport("scipy.optimize")
 
@@ -432,30 +435,18 @@ end
     return folderpath
 end
 
+@everywhere function SDTFile(filepath)
+    open(filepath,"r") do io
+        seek(io, 14)
+        header = read(io, 2)
+        seek(io, header[2]*16^2+header[1])
+    
+        file_info = read(io, 22)
+    
+        zip = IOBuffer(read(io, file_info[10]*16^6 + file_info[9]*16^4 + file_info[8]*16^2 + file_info[7] - (file_info[6]*10^6 + file_info[5]*16^4 + file_info[4]*16^2 + file_info[3])))
 
-@everywhere function open_file(filepath)
-    filepath = filepath
-
-    py"""
-    from sdtfile import SdtFile
-    import numpy as np
-
-    filepath = $filepath
-
-    file = SdtFile(filepath)
-    pyarray = np.array(file.data).reshape((-1, 1024, 256))[::2,:,:]
-    pyarray = pyarray[:512]
-    """
-
-    # pyarray = 
-    julia_array = py"pyarray"
-
-    return julia_array
-end
-
-@everywhere function get_region_lifetime(file, x_region=1:size(file)[2], y_region=1:size(file)[1]; bin_size=3.9088729e-2, hist_size_threshold=100, method="MLE", broadcast_call=false, guess=[2.0, 1.0], laser_pulse_period=12.5, histogram_resolution=256, number_of_previous_pulses=5, tcspc_window_size=10, tac_low_cut=5.0980392, tac_high_cut=94.901962)
-    return vec_to_lifetime(dropdims(sum(file[y_region,x_region,:], dims=(1, 2)), dims=(1, 2)))
-    # return vec_to_lifetime(sum(file[y_region,x_region,:], dims=(1, 2))[1,1,:])
+        return reinterpret(UInt16, read(ZipFile.Reader(zip).files[1], 536_870_912))
+    end
 end
 
 @everywhere function ROI_coordinates(x_region, y_region)
@@ -468,95 +459,103 @@ end
     return ROI[2:end]
 end
 
-function SDTFile(filepath)
-    # file = open(filepath, "r")
-    # seek(file, 14)
-    # header = read(file, 2)
-    # seek(file, header[2]*16^2+header[1])
+@everywhere function get_ROI_vector(array, ROI)
+    ROI_arr = zeros(256)
 
-    # file_info = read(file, 22)
-
-    # zip = IOBuffer(read(file, file_info[10]*16^6 + file_info[9]*16^4 + file_info[8]*16^2 + file_info[7] - (file_info[6]*10^6 + file_info[5]*16^4 + file_info[4]*16^2 + file_info[3])))
-
-    # close(file)
-
-    # data = reinterpret(UInt16, read(ZipFile.Reader(zip).files[1]))
-
-    # return reshape(data, (1024, 1024, 256))[begin:2:end, begin:end, begin:end]
-
-    open(filepath,"r") do io
-        seek(io, 14)
-        header = read(io, 2)
-        seek(io, header[2]*16^2+header[1])
-    
-        file_info = read(io, 22)
-    
-        zip = IOBuffer(read(io, file_info[10]*16^6 + file_info[9]*16^4 + file_info[8]*16^2 + file_info[7] - (file_info[6]*10^6 + file_info[5]*16^4 + file_info[4]*16^2 + file_info[3])))
-    
-        data = reinterpret(UInt16, read(ZipFile.Reader(zip).files[1]))
-
-        return reshape(data, (1024, 1024, 256))[begin:2:end, begin:end, begin:end]
+    for (x, y) in ROI
+        ROI_arr += array[:, x + (y-1)*2048]
     end
+
+    return ROI_arr
+end
+
+@everywhere function get_ROI_lifetime(filepath, x_region, y_region)
+    ROI = ROI_coordinates(x_region, y_region)
+
+    file = SDTFile(filepath)
+
+    array = reshape(file, (256, :))
+
+    ROI_vector = get_ROI_vector(array, ROI)
+
+    return vec_to_lifetime(ROI_vector)
+end
+    
+
+@everywhere function get_file_lifetime(filepath)
+    file = SDTFile(filepath)
+    
+    array = reshape(file, (256, :))
+
+    vector = sum(array, dims = 2)[:,1]
+
+    return vec_to_lifetime(vector)
 end
 
 
-
-# counts = [6, 9, 9, 8, 10, 10, 13, 11, 11, 8, 11, 7, 15, 6, 7, 11, 7, 12, 9, 14, 12, 12, 9, 14, 13, 12, 9, 109, 504, 908, 1180, 1363, 1448, 1476, 1365, 1427, 1350, 1384, 1352, 1244, 1252, 1207, 1155, 1116, 996, 1033, 1004, 908, 874, 917, 873, 807, 764, 705, 772, 662, 618, 670, 626, 598, 557, 547, 531, 540, 529, 459, 462, 464, 402, 391, 393, 402, 344, 350, 312, 315, 319, 309, 339, 286, 287, 270, 282, 217, 232, 238, 233, 211, 181, 204, 198, 184, 181, 185, 187, 135, 164, 129, 169, 124, 136, 117, 132, 116, 98, 102, 115, 111, 99, 105, 97, 90, 85, 74, 71, 83, 76, 61, 53, 72, 66, 77, 83, 49, 47, 59, 55, 66, 44, 48, 45, 48, 44, 37, 46, 40, 29, 36, 39, 39, 41, 43, 35, 37, 33, 26, 39, 32, 29, 24, 28, 22, 33, 31, 21, 41, 27, 24, 23, 25, 19, 17, 21, 19, 23, 25, 25, 16, 15, 15, 18, 13, 12, 16, 22, 18, 19, 20, 12, 22, 13, 15, 13, 21, 16, 17, 17, 11, 9, 17, 8, 12, 9, 10, 13, 9, 18, 14, 13, 5, 12, 11, 10, 14, 25, 11, 15, 14, 10, 13, 11, 12, 12, 11, 11, 10, 16, 8, 21, 16, 12, 8, 6, 14, 8, 11, 10, 11, 15, 19, 14, 13, 8, 13, 10, 10, 14, 20, 9, 10, 11, 12, 6, 11, 14, 11, 12, 12, 10, 14, 9, 9, 9, 12, 7, 8]
 @everywhere global irf = get_irf()
 @everywhere global irf_bin_size = get_irf_bin_size(irf)
 # @everywhere global folderpath = get_folder_path()
-@everywhere global folderpath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichiers/"
-@everywhere global filepath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichiers/1.sdt"
+@everywhere global folderpath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichiers_sdt/"
+# @everywhere global filepath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichiers_sdt/4.sdt"
 
-@everywhere global BenchmarkTools.DEFAULT_PARAMETERS.seconds = 100
+# @everywhere global BenchmarkTools.DEFAULT_PARAMETERS.seconds = 120
 
-@benchmark get_region_lifetime(SDTFile(filepath), 50:70, 100:120) samples=10
+# @everywhere global ROI = ROI_coordinates(462:562, 206:306)
 
-# @everywhere SDT = pyimport("sdtfile")
+# @time file = SDTFile(filepath)
 
-# @benchmark SDT.SdtFile(filepath).data[1] samples = 10
+# @time array = reshape(file, (256, :))
 
-# println(vec_to_lifetime(convert(Vector{Int16}, data[1])))
+# ROI_arr = zeros(256)
 
-# sum_of_vector = zeros(256)
-# for (x, y) in ROI_coordinates(500:700, 100:120)
-#     sum_of_vector .+= data[x + 2048*y]
+# for (x, y) in ROI
+#     global ROI_arr
+#     ROI_arr += array[:, x + (y-1)*2048]
 # end
 
-# println(vec_to_lifetime(convert(Vector{Int16}, sum_of_vector))[1][1])
+# @time ROI_vector = get_ROI_vector(ROI)
 
-# println((readdir(folderpath)))
+# @time region_lifetime = vec_to_lifetime(ROI_vector)
 
-# ROI = ROI_coordinates(50:70, 100:120)
+# println(region_lifetime[1][1])
+
+# file = SDTFile(filepath)
+
+# array = reshape(file, (256, :))
+
+# @benchmark ROI_vector = get_ROI_vector(array, ROI) samples = 10
+
+# @benchmark region_lifetime = get_ROI_lifetime(filepath, 462:562, 206:306) samples = 100
+# @benchmark region_lifetime = get_file_lifetime(filepath) samples = 100
+
+# println(region_lifetime[1][1])
 
 
+for i in tqdm(readdir(folderpath))
+    if i != ".DS_Store"
+        filepath = folderpath*i
+        
+        # @time file = SDTFile(filepath)
 
-# for i in tqdm(readdir(folderpath))
-#     if i != ".DS_Store"
-#         filepath = folderpath*i
-#         # @time data = SDT.SdtFile(filepath).data[1]
-#         @time data = SDTFile(filepath)
+        # @time array = reshape(file, (256, :))
 
-#         # println(vec_to_lifetime(convert(Vector{Int16}, data[1])))
+        # @time vector = sum(array, dims = 2)[:,1]
+        # @time region_lifetime = vec_to_lifetime(vector)
 
-#         # sum_of_vector = zeros(Threads.nthreads(), 256)
-#         # Threads.@threads for (x, y) in ROI_coordinates(50:70, 100:120)
-#         #     sum_of_vector[Threads.threadid(),:] .+= data[x + 2048*y]
-#         # end
-#         # sum_of_vector = dropdims(sum(sum_of_vector, dims=1), dims=1)
+        # @time ROI_vector = get_ROI_vector(array, ROI)
+        # @time region_lifetime = vec_to_lifetime(ROI_vector)
 
-#         # sum_of_vector = zeros(256)
-#         # for (x, y) in ROI
-#         #     sum_of_vector .+= data[x + 2048*y]
-#         # end
+        @time region_lifetime = get_ROI_lifetime(filepath, 462:562, 206:306)
+        @time complete_lifetime = get_file_lifetime(filepath)
 
-#         @time region_lifetime = get_region_lifetime(data, 50:70, 100:120)
+        println(region_lifetime[1][1])
+        println(complete_lifetime[1][1])
+        println()
+    else
+        println("Not a .sdt file")
+        println()
+    end
+end
 
-#         println(region_lifetime[1][1])
-#         println()
-#     else
-#         println("Not a .sdt file")
-#         println()
-#     end
-# end
 # GC.gc()

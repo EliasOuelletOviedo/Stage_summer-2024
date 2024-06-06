@@ -450,6 +450,31 @@ end
     return julia_array
 end
 
+@everywhere function open_file(filepath)
+    println("Getting SDT file...")
+
+    filepath = filepath
+
+    py"""
+    from sdtfile import SdtFile
+    import numpy as np
+
+    filepath = $filepath
+
+    file = SdtFile(filepath)
+    pyarray = np.squeeze(np.array(file.data)).reshape((-1, 1024, 256))[::2,:,:]
+    pyarray = pyarray[:512]
+    """
+
+    pyarray = py"pyarray"
+    julia_array = pyarray
+
+    println("Done")
+    println()
+
+    return julia_array
+end
+
 @everywhere function bin(file, binsize)
     # binned = zeros(size(file)[1], size(file)[2], size(file)[3])
     # for i in tqdm(1:size(file)[3])
@@ -519,7 +544,23 @@ end
 # counts = [6, 9, 9, 8, 10, 10, 13, 11, 11, 8, 11, 7, 15, 6, 7, 11, 7, 12, 9, 14, 12, 12, 9, 14, 13, 12, 9, 109, 504, 908, 1180, 1363, 1448, 1476, 1365, 1427, 1350, 1384, 1352, 1244, 1252, 1207, 1155, 1116, 996, 1033, 1004, 908, 874, 917, 873, 807, 764, 705, 772, 662, 618, 670, 626, 598, 557, 547, 531, 540, 529, 459, 462, 464, 402, 391, 393, 402, 344, 350, 312, 315, 319, 309, 339, 286, 287, 270, 282, 217, 232, 238, 233, 211, 181, 204, 198, 184, 181, 185, 187, 135, 164, 129, 169, 124, 136, 117, 132, 116, 98, 102, 115, 111, 99, 105, 97, 90, 85, 74, 71, 83, 76, 61, 53, 72, 66, 77, 83, 49, 47, 59, 55, 66, 44, 48, 45, 48, 44, 37, 46, 40, 29, 36, 39, 39, 41, 43, 35, 37, 33, 26, 39, 32, 29, 24, 28, 22, 33, 31, 21, 41, 27, 24, 23, 25, 19, 17, 21, 19, 23, 25, 25, 16, 15, 15, 18, 13, 12, 16, 22, 18, 19, 20, 12, 22, 13, 15, 13, 21, 16, 17, 17, 11, 9, 17, 8, 12, 9, 10, 13, 9, 18, 14, 13, 5, 12, 11, 10, 14, 25, 11, 15, 14, 10, 13, 11, 12, 12, 11, 11, 10, 16, 8, 21, 16, 12, 8, 6, 14, 8, 11, 10, 11, 15, 19, 14, 13, 8, 13, 10, 10, 14, 20, 9, 10, 11, 12, 6, 11, 14, 11, 12, 12, 10, 14, 9, 9, 9, 12, 7, 8]
 @everywhere global irf = get_irf()
 @everywhere global irf_bin_size = get_irf_bin_size(irf)
-@everywhere global filearray = get_file()
+# @everywhere global filearray = get_file()
+@everywhere global folderpath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichiers_sdt/"
+
+for i in tqdm(readdir(folderpath))
+    if i != ".DS_Store"
+        @time data = open_file(folderpath*i)
+
+        @time region_lifetime = get_region_lifetime(data, 462:562, 206:306)
+        # @time region_lifetime = get_region_lifetime(data)
+
+        println(region_lifetime[1][1])
+        println()
+    else
+        println("Not a .sdt file")
+        println()
+    end
+end
 
 # @everywhere global filearray = bin(filearray, 2)
 
@@ -527,9 +568,9 @@ end
 # @everywhere global lifetimes = get_lifetime(filearray, x_region = 620:680, y_region=30:140, bin_size=irf_bin_size)
 # lifetimes = get_lifetime(filearray, bin_size=irf_bin_size)
 # print(get_region_lifetime(filearray, 628:672, 40:122))
-print(get_region_lifetime(filearray, 500:700, 100:120)[1][1])
+# print(get_region_lifetime(filearray, 462:562, 206:306)[1][1])
 
-# heatmap(sum(filearray, dims = 3)[:,:,1], c=cgrad([:black, :white]), yflip = true)
+# heatmap(sum(filearray, dims = 3)[206:306, 462:562, 1], c=cgrad([:black, :white]), yflip = true, aspect_ratio = :equal)
 # heatmap(lifetimes, c=cgrad([:black, :white]), yflip = true)
 # plot(sum(filearray[30:140, 620:680, :], dims=(1, 2))[1, 1, :])
 
