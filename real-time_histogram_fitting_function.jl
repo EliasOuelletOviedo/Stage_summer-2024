@@ -11,8 +11,9 @@ using Base64
 using ZipFile
 using BenchmarkTools
 using Plots
+# using Gadfly
 
-gr()
+# gr()
 
 @everywhere sp_o = pyimport("scipy.optimize")
 
@@ -445,7 +446,7 @@ end
     
         zip = IOBuffer(read(io, file_info[10]*16^6 + file_info[9]*16^4 + file_info[8]*16^2 + file_info[7] - (file_info[6]*10^6 + file_info[5]*16^4 + file_info[4]*16^2 + file_info[3])))
 
-        return reinterpret(UInt16, read(ZipFile.Reader(zip).files[1], 536_870_912))
+        return reinterpret(UInt16, read(ZipFile.Reader(zip).files[1], file_info[22]*16^6 + file_info[21]*16^4 + file_info[20]*16^2 + file_info[19]))
     end
 end
 
@@ -492,6 +493,64 @@ end
     return vec_to_lifetime(vector)
 end
 
+@everywhere function display_lifetime(folderpath)
+    t = zeros(0)
+    lifetime = zeros(0)
+
+    while true
+        println("Iteration #"*string(length(lifetime) + 1))
+
+        filepath = folderpath*readdir(folderpath)[end]
+        # region_lifetime = get_file_lifetime(filepath)
+        region_lifetime = get_ROI_lifetime(filepath, 462:562, 206:306)[1][1]
+
+        println("   "*string(region_lifetime)*" ns")
+        println()
+
+        push!(t, time())
+        push!(t, time()-t[1])
+        push!(lifetime, region_lifetime)
+
+        p = plot(t[2:2:end],
+            lifetime,
+            xlabel = "Time [s]",
+            ylabel = "Lifetime [ns]",
+            linewidth = 2,
+            linecolor = :black,
+            legend = false)
+        display(p)
+    end
+end
+
+@everywhere function display_lifetime2(folderpath)
+    t = zeros(0)
+    lifetime = zeros(0)
+
+    while true
+        println("Iteration #"*string(length(lifetime) + 1))
+
+        filepath = folderpath*readdir(folderpath)[end]
+        # region_lifetime = get_file_lifetime(filepath)
+        region_lifetime = get_ROI_lifetime(filepath, 462:562, 206:306)[1][1]
+
+        println("   "*string(region_lifetime)*" ns")
+        println()
+
+        push!(t, time())
+        push!(t, time()-t[1])
+        push!(lifetime, region_lifetime)
+
+        p = plot(t[2:2:end],
+            lifetime,
+            xlabel = "Time [s]",
+            ylabel = "Lifetime [ns]",
+            linewidth = 2,
+            linecolor = :black,
+            legend = false)
+        display(p)
+    end
+end
+
 
 @everywhere global irf = get_irf()
 @everywhere global irf_bin_size = get_irf_bin_size(irf)
@@ -499,63 +558,52 @@ end
 @everywhere global folderpath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichiers_sdt/"
 # @everywhere global filepath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichiers_sdt/4.sdt"
 
-# @everywhere global BenchmarkTools.DEFAULT_PARAMETERS.seconds = 120
+# @everywhere global BenchmarkTools.DEFAULT_PARAMETERS.seconds = 12
 
-# @everywhere global ROI = ROI_coordinates(462:562, 206:306)
+# @benchmark region_lifetime = get_ROI_lifetime(filepath, 462:562, 206:306) samples = 10
+# @benchmark region_lifetime = get_file_lifetime(filepath) samples = 10
 
-# @time file = SDTFile(filepath)
+display_lifetime(folderpath)
 
-# @time array = reshape(file, (256, :))
+# t = zeros(0)
+# lifetime = zeros(0)
 
-# ROI_arr = zeros(256)
+# while true
+    # filepath = folderpath*readdir(folderpath)[end]
+    # println(filepath)
+    # @time region_lifetime = get_file_lifetime(filepath)
+    # # @time region_lifetime = get_ROI_lifetime(filepath, 462:562, 206:306)
+    # println(region_lifetime[1][1])
 
-# for (x, y) in ROI
-#     global ROI_arr
-#     ROI_arr += array[:, x + (y-1)*2048]
+    # push!(t, time())
+    # push!(t, time()-t[1])
+    # push!(lifetime, region_lifetime[1][1])
+
+    # p = plot(t[2:2:end],
+    #     lifetime,
+    #     xlabel = "Time [s]",
+    #     ylabel = "Lifetime [nm]",
+    #     linewidth = 2,
+    #     linecolor = :black,
+    #     legend = false)
+    # display(p)
 # end
 
-# @time ROI_vector = get_ROI_vector(ROI)
 
-# @time region_lifetime = vec_to_lifetime(ROI_vector)
-
-# println(region_lifetime[1][1])
-
-# file = SDTFile(filepath)
-
-# array = reshape(file, (256, :))
-
-# @benchmark ROI_vector = get_ROI_vector(array, ROI) samples = 10
-
-# @benchmark region_lifetime = get_ROI_lifetime(filepath, 462:562, 206:306) samples = 100
-# @benchmark region_lifetime = get_file_lifetime(filepath) samples = 100
-
-# println(region_lifetime[1][1])
-
-
-for i in tqdm(readdir(folderpath))
-    if i != ".DS_Store"
-        filepath = folderpath*i
+# for i in tqdm(readdir(folderpath))
+#     if i != ".DS_Store"
+#         filepath = folderpath*i
         
-        # @time file = SDTFile(filepath)
+#         @time region_lifetime = get_ROI_lifetime(filepath, 462:562, 206:306)
+#         # @time complete_lifetime = get_file_lifetime(filepath)
 
-        # @time array = reshape(file, (256, :))
-
-        # @time vector = sum(array, dims = 2)[:,1]
-        # @time region_lifetime = vec_to_lifetime(vector)
-
-        # @time ROI_vector = get_ROI_vector(array, ROI)
-        # @time region_lifetime = vec_to_lifetime(ROI_vector)
-
-        @time region_lifetime = get_ROI_lifetime(filepath, 462:562, 206:306)
-        @time complete_lifetime = get_file_lifetime(filepath)
-
-        println(region_lifetime[1][1])
-        println(complete_lifetime[1][1])
-        println()
-    else
-        println("Not a .sdt file")
-        println()
-    end
-end
+#         println(region_lifetime[1][1])
+#         # println(complete_lifetime[1][1])
+#         println()
+#     else
+#         println("Not a .sdt file")
+#         println()
+#     end
+# end
 
 # GC.gc()
