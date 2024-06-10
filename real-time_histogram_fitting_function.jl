@@ -1,4 +1,3 @@
-using Gtk4
 using PyCall
 using FFTW
 using Statistics
@@ -11,6 +10,8 @@ using Base64
 using ZipFile
 using BenchmarkTools
 using Plots
+# using Gtk4
+# using FilePathsBase
 # using Gadfly
 
 # gr()
@@ -493,7 +494,7 @@ end
     return vec_to_lifetime(vector)
 end
 
-@everywhere function display_lifetime(folderpath)
+@everywhere function display_realtime_lifetime(folderpath)
     t = zeros(0)
     lifetime = zeros(0)
 
@@ -501,8 +502,8 @@ end
         println("Iteration #"*string(length(lifetime) + 1))
 
         filepath = folderpath*readdir(folderpath)[end]
-        # region_lifetime = get_file_lifetime(filepath)
-        region_lifetime = get_ROI_lifetime(filepath, 462:562, 206:306)[1][1]
+        region_lifetime = get_file_lifetime(filepath)[1][1]
+        # region_lifetime = get_ROI_lifetime(filepath, 462:562, 206:306)[1][1]
 
         println("   "*string(region_lifetime)*" ns")
         println()
@@ -522,32 +523,81 @@ end
     end
 end
 
-@everywhere function display_lifetime2(folderpath)
+@everywhere function display_lifetime_folder(folderpath)
     t = zeros(0)
     lifetime = zeros(0)
 
+    for i in tqdm(readdir(folderpath))
+        if i != ".DS_Store"
+            println("Iteration #"*string(length(lifetime) + 1))
+
+            filepath = folderpath*i
+
+            @time region_lifetime = get_file_lifetime(filepath)[1][1]
+            # region_lifetime = get_ROI_lifetime(filepath, 462:562, 206:306)[1][1]
+
+            println("  "*string(region_lifetime)*" ns")
+            println()
+
+            push!(t, length(lifetime))
+            push!(lifetime, region_lifetime)
+
+            p = plot(t,
+                lifetime,
+                xlabel = "Time [s]",
+                ylabel = "Lifetime [ns]",
+                linewidth = 2,
+                linecolor = :black,
+                legend = false)
+            display(p)
+        else
+            println("Not a .sdt file")
+            println()
+        end
+    end
+end
+
+@everywhere function new_file_lifetime(path)
+    previous_files = readdir(path)
+
+    t = zeros(0)
+
+    lifetime = zeros(0)
+
+    t_0 = time()
+
+    println("Waiting for file")
+
     while true
-        println("Iteration #"*string(length(lifetime) + 1))
+        current_files = readdir(path)
 
-        filepath = folderpath*readdir(folderpath)[end]
-        # region_lifetime = get_file_lifetime(filepath)
-        region_lifetime = get_ROI_lifetime(filepath, 462:562, 206:306)[1][1]
+        new_files = setdiff(current_files, previous_files)
 
-        println("   "*string(region_lifetime)*" ns")
-        println()
+        if !isempty(new_files)
+            # println("New file detected")
+            for new_file in new_files
+                if new_file != ".DS_Store"
+                    file_lifetime = get_file_lifetime(joinpath(path, new_file))[1][1]
 
-        push!(t, time())
-        push!(t, time()-t[1])
-        push!(lifetime, region_lifetime)
+                    # println("File lifetime : "*string(file_lifetime)*" ns")
+                    # println()
 
-        p = plot(t[2:2:end],
-            lifetime,
-            xlabel = "Time [s]",
-            ylabel = "Lifetime [ns]",
-            linewidth = 2,
-            linecolor = :black,
-            legend = false)
-        display(p)
+                    push!(t, time()-t_0)
+                    push!(lifetime, file_lifetime)
+
+                    p = plot(t,
+                        lifetime,
+                        xlabel = "Time [s]",
+                        ylabel = "Lifetime [ns]",
+                        linewidth = 2,
+                        linecolor = :black,
+                        legend = false)
+                    display(p)
+                end
+            end
+        end
+
+        previous_files = current_files
     end
 end
 
@@ -555,15 +605,22 @@ end
 @everywhere global irf = get_irf()
 @everywhere global irf_bin_size = get_irf_bin_size(irf)
 # @everywhere global folderpath = get_folder_path()
-@everywhere global folderpath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichiers_sdt/"
+@everywhere global folderpath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichier_test/"
+# @everywhere global folderpath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/20240607_test_taille_image/"
 # @everywhere global filepath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichiers_sdt/4.sdt"
+# @everywhere global filepath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichier_test/test_60X60X256_2_c001.sdt" 
+
+# file = get_file_lifetime(filepath)
+
 
 # @everywhere global BenchmarkTools.DEFAULT_PARAMETERS.seconds = 12
 
 # @benchmark region_lifetime = get_ROI_lifetime(filepath, 462:562, 206:306) samples = 10
 # @benchmark region_lifetime = get_file_lifetime(filepath) samples = 10
 
-display_lifetime(folderpath)
+# display_realtime_lifetime(folderpath)
+# display_lifetime_folder(folderpath)
+new_file_lifetime(folderpath)
 
 # t = zeros(0)
 # lifetime = zeros(0)
