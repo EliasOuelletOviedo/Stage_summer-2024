@@ -427,11 +427,38 @@ end
 @everywhere function get_folder_path()
     if isfile("folder_path.txt")
         folderpath = open(f->read(f, String), "folder_path.txt")
+
+        if isempty(folderpath)
+            py"""
+            from tkinter.filedialog import askdirectory
+
+            path = askdirectory()
+            """
+
+            folderpath = py"path"
+
+            open("folder_path.txt", "w") do io
+                write(io, folderpath)
+            end
+            end
     else
-        folderpath = open_dialog("Folder: Choose folder to open.")
-        # open("folder_path.txt", "w") do io
-        #     write(io, folderpath)
-        # end
+        py"""
+        from tkinter.filedialog import askdirectory
+
+        path = askdirectory()
+        """
+
+        folderpath = py"path"
+
+        open("folder_path.txt", "w") do io
+            write(io, folderpath)
+        end
+    end
+
+    if isempty(folderpath)
+        println("Folder does not exist")
+
+        folderpath = get_folder_path()
     end
 
     return folderpath
@@ -528,10 +555,11 @@ end
     lifetime = zeros(0)
 
     for i in tqdm(readdir(folderpath))
-        if i != ".DS_Store"
-            println("Iteration #"*string(length(lifetime) + 1))
-
-            filepath = folderpath*i
+        println("Iteration #"*string(length(lifetime) + 1))
+        
+        if endswith(i, ".sdt") || endswith(i[begin:end-6], ".sdt") || endswith(i[begin:end-8], ".sdt")
+        # if endswith(i, ".sdt")
+            filepath = joinpath(folderpath, i)
 
             @time region_lifetime = get_file_lifetime(filepath)[1][1]
             # region_lifetime = get_ROI_lifetime(filepath, 462:562, 206:306)[1][1]
@@ -576,7 +604,8 @@ end
         if !isempty(new_files)
             # println("New file detected")
             for new_file in new_files
-                if new_file != ".DS_Store"
+                if endswith(new_file, ".sdt") || endswith(new_file[begin:end-6], ".sdt") || endswith(new_file[begin:end-8], ".sdt") || endswith(new_file[begin:end-9], ".sdt")
+
                     file_lifetime = get_file_lifetime(joinpath(path, new_file))[1][1]
 
                     # println("File lifetime : "*string(file_lifetime)*" ns")
@@ -592,6 +621,8 @@ end
                         linewidth = 2,
                         linecolor = :black,
                         legend = false)
+            
+                    display(p)
                     display(p)
                 end
             end
@@ -604,14 +635,13 @@ end
 
 @everywhere global irf = get_irf()
 @everywhere global irf_bin_size = get_irf_bin_size(irf)
-# @everywhere global folderpath = get_folder_path()
-@everywhere global folderpath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichier_test/"
+@everywhere global folderpath = get_folder_path()
+# @everywhere global folderpath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichier_test/"
 # @everywhere global folderpath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/20240607_test_taille_image/"
 # @everywhere global filepath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichiers_sdt/4.sdt"
 # @everywhere global filepath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichier_test/test_60X60X256_2_c001.sdt" 
 
 # file = get_file_lifetime(filepath)
-
 
 # @everywhere global BenchmarkTools.DEFAULT_PARAMETERS.seconds = 12
 

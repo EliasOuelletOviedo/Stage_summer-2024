@@ -1,39 +1,14 @@
-using FilePathsBase
+using GLMakie
 
-function watch_directory(directory::AbstractString)
-    # Convert to Path object
-    dir_path = Path(directory)
-    
-    # Previous state of the directory
-    prev_files = Set(readdir(string(dir_path)))
-    
-    while true
-        sleep(0.1)  # Check every 1 second
-        
-        current_files = Set(readdir(string(dir_path)))
-        
-        # Detect newly created files
-        new_files = setdiff(current_files, prev_files)
-        if !isempty(new_files)
-            for new_file in new_files
-                println("New file created: ", joinpath(string(dir_path), new_file))
-            end
-        end
-        
-        # Update the previous state
-        prev_files = current_files
-    end
-end
+fig = Figure()
 
-# Directory to be monitored
-directory_to_watch = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichier_test"
+ax = Axis(fig[1, 1], xlabel = "x label", ylabel = "y label",
+title = "Title")
 
-# Start watching the directory
-watch_directory(directory_to_watch)
+fig[2, 1] = buttongrid = GridLayout(tellwidth = false)
 
+button_IRF = buttongrid[1, 1] = Button(fig, label="Import IRF")
+button_folder = buttongrid[1, 2] = Button(fig, label="Select folder")
+button_play = buttongrid[2, 1:2] = Button(fig, label="Select folder")
 
-
-
-
-
-# path = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichier_test"
+fig
