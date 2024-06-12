@@ -638,8 +638,20 @@ end
 @everywhere global folderpath = get_folder_path()
 # @everywhere global folderpath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichier_test/"
 # @everywhere global folderpath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/20240607_test_taille_image/"
-# @everywhere global filepath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichiers_sdt/4.sdt"
+@everywhere global filepath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichier_test/single_c003.sdt"
 # @everywhere global filepath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichier_test/test_60X60X256_2_c001.sdt" 
+
+open(filepath,"r") do io
+    seek(io, 14)
+    header = read(io, 2)
+    seek(io, header[2]*16^2+header[1])
+
+    file_info = read(io, 22)
+
+    zip = IOBuffer(read(io, file_info[10]*16^6 + file_info[9]*16^4 + file_info[8]*16^2 + file_info[7] - (file_info[6]*10^6 + file_info[5]*16^4 + file_info[4]*16^2 + file_info[3])))
+
+    array = reinterpret(UInt16, read(ZipFile.Reader(zip).files[1], file_info[22]*16^6 + file_info[21]*16^4 + file_info[20]*16^2 + file_info[19]))
+end
 
 # file = get_file_lifetime(filepath)
 
@@ -650,7 +662,7 @@ end
 
 # display_realtime_lifetime(folderpath)
 # display_lifetime_folder(folderpath)
-new_file_lifetime(folderpath)
+# new_file_lifetime(folderpath)
 
 # t = zeros(0)
 # lifetime = zeros(0)

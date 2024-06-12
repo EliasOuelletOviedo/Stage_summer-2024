@@ -9,8 +9,24 @@ using StructTypes
 using Base64
 using ZipFile
 using BenchmarkTools
-using Plots
 using GLMakie
+using Observables
+using Dates
+
+tau_0 = 1
+K_q = 1
+
+hist_time = collect(1:256)
+lifetime_time = Observable(Float64[])
+photons_time = Observable(Float64[])
+concentration_time = Observable(Float64[])
+
+hist = Observable(Vector{UInt64}(ones(256)))
+lifetime = Observable(Float64[])
+photons = Observable(Float64[])
+concentration = Observable(Float64[])
+
+running = Observable(false)
 
 @everywhere sp_o = pyimport("scipy.optimize")
 
@@ -460,6 +476,28 @@ end
     return folderpath
 end
 
+@everywhere function get_new_folder_path()
+    py"""
+    from tkinter.filedialog import askdirectory
+
+    path = askdirectory()
+    """
+
+    folderpath = py"path"
+
+    open("folder_path.txt", "w") do io
+        write(io, folderpath)
+    end
+
+    if isempty(folderpath)
+        println("Folder does not exist")
+
+        folderpath = get_folder_path()
+    end
+
+    return folderpath
+end
+
 @everywhere function SDTFile(filepath)
     open(filepath,"r") do io
         seek(io, 14)
@@ -474,38 +512,22 @@ end
     end
 end
 
-@everywhere function ROI_coordinates(x_region, y_region)
-    ROI = [(0, 0)]
-    for x in x_region
-        for y in y_region
-            push!(ROI, (x, y))
+@everywhere function SDTFile_single(filepath)
+    open(filepath,"r") do io
+        seek(io, 14)
+        header = read(io, 2)
+        seek(io, header[2]*16^2+header[1]+22)
+
+        vector = read(io)
+        new_vector = UInt16[]
+
+        for i in 1:2:length(vector)
+            push!(new_vector, vector[i+1]*16^2 + vector[i])
         end
+
+        return new_vector
     end
-    return ROI[2:end]
 end
-
-@everywhere function get_ROI_vector(array, ROI)
-    ROI_arr = zeros(256)
-
-    for (x, y) in ROI
-        ROI_arr += array[:, x + (y-1)*2048]
-    end
-
-    return ROI_arr
-end
-
-@everywhere function get_ROI_lifetime(filepath, x_region, y_region)
-    ROI = ROI_coordinates(x_region, y_region)
-
-    file = SDTFile(filepath)
-
-    array = reshape(file, (256, :))
-
-    ROI_vector = get_ROI_vector(array, ROI)
-
-    return vec_to_lifetime(ROI_vector)
-end
-    
 
 @everywhere function get_file_lifetime(filepath)
     file = SDTFile(filepath)
@@ -517,58 +539,182 @@ end
     return vec_to_lifetime(vector)
 end
 
-@everywhere function new_file_lifetime(path)
+@everywhere function display_lifetime_folder(folderpath)
+
+    for i in readdir(folderpath)
+        if endswith(i, ".sdt") || endswith(i[begin:end-6], ".sdt") || endswith(i[begin:end-8], ".sdt")
+            filepath = joinpath(folderpath, i)
+
+            @time region_lifetime = get_file_lifetime(filepath)[1][1]
+
+            push!(time, length(lifetime))
+            push!(lifetime, region_lifetime)
+        end
+    end
+end
+
+@everywhere function new_file_lifetime(path, ax_histogram, ax_lifetime, ax_photons, ax_concentration)
     previous_files = readdir(path)
 
-    t = zeros(0)
+    t_0 = now()
 
-    lifetime = zeros(0)
+    i = 0
 
-    t_0 = time()
-
-    println("Waiting for file")
-
-    while true
+    while running[]
         current_files = readdir(path)
 
         new_files = setdiff(current_files, previous_files)
 
         if !isempty(new_files)
-            # println("New file detected")
+            # println("File detected!")
             for new_file in new_files
-                if endswith(new_file, ".sdt") || endswith(new_file[begin:end-6], ".sdt") || endswith(new_file[begin:end-8], ".sdt") || endswith(new_file[begin:end-9], ".sdt")
+                # if endswith(new_file, ".sdt") || endswith(new_file[begin:end-6], ".sdt") || endswith(new_file[begin:end-8], ".sdt") || endswith(new_file[begin:end-9], ".sdt")
+                file = SDTFile(joinpath(path, new_file))
+                array = reshape(file, (256, :))
 
-                    file_lifetime = get_file_lifetime(joinpath(path, new_file))[1][1]
+                file_hist = sum(array, dims = 2)[:,1]
+                file_lifetime = vec_to_lifetime(sum(array, dims = 2)[:,1])[1][1]
+                file_photons = sum(array, dims = (1,2))[1][1]
+                file_concentration = file_lifetime
 
-                    # println("File lifetime : "*string(file_lifetime)*" ns")
-                    # println()
+                present_time = (now() - t_0)/Millisecond(1)/1000
 
-                    push!(t, time()-t_0)
-                    push!(lifetime, file_lifetime)
+                hist[] = file_hist
+                notify(hist)
 
-                    p = plot(t,
-                        lifetime,
-                        xlabel = "Time [s]",
-                        ylabel = "Lifetime [ns]",
-                        linewidth = 2,
-                        linecolor = :black,
-                        legend = false)
-            
-                    display(p)
-                    display(p)
-                end
+                push!(lifetime_time[], present_time)
+                push!(lifetime[], file_lifetime)
+                notify(lifetime_time)
+                notify(lifetime)
+
+                push!(photons_time[], present_time)
+                push!(photons[], file_photons)
+                notify(photons_time)
+                notify(photons)
+
+                push!(concentration_time[], present_time)
+                push!(concentration[], file_concentration)
+                notify(concentration_time)
+                notify(concentration)
+
+                limits!(ax_histogram, 0, 256, 0, maximum(hist[])*1.1)
+                limits!(ax_lifetime, max(0, present_time-10), max(10, present_time), minimum(lifetime[])*0.99, maximum(lifetime[])*1.01)
+                limits!(ax_photons, max(0, present_time-10), max(10, present_time), minimum(photons[])*0.99, maximum(photons[])*1.01)
+                limits!(ax_concentration, max(0, present_time-10), max(10, present_time), minimum(concentration[])*0.99, maximum(concentration[])*1.01)
+                i += 1
+                # end
+
+                # println(i)
+                sleep(0.05)
             end
         end
 
         previous_files = current_files
+
+        sleep(0.01)
     end
 end
 
-# @everywhere global irf = get_irf()
-# @everywhere global irf_bin_size = get_irf_bin_size(irf)
-# @everywhere global folderpath = get_folder_path()
+@everywhere function new_file_lifetime_single(path, ax_histogram, ax_lifetime, ax_photons, ax_concentration)
+    previous_files = readdir(path)
 
-fig = Figure()
+    t_0 = now()
 
-ax = Axis(fig[1, 1], xlabel = "x label", ylabel = "y label",
-title = "Title")
+    i = 0
+
+    while running[]
+        current_files = readdir(path)
+
+        new_files = setdiff(current_files, previous_files)
+
+        if !isempty(new_files)
+            println("File detected!")
+            for new_file in new_files
+                # if endswith(new_file, ".sdt") || endswith(new_file[begin:end-6], ".sdt") || endswith(new_file[begin:end-8], ".sdt") || endswith(new_file[begin:end-9], ".sdt")
+                vector = SDTFile_single(joinpath(path, new_file))
+
+                file_hist = Vector{UInt64}(vector)
+                file_lifetime = vec_to_lifetime(vector)[1][1]
+                file_photons = sum(vector)[1]
+                file_concentration = 1/(1/tau_0 + K_q*file_lifetime)
+
+                present_time = (now() - t_0)/Millisecond(1)/1000
+
+                hist[] = file_hist
+                notify(hist)
+
+                push!(lifetime_time[], present_time)
+                push!(lifetime[], file_lifetime)
+                notify(lifetime_time)
+                notify(lifetime)
+
+                push!(photons_time[], present_time)
+                push!(photons[], file_photons)
+                notify(photons_time)
+                notify(photons)
+
+                push!(concentration_time[], present_time)
+                push!(concentration[], file_concentration)
+                notify(concentration_time)
+                notify(concentration)
+
+                limits!(ax_histogram, 0, 256, 0, maximum(hist[])*1.1)
+                limits!(ax_lifetime, max(0, present_time-10), max(10, present_time), minimum(lifetime[])*0.99, maximum(lifetime[])*1.01)
+                limits!(ax_photons, max(0, present_time-10), max(10, present_time), minimum(photons[])*0.99, maximum(photons[])*1.01)
+                limits!(ax_concentration, max(0, present_time-10), max(10, present_time), minimum(concentration[])*0.99, maximum(concentration[])*1.01)
+                i += 1
+                # end
+
+                # println(i)
+                sleep(0.05)
+            end
+        end
+
+        previous_files = current_files
+
+        sleep(0.01)
+    end
+end
+
+@everywhere global irf = get_irf()
+@everywhere global irf_bin_size = get_irf_bin_size(irf)
+@everywhere global folderpath = get_folder_path()
+
+fig = Figure(size = (1000, 750))
+
+Label(fig[0, 1:4], text = "Title", fontsize = 30)
+
+fig[1, 1:4] = axisgrid = GridLayout()
+
+axis_histogram = axisgrid[1, 1] = Axis(fig, title="Histogram of the photon counts")
+axis_lifetime = axisgrid[1, 2] = Axis(fig, title="Real-time plot of the lifetime")
+axis_photons = axisgrid[2, 1] = Axis(fig, title="Real-time plot of the total photon counts")
+axis_concentration = axisgrid[2, 2] = Axis(fig, title="Real-time plot of the chlorine concentration")
+
+line_histogram = lines!(axis_histogram, hist_time, hist)
+line_lifetime = lines!(axis_lifetime, lifetime_time, lifetime)
+line_photons = lines!(axis_photons, photons_time, photons)
+line_concentration = lines!(axis_concentration, concentration_time, concentration)
+
+fig[2, 1:4] = buttongrid = GridLayout()
+
+# button_folder = buttongrid[1, 1] = Button(fig[2, 1], label="Select folder", width = 200)
+button_start = buttongrid[1, 1] = Button(fig, label="Start", width = 200)
+button_stop = buttongrid[1, 2] = Button(fig, label="Stop", width = 200)
+
+# on(button_folder.clicks) do _
+#     @everywhere global folderpath = get_new_folder_path()
+# end
+
+on(button_start.clicks) do _
+    running[] = true
+    println("button pressed")
+    @async new_file_lifetime_single(folderpath, axis_histogram, axis_lifetime, axis_photons, axis_concentration)
+    # @async new_file_lifetime(folderpath, axis_histogram, axis_lifetime, axis_photons, axis_concentration)
+end
+
+on(button_stop.clicks) do _
+    running[] = false
+end
+
+fig

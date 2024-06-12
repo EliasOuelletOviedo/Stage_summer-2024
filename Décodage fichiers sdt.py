@@ -354,7 +354,6 @@ with open(arg, 'rb') as fh:
 
 
 print(header)
-print(header.no_of_data_blocks)
 print(bh)
 # print(bh.block_type)
 # print(bh.block_length)

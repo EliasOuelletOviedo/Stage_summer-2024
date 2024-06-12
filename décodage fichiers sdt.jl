@@ -39,7 +39,38 @@ struct BlockHeader
     block_length::UInt32
 end
 
-filepath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichiers_sdt/4.sdt"
+filepath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichier_test/single_c003.sdt"
+
+
+open(filepath,"r") do io
+    seek(io, 14)
+    header = read(io, 2)
+    seek(io, header[2]*16^2+header[1] + 22)
+
+    # println(header)
+
+    # file_info = read(io, 22)
+
+    # println(file_info)
+
+    vector = read(io)
+    new_vector = UInt16[]
+
+    for i in 1:2:length(vector)
+        push!(new_vector, vector[i+1] * 16^2 + vector[i])
+    end
+
+    println((new_vector))
+
+    # zip = IOBuffer(read(io, file_info[10]*16^6 + file_info[9]*16^4 + file_info[8]*16^2 + file_info[7] - (file_info[6]*10^6 + file_info[5]*16^4 + file_info[4]*16^2 + file_info[3])))
+
+    # array = reinterpret(UInt16, read(ZipFile.Reader(zip).files[1], file_info[22]*16^6 + file_info[21]*16^4 + file_info[20]*16^2 + file_info[19]))
+
+    # println(size(array))
+end
+
+
+
 
 # file = open(filepath, "r")
 # seek(file, 14)
@@ -59,32 +90,32 @@ filepath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichier
 
 # close(file)
 
-open(filepath,"r") do io
-    seek(io, 14)
-    header = read(io, 2)
-    seek(io, header[2]*16^2+header[1])
+# open(filepath,"r") do io
+#     seek(io, 14)
+#     header = read(io, 2)
+#     seek(io, header[2]*16^2+header[1])
 
-    file_info = read(io, 22)
+#     file_info = read(io, 22)
 
-    println(file_info[10]*16^6 + file_info[9]*16^4 + file_info[8]*16^2 + file_info[7] - (file_info[6]*10^6 + file_info[5]*16^4 + file_info[4]*16^2 + file_info[3]))
+#     println(file_info[10]*16^6 + file_info[9]*16^4 + file_info[8]*16^2 + file_info[7] - (file_info[6]*10^6 + file_info[5]*16^4 + file_info[4]*16^2 + file_info[3]))
 
-    @time zip = IOBuffer(read(io, file_info[10]*16^6 + file_info[9]*16^4 + file_info[8]*16^2 + file_info[7] - (file_info[6]*10^6 + file_info[5]*16^4 + file_info[4]*16^2 + file_info[3])))
+#     # @time zip = IOBuffer(read(io, file_info[10]*16^6 + file_info[9]*16^4 + file_info[8]*16^2 + file_info[7] - (file_info[6]*10^6 + file_info[5]*16^4 + file_info[4]*16^2 + file_info[3])))
 
-    @time unzip = ZipFile.Reader(zip).files[1]
+#     # @time unzip = ZipFile.Reader(zip).files[1]
     
-    @time read_unzip = read(unzip, 536_870_912)
+#     # @time read_unzip = read(unzip, 536_870_912)
 
-    @time data = reinterpret(UInt16, read_unzip)
+#     # @time data = reinterpret(UInt16, read_unzip)
 
-    @time data_array = permutedims(reshape(data, (256, 1024, 1024))[:,:,begin:2:end], [3, 2, 1])
+#     # @time data_array = permutedims(reshape(data, (256, 1024, 1024))[:,:,begin:2:end], [3, 2, 1])
 
-    println(size(data))
-    # println(size(data_array))
+#     # println(size(data))
+#     # println(size(data_array))
 
-    heatmap(sum(data_array, dims = 3)[:,:,1], c=cgrad([:black, :white]), yflip = true, aspect_ratio = :equal)
+#     # heatmap(sum(data_array, dims = 3)[:,:,1], c=cgrad([:black, :white]), yflip = true, aspect_ratio = :equal)
 
-    # writedlm("SDT.csv", data, ",")
-end
+#     # writedlm("SDT.csv", data, ",")
+# end
 
 # open(filepath,"r") do io
 #     seek(io, 14)
