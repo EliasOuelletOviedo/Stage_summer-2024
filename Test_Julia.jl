@@ -1,32 +1,40 @@
 using GLMakie
-using Observables
-using Threads
 
-set_theme!(backgroundcolor = :gray90)
+positions = Observable(rand(Point2f, 10))
+dragging = false
+idx = 1
 
-# fig = Figure(size = (600, 400))
+fig, ax, p = scatter(positions)
 
-# empty!(fig)
+println(fig)
+println(ax)
+println(p)
 
-# fig
+on(events(fig).mousebutton, priority = 2) do event
+    global dragging, idx
+    if event.button == Mouse.left
+        if event.action == Mouse.press
+            plt, i = pick(fig)
 
-# sleep(10)
+            dragging = plt == p
+            idx = i
+            return Consume(dragging)
+        elseif event.action == Mouse.release
+            # Exit drag
+            dragging = false
+            return Consume(false)
+        end
+    end
+    return Consume(false)
+end
 
-# button_IRF = buttongrid[1, 1] = Button(fig, label="Import IRF", width = 100)
-# button_folder = buttongrid[1, 2] = Button(fig, label="Select folder", width = 100)
-
-fig = Figure(size = (1440, 900))
-
-fig[1, 1] = buttongrid = GridLayout(tellwidth = false)
-
-button_start = buttongrid[1, 1] = Button(fig, label="START", width = 200)
-button_stop = buttongrid[1, 2] = Button(fig, label="STOP", width = 200)
-
-fig[2, 1] = axisgrid = GridLayout(tellwidth = false)
-
-axis_count = axisgrid[1, 1] = Axis(fig, xlabel = "Time [ns]", ylabel = "y label", title = "Photon counts", aspect = 2, xgridvisible=false, ygridvisible=false)
-axis_histogram = axisgrid[1, 2] = Axis(fig, xlabel = "Time [ns]", ylabel = "y label", title = "Counts histogram", aspect = 2, xgridvisible=false, ygridvisible=false)
-axis_lifetime = axisgrid[2, 1] = Axis(fig, xlabel = "Time [ns]", ylabel = "y label", title = "Lifetime", aspect = 2, xgridvisible=false, ygridvisible=false)
-axis_concentration = axisgrid[2, 2] = Axis(fig, xlabel = "Time [ns]", ylabel = "y label", title = "Chlorine concentration", aspect = 2, xgridvisible=false, ygridvisible=false)
+on(events(fig).mouseposition, priority = 2) do mp
+    if dragging
+        positions[][idx] = mouseposition(ax)
+        notify(positions)
+        return Consume(true)
+    end
+    return Consume(false)
+end
 
 fig

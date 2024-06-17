@@ -12,21 +12,7 @@ using BenchmarkTools
 using GLMakie
 using Observables
 using Dates
-
-tau_0 = 1
-K_q = 1
-
-hist_time = collect(1:256)
-lifetime_time = Observable(Float64[])
-photons_time = Observable(Float64[])
-concentration_time = Observable(Float64[])
-
-hist = Observable(Vector{UInt64}(ones(256)))
-lifetime = Observable(Float64[])
-photons = Observable(Float64[])
-concentration = Observable(Float64[])
-
-running = Observable(false)
+using Colors
 
 @everywhere sp_o = pyimport("scipy.optimize")
 
@@ -386,7 +372,7 @@ end
     return res
 end
 
-@everywhere function vec_to_lifetime(x; bin_size=3.9088729e-2, hist_size_threshold=100, method="MLE", broadcast_call=false, guess=[2.0, 1.0], laser_pulse_period=12.5, histogram_resolution=256, number_of_previous_pulses=5, tcspc_window_size=10, tac_low_cut=5.0980392, tac_high_cut=94.901962)
+@everywhere function vec_to_lifetime(x; bin_size=3.9088729e-2, hist_size_threshold=100, method="MLE", broadcast_call=false, guess=[4.0, 3.0, 2.0, 1.0], laser_pulse_period=12.5, histogram_resolution=256, number_of_previous_pulses=5, tcspc_window_size=10, tac_low_cut=5.0980392, tac_high_cut=94.901962)
     """
     Calculate fluorescence lifetime from vector of counts
     """
@@ -553,7 +539,35 @@ end
     end
 end
 
-@everywhere function new_file_lifetime(path, ax_histogram, ax_lifetime, ax_photons, ax_concentration)
+@everywhere function start_real_time(folderpath, type, hist_res, axis_histogram, axis_lifetime, axis_photons, axis_concentration)
+    channels = Int(round(laser_pulse_period[]*hist_res/tcspc_window_size[]))
+
+    hist_time = LinRange(0, laser_pulse_period[], channels)
+    hist = Observable(zeros(channels))
+    curve_fit = Observable(zeros(channels))
+    real_time = Observable(Float64[])
+    lifetime = Observable(Float64[])
+    photons = Observable(Int64[])
+    concentration = Observable(Float64[])
+
+    line_histogram = barplot!(axis_histogram, hist_time, hist, gap = 0, color = Colors.JULIA_LOGO_COLORS.blue)
+    line_curve_fit = lines!(axis_histogram, hist_time, curve_fit, color = Colors.JULIA_LOGO_COLORS.red, linewidth=2)
+    line_lifetime = lines!(axis_lifetime, real_time, lifetime, color = Colors.JULIA_LOGO_COLORS.blue)
+    line_photons = lines!(axis_photons, real_time, photons, color = Colors.JULIA_LOGO_COLORS.blue)
+    line_concentration = lines!(axis_concentration, real_time, concentration, color = Colors.JULIA_LOGO_COLORS.blue)
+    
+    if type == "Single"
+        println("Single")
+        @async new_file_lifetime_single(folderpath, hist_res, axis_histogram, axis_lifetime, axis_photons, axis_concentration, hist, curve_fit, real_time, lifetime, photons, concentration)
+        # @async new_file_lifetime_single(folderpath, hist_res, axis_histogram, axis_lifetime, axis_photons, axis_concentration)
+    else
+        println(size(hist[]))
+        println("Image")
+        @async new_file_lifetime(folderpath, hist_res, axis_histogram, axis_lifetime, axis_photons, axis_concentration, hist, curve_fit, real_time, lifetime, photons, concentration)
+    end
+end
+
+@everywhere function new_file_lifetime(path, hist_res, axis_histogram, axis_lifetime, axis_photons, axis_concentration, hist, curve_fit, real_time, lifetime, photons, concentration)
     previous_files = readdir(path)
 
     t_0 = now()
@@ -566,56 +580,88 @@ end
         new_files = setdiff(current_files, previous_files)
 
         if !isempty(new_files)
-            # println("File detected!")
+            
+
+            println("File detected!")
+
             for new_file in new_files
                 # if endswith(new_file, ".sdt") || endswith(new_file[begin:end-6], ".sdt") || endswith(new_file[begin:end-8], ".sdt") || endswith(new_file[begin:end-9], ".sdt")
                 file = SDTFile(joinpath(path, new_file))
-                array = reshape(file, (256, :))
+                array = reshape(file, (hist_res, :))
+                file_params = vec_to_lifetime(sum(array, dims = 2)[:,1], histogram_resolution=hist_res, laser_pulse_period=laser_pulse_period[], tcspc_window_size=tcspc_window_size[])
 
-                file_hist = sum(array, dims = 2)[:,1]
-                file_lifetime = vec_to_lifetime(sum(array, dims = 2)[:,1])[1][1]
-                file_photons = sum(array, dims = (1,2))[1][1]
-                file_concentration = file_lifetime
+                file_hist = file_params[2][2]
+                file_curve_fit = conv_irf_data(file_params[2][1], file_params[1], irf, file_params[2][2], histogram_resolution=hist_res)
+                file_lifetime = file_params[1][1]
+
+                if isnan(file_lifetime)
+                    if i == 0
+                        file_lifetime = 1
+                    else
+                        file_lifetime = lifetime[][end]
+                    end
+                end
+
+                file_photons = sum(file_hist)[1]
+                file_concentration = 1/(1/tau_0[] + K_q[]*file_lifetime)
+                # file_concentration = file_params[1][3]
+
+                if i == 0
+                    t_0 = now()
+                    i += 1
+                end
 
                 present_time = (now() - t_0)/Millisecond(1)/1000
 
                 hist[] = file_hist
-                notify(hist)
-
-                push!(lifetime_time[], present_time)
+                curve_fit[] = file_curve_fit
+                push!(real_time[], present_time)
                 push!(lifetime[], file_lifetime)
-                notify(lifetime_time)
-                notify(lifetime)
-
-                push!(photons_time[], present_time)
                 push!(photons[], file_photons)
-                notify(photons_time)
-                notify(photons)
-
-                push!(concentration_time[], present_time)
                 push!(concentration[], file_concentration)
-                notify(concentration_time)
+
+                notify(hist)
+                notify(curve_fit)
+                notify(real_time)
+                notify(lifetime)
+                notify(photons)
                 notify(concentration)
 
-                limits!(ax_histogram, 0, 256, 0, maximum(hist[])*1.1)
-                limits!(ax_lifetime, max(0, present_time-10), max(10, present_time), minimum(lifetime[])*0.99, maximum(lifetime[])*1.01)
-                limits!(ax_photons, max(0, present_time-10), max(10, present_time), minimum(photons[])*0.99, maximum(photons[])*1.01)
-                limits!(ax_concentration, max(0, present_time-10), max(10, present_time), minimum(concentration[])*0.99, maximum(concentration[])*1.01)
-                i += 1
+                limits!(axis_histogram, 0, laser_pulse_period[], 0, maximum(hist[])*1.1)
+                limits!(axis_lifetime, max(0, present_time-10), max(10, present_time), minimum(lifetime[])*0.99, maximum(lifetime[])*1.01)
+                limits!(axis_photons, max(0, present_time-10), max(10, present_time), minimum(photons[])*0.99, maximum(photons[])*1.01)
+                limits!(axis_concentration, max(0, present_time-10), max(10, present_time), minimum(concentration[])*0.99, maximum(concentration[])*1.01)
+                
                 # end
 
                 # println(i)
-                sleep(0.05)
+                sleep(0.01)
             end
         end
 
         previous_files = current_files
+
+        if save[] == true
+            filename = tb_file_name.displayed_string[]*".csv"
+
+            if filename == "Enter a file name.csv"
+                filename = split(path, "/")[end]*".csv"
+            end
+
+            open(filename, "w") do io
+                writedlm(io, [string(now())])
+                writedlm(io, [""])
+                writedlm(io, [real_time[] lifetime[] photons[] concentration[]], ",")
+            end
+
+            save[] = false
+        end
 
         sleep(0.01)
     end
 end
 
-@everywhere function new_file_lifetime_single(path, ax_histogram, ax_lifetime, ax_photons, ax_concentration)
+@everywhere function new_file_lifetime_single(path, hist_res, axis_histogram, axis_lifetime, axis_photons, axis_concentration, hist, curve_fit, real_time, lifetime, photons, concentration)
     previous_files = readdir(path)
 
     t_0 = now()
@@ -628,49 +674,79 @@ end
         new_files = setdiff(current_files, previous_files)
 
         if !isempty(new_files)
-            println("File detected!")
+
+            # println("File detected!")
+
             for new_file in new_files
                 # if endswith(new_file, ".sdt") || endswith(new_file[begin:end-6], ".sdt") || endswith(new_file[begin:end-8], ".sdt") || endswith(new_file[begin:end-9], ".sdt")
                 vector = SDTFile_single(joinpath(path, new_file))
+                file_params = vec_to_lifetime(vector, histogram_resolution=hist_res, laser_pulse_period=laser_pulse_period[], tcspc_window_size=tcspc_window_size[])
 
-                file_hist = Vector{UInt64}(vector)
-                file_lifetime = vec_to_lifetime(vector)[1][1]
-                file_photons = sum(vector)[1]
-                file_concentration = 1/(1/tau_0 + K_q*file_lifetime)
+                file_hist = file_params[2][2]
+                file_curve_fit = conv_irf_data(file_params[2][1], file_params[1], irf, file_params[2][2], histogram_resolution=hist_res)
+                file_lifetime = file_params[1][1]
+
+                if isnan(file_lifetime)
+                    if i == 0
+                        file_lifetime = 1
+                    else
+                        file_lifetime = lifetime[][end]
+                    end
+                end
+
+                file_photons = sum(file_hist)[1]
+                file_concentration = 1/(1/tau_0[] + K_q[]*file_lifetime)
+
+                if i == 0
+                    t_0 = now()
+                    i += 1
+                end
 
                 present_time = (now() - t_0)/Millisecond(1)/1000
 
                 hist[] = file_hist
-                notify(hist)
-
-                push!(lifetime_time[], present_time)
+                curve_fit[] = file_curve_fit
+                push!(real_time[], present_time)
                 push!(lifetime[], file_lifetime)
-                notify(lifetime_time)
-                notify(lifetime)
-
-                push!(photons_time[], present_time)
                 push!(photons[], file_photons)
-                notify(photons_time)
-                notify(photons)
-
-                push!(concentration_time[], present_time)
                 push!(concentration[], file_concentration)
-                notify(concentration_time)
+
+                notify(hist)
+                notify(curve_fit)
+                notify(real_time)
+                notify(lifetime)
+                notify(photons)
                 notify(concentration)
 
-                limits!(ax_histogram, 0, 256, 0, maximum(hist[])*1.1)
-                limits!(ax_lifetime, max(0, present_time-10), max(10, present_time), minimum(lifetime[])*0.99, maximum(lifetime[])*1.01)
-                limits!(ax_photons, max(0, present_time-10), max(10, present_time), minimum(photons[])*0.99, maximum(photons[])*1.01)
-                limits!(ax_concentration, max(0, present_time-10), max(10, present_time), minimum(concentration[])*0.99, maximum(concentration[])*1.01)
-                i += 1
+                limits!(axis_histogram, 0, laser_pulse_period[], 0, maximum(hist[])*1.1)
+                limits!(axis_lifetime, max(0, present_time-10), max(10, present_time), minimum(lifetime[])*0.99, maximum(lifetime[])*1.01)
+                limits!(axis_photons, max(0, present_time-10), max(10, present_time), minimum(photons[])*0.99, maximum(photons[])*1.01)
+                limits!(axis_concentration, max(0, present_time-10), max(10, present_time), minimum(concentration[])*0.99, maximum(concentration[])*1.01)
+                
                 # end
 
                 # println(i)
-                sleep(0.05)
+                sleep(0.01)
             end
         end
 
         previous_files = current_files
+
+        if save[] == true
+            filename = tb_file_name.displayed_string[]*".csv"
+
+            if filename == "Enter a file name.csv"
+                filename = split(path, "/")[end]*".csv"
+            end
+
+            open(filename, "w") do io
+                writedlm(io, [string(now())])
+                writedlm(io, [""])
+                writedlm(io, [real_time[] lifetime[] photons[] concentration[]], ",")
+            end
+
+            save[] = false
+        end
 
         sleep(0.01)
     end
@@ -680,41 +756,78 @@ end
 @everywhere global irf_bin_size = get_irf_bin_size(irf)
 @everywhere global folderpath = get_folder_path()
 
-fig = Figure(size = (1000, 750))
+set_theme!(backgroundcolor = :gray95)
 
-Label(fig[0, 1:4], text = "Title", fontsize = 30)
+tau_0 = Observable(1)
+K_q = Observable(1)
+
+laser_pulse_period = Observable(10)
+tcspc_window_size = Observable(10)
+
+running = Observable(false)
+ran = Observable(false)
+save = Observable(false)
+
+fig = Figure(size = (1440, 847))
+
+Label(fig[0, 1:4], text = "Title", font=:bold, fontsize = 32)
 
 fig[1, 1:4] = axisgrid = GridLayout()
 
-axis_histogram = axisgrid[1, 1] = Axis(fig, title="Histogram of the photon counts")
-axis_lifetime = axisgrid[1, 2] = Axis(fig, title="Real-time plot of the lifetime")
-axis_photons = axisgrid[2, 1] = Axis(fig, title="Real-time plot of the total photon counts")
-axis_concentration = axisgrid[2, 2] = Axis(fig, title="Real-time plot of the chlorine concentration")
+axis_histogram = axisgrid[1, 1] = Axis(fig, title="Histogram of the photon counts", xlabel = "Time [ns]", ylabel = "Photon counts", titlesize=20, xlabelsize=18, ylabelsize=18)
+axis_lifetime = axisgrid[1, 3] = Axis(fig, title="Real-time plot of the lifetime", xlabel = "Time [s]", ylabel = "Lifetime [ns]", titlesize=20, xlabelsize=18, ylabelsize=18)
+axis_photons = axisgrid[2, 1] = Axis(fig, title="Real-time plot of the total photon counts", xlabel = "Time [s]", ylabel = "Photon counts", titlesize=20, xlabelsize=18, ylabelsize=18)
+axis_concentration = axisgrid[2, 3] = Axis(fig, title="Real-time plot of the chlorine concentration", xlabel = "Time [s]", ylabel = "Chlorine concentration [mM]", titlesize=20, xlabelsize=18, ylabelsize=18)
 
-line_histogram = lines!(axis_histogram, hist_time, hist)
-line_lifetime = lines!(axis_lifetime, lifetime_time, lifetime)
-line_photons = lines!(axis_photons, photons_time, photons)
-line_concentration = lines!(axis_concentration, concentration_time, concentration)
+limits!(axis_histogram, 0, 12.5, 0, 10)
+
+colsize!(axisgrid, 1, Auto(16))
+colsize!(axisgrid, 3, Auto(16))
 
 fig[2, 1:4] = buttongrid = GridLayout()
 
-# button_folder = buttongrid[1, 1] = Button(fig[2, 1], label="Select folder", width = 200)
-button_start = buttongrid[1, 1] = Button(fig, label="Start", width = 200)
-button_stop = buttongrid[1, 2] = Button(fig, label="Stop", width = 200)
+button_start = buttongrid[1, 1] = Button(fig, label="START", font=:bold, height = 40, width = 120, buttoncolor=RGBf(0.8, 0.8, 0.8), buttoncolor_hover=RGBf(0.6, 0.6, 0.6), buttoncolor_active=RGBf(0.4, 0.4, 0.4), fontsize=20, cornerradius=8, labelcolor_active=:black)
+button_reset = buttongrid[1, 2] = Button(fig, label="RESET", font=:bold, height = 40, width = 120, buttoncolor=RGBf(0.8, 0.8, 0.8), buttoncolor_hover=RGBf(0.6, 0.6, 0.6), buttoncolor_active=RGBf(0.4, 0.4, 0.4), fontsize=20, cornerradius=8, labelcolor_active=:black)
+menu_type = buttongrid[1, 3] = Menu(fig, options=["Image", "Single"], height = 40, width = 120, selection_cell_color_inactive=RGBf(0.8, 0.8, 0.8), cell_color_hover=RGBf(0.6, 0.6, 0.6), cell_color_active=RGBf(0.8, 0.8, 0.8), cell_color_inactive_even=RGBf(0.9, 0.9, 0.9), cell_color_inactive_odd=RGBf(0.9, 0.9, 0.9), fontsize=20, textcolor=:black)
+menu_time_res = buttongrid[1, 4] = Menu(fig, options=["256", "64"], height = 40, width = 120, selection_cell_color_inactive=RGBf(0.8, 0.8, 0.8), cell_color_hover=RGBf(0.6, 0.6, 0.6), cell_color_active=RGBf(0.8, 0.8, 0.8), cell_color_inactive_even=RGBf(0.9, 0.9, 0.9), cell_color_inactive_odd=RGBf(0.9, 0.9, 0.9), fontsize=20, textcolor=:black)
 
-# on(button_folder.clicks) do _
-#     @everywhere global folderpath = get_new_folder_path()
-# end
+tb_file_name = buttongrid[2, 1:3] = Textbox(fig, placeholder="Enter a file name", textcolor=RGBf(0.4, 0.4, 0.4), textcolor_placeholder=RGBf(0.6, 0.6, 0.6),height = 40, width = 397, borderwidth=2, bordercolor=RGBf(0.8, 0.8, 0.8), bordercolor_focused=RGBf(0.4, 0.4, 0.4), bordercolor_hover=RGBf(0.6, 0.6, 0.6), boxcolor=:white, boxcolor_focused=:white, boxcolor_hover=:white, fontsize=20, cornerradius=8)
+button_save = buttongrid[2, 4] = Button(fig, label="Save", height = 40, width = 120, buttoncolor=RGBf(0.8, 0.8, 0.8), buttoncolor_hover=RGBf(0.6, 0.6, 0.6), buttoncolor_active=RGBf(0.4, 0.4, 0.4), fontsize=20, cornerradius=8, labelcolor_active=:black)
 
 on(button_start.clicks) do _
-    running[] = true
-    println("button pressed")
-    @async new_file_lifetime_single(folderpath, axis_histogram, axis_lifetime, axis_photons, axis_concentration)
-    # @async new_file_lifetime(folderpath, axis_histogram, axis_lifetime, axis_photons, axis_concentration)
+    ran[] = true
+
+    if running[] == false
+        running[] = true
+        println("button pressed")
+
+        start_real_time(folderpath, menu_type.selection[], parse(Int64, menu_time_res.selection[]), axis_histogram, axis_lifetime, axis_photons, axis_concentration)
+    end
 end
 
-on(button_stop.clicks) do _
+on(button_reset.clicks) do _
     running[] = false
+
+    empty!(axis_histogram)
+    empty!(axis_lifetime)
+    empty!(axis_photons)
+    empty!(axis_concentration)
+end
+
+on(button_save.clicks) do _
+    # if running[] == false && ran[] == true
+    #     filename = tb_file_name.displayed_string[]*".csv"
+
+    #     if filename == "Enter a file name.csv"
+    #         filename = split(folderpath, "/")[end]*".csv"
+    #     end
+
+    #     open(filename, "w") do io
+    #         writedlm(io, [real_time[] lifetime[] photons[] concentration[]], ",")
+    #     end
+    # end
+
+    save[] = true
 end
 
 fig

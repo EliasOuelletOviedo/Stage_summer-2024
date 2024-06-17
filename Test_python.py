@@ -1,3 +1,3 @@
-from tkinter.filedialog import askdirectory
+x = ["apple", "banana", "cherry"]
 
-path = askdirectory()
+print(x.pop(1))

@@ -511,14 +511,14 @@ end
 end
     
 
-@everywhere function get_file_lifetime(filepath)
+@everywhere function get_file_lifetime(filepath, time_res)
     file = SDTFile(filepath)
     
-    array = reshape(file, (256, :))
+    array = reshape(file, (time_res, :))
 
     vector = sum(array, dims = 2)[:,1]
 
-    return vec_to_lifetime(vector)
+    return vec_to_lifetime(vector, histogram_resolution=time_res)
 end
 
 @everywhere function display_realtime_lifetime(folderpath)
@@ -638,22 +638,43 @@ end
 @everywhere global folderpath = get_folder_path()
 # @everywhere global folderpath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichier_test/"
 # @everywhere global folderpath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/20240607_test_taille_image/"
-@everywhere global filepath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichier_test/single_c003.sdt"
+# @everywhere global filepath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichier_test/single_c003.sdt"
+# @everywhere global filepath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichier_test/64x64x256_52ns_0.25s_c089.sdt"
 # @everywhere global filepath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichier_test/test_60X60X256_2_c001.sdt" 
+@everywhere global filepath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-06-10/64x64x256_52ns_0.25/64x64x256_52ns_0.25s_c003.sdt"
+# @everywhere global filepath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-05-13/FLIM/Pollen_1/pollen.sdt"
 
-open(filepath,"r") do io
-    seek(io, 14)
-    header = read(io, 2)
-    seek(io, header[2]*16^2+header[1])
+# open(filepath,"r") do io
+#     seek(io, 14)
+#     header = read(io, 2)
+#     seek(io, header[2]*16^2+header[1])
 
-    file_info = read(io, 22)
+#     file_info = read(io, 22)
 
-    zip = IOBuffer(read(io, file_info[10]*16^6 + file_info[9]*16^4 + file_info[8]*16^2 + file_info[7] - (file_info[6]*10^6 + file_info[5]*16^4 + file_info[4]*16^2 + file_info[3])))
+#     zip = IOBuffer(read(io, file_info[10]*16^6 + file_info[9]*16^4 + file_info[8]*16^2 + file_info[7] - (file_info[6]*10^6 + file_info[5]*16^4 + file_info[4]*16^2 + file_info[3])))
 
-    array = reinterpret(UInt16, read(ZipFile.Reader(zip).files[1], file_info[22]*16^6 + file_info[21]*16^4 + file_info[20]*16^2 + file_info[19]))
-end
+#     array = reinterpret(UInt16, read(ZipFile.Reader(zip).files[1], file_info[22]*16^6 + file_info[21]*16^4 + file_info[20]*16^2 + file_info[19]))
+# end
 
-# file = get_file_lifetime(filepath)
+file = get_file_lifetime(filepath, 256)
+
+println(file[1])
+
+fit = file[1]
+
+x_data = file[2][1]
+y_data = file[2][2]
+# fit_curve(x) = e^(x/fit[1])
+
+decay = conv_irf_data(x_data, fit, irf, y_data)
+
+
+println(size(irf[1]))
+
+plot(x_data, y_data, xlabel = "Time [s]", ylabel = "Counts", linewidth = 2, linecolor = :black, legend = false)
+# plot!(irf[1], irf[2]./maximum(irf[2]).*maximum(y_data), xlabel = "Time [s]", ylabel = "Counts", linewidth = 2, linecolor = :green, legend = false)
+plot!(x_data, decay, xlabel = "Time [s]", ylabel = "Counts", linewidth = 2, linecolor = :red, legend = false)
+
 
 # @everywhere global BenchmarkTools.DEFAULT_PARAMETERS.seconds = 12
 
