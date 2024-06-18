@@ -555,8 +555,12 @@ end
     line_lifetime = lines!(axis_lifetime, real_time, lifetime, color = Colors.JULIA_LOGO_COLORS.blue)
     line_photons = lines!(axis_photons, real_time, photons, color = Colors.JULIA_LOGO_COLORS.blue)
     line_concentration = lines!(axis_concentration, real_time, concentration, color = Colors.JULIA_LOGO_COLORS.blue)
+
+    print("Folder path : ")
+    println(folderpath)
     
     if type == "Single"
+        println(size(hist[]))
         println("Single")
         @async new_file_lifetime_single(folderpath, hist_res, axis_histogram, axis_lifetime, axis_photons, axis_concentration, hist, curve_fit, real_time, lifetime, photons, concentration)
         # @async new_file_lifetime_single(folderpath, hist_res, axis_histogram, axis_lifetime, axis_photons, axis_concentration)
@@ -574,6 +578,8 @@ end
 
     i = 0
 
+    println("Search started")
+
     while running[]
         current_files = readdir(path)
 
@@ -581,11 +587,11 @@ end
 
         if !isempty(new_files)
             
-
             println("File detected!")
 
             for new_file in new_files
                 # if endswith(new_file, ".sdt") || endswith(new_file[begin:end-6], ".sdt") || endswith(new_file[begin:end-8], ".sdt") || endswith(new_file[begin:end-9], ".sdt")
+                println(joinpath(path, new_file))
                 file = SDTFile(joinpath(path, new_file))
                 array = reshape(file, (hist_res, :))
                 file_params = vec_to_lifetime(sum(array, dims = 2)[:,1], histogram_resolution=hist_res, laser_pulse_period=laser_pulse_period[], tcspc_window_size=tcspc_window_size[])
@@ -668,6 +674,8 @@ end
 
     i = 0
 
+    println("Search started")
+
     while running[]
         current_files = readdir(path)
 
@@ -679,6 +687,8 @@ end
 
             for new_file in new_files
                 # if endswith(new_file, ".sdt") || endswith(new_file[begin:end-6], ".sdt") || endswith(new_file[begin:end-8], ".sdt") || endswith(new_file[begin:end-9], ".sdt")
+                println(joinpath(path, new_file))
+                
                 vector = SDTFile_single(joinpath(path, new_file))
 
                 file_params = vec_to_lifetime(vector, histogram_resolution=hist_res, laser_pulse_period=laser_pulse_period[], tcspc_window_size=tcspc_window_size[])
@@ -850,7 +860,7 @@ on(button_start.clicks) do _
 
     if running[] == false
         running[] = true
-        println("button pressed")
+        println("Button pressed")
 
         start_real_time(folderpath, menu_type.selection[], parse(Int64, menu_time_res.selection[]), axis_histogram, axis_lifetime, axis_photons, axis_concentration)
     end
