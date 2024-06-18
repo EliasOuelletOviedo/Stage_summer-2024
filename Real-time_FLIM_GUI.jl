@@ -677,57 +677,108 @@ end
 
             # println("File detected!")
 
-            for new_file in new_files
-                # if endswith(new_file, ".sdt") || endswith(new_file[begin:end-6], ".sdt") || endswith(new_file[begin:end-8], ".sdt") || endswith(new_file[begin:end-9], ".sdt")
-                vector = SDTFile_single(joinpath(path, new_file))
-                file_params = vec_to_lifetime(vector, histogram_resolution=hist_res, laser_pulse_period=laser_pulse_period[], tcspc_window_size=tcspc_window_size[])
+            # for new_file in new_files
+            #     # if endswith(new_file, ".sdt") || endswith(new_file[begin:end-6], ".sdt") || endswith(new_file[begin:end-8], ".sdt") || endswith(new_file[begin:end-9], ".sdt")
+            #     vector = SDTFile_single(joinpath(path, new_file))
 
-                file_hist = file_params[2][2]
-                file_curve_fit = conv_irf_data(file_params[2][1], file_params[1], irf, file_params[2][2], histogram_resolution=hist_res)
-                file_lifetime = file_params[1][1]
+            #     file_params = vec_to_lifetime(vector, histogram_resolution=hist_res, laser_pulse_period=laser_pulse_period[], tcspc_window_size=tcspc_window_size[])
+            #     file_hist = file_params[2][2]
+            #     file_curve_fit = conv_irf_data(file_params[2][1], file_params[1], irf, file_params[2][2], histogram_resolution=hist_res)
+            #     file_lifetime = file_params[1][1]
 
-                if isnan(file_lifetime)
-                    if i == 0
-                        file_lifetime = 1
-                    else
-                        file_lifetime = lifetime[][end]
-                    end
-                end
+            #     if isnan(file_lifetime)
+            #         if i == 0
+            #             file_lifetime = 1
+            #         else
+            #             file_lifetime = lifetime[][end]
+            #         end
+            #     end
 
-                file_photons = sum(file_hist)[1]
-                file_concentration = 1/(1/tau_0[] + K_q[]*file_lifetime)
+            #     file_photons = sum(file_hist)[1]
+            #     file_concentration = 1/(1/tau_0[] + K_q[]*file_lifetime)
 
-                if i == 0
-                    t_0 = now()
-                    i += 1
-                end
+            #     if i == 0
+            #         t_0 = now()
+            #         i += 1
+            #     end
 
-                present_time = (now() - t_0)/Millisecond(1)/1000
+            #     present_time = (now() - t_0)/Millisecond(1)/1000
 
-                hist[] = file_hist
-                curve_fit[] = file_curve_fit
-                push!(real_time[], present_time)
-                push!(lifetime[], file_lifetime)
-                push!(photons[], file_photons)
-                push!(concentration[], file_concentration)
+            #     hist[] = file_hist
+            #     curve_fit[] = file_curve_fit
+            #     push!(real_time[], present_time)
+            #     push!(lifetime[], file_lifetime)
+            #     push!(photons[], file_photons)
+            #     push!(concentration[], file_concentration)
 
-                notify(hist)
-                notify(curve_fit)
-                notify(real_time)
-                notify(lifetime)
-                notify(photons)
-                notify(concentration)
+            #     notify(hist)
+            #     notify(curve_fit)
+            #     notify(real_time)
+            #     notify(lifetime)
+            #     notify(photons)
+            #     notify(concentration)
 
-                limits!(axis_histogram, 0, laser_pulse_period[], 0, maximum(hist[])*1.1)
-                limits!(axis_lifetime, max(0, present_time-10), max(10, present_time), minimum(lifetime[])*0.99, maximum(lifetime[])*1.01)
-                limits!(axis_photons, max(0, present_time-10), max(10, present_time), minimum(photons[])*0.99, maximum(photons[])*1.01)
-                limits!(axis_concentration, max(0, present_time-10), max(10, present_time), minimum(concentration[])*0.99, maximum(concentration[])*1.01)
+            #     limits!(axis_histogram, 0, laser_pulse_period[], 0, maximum(hist[])*1.1)
+            #     limits!(axis_lifetime, max(0, present_time-10), max(10, present_time), minimum(lifetime[])*0.99, maximum(lifetime[])*1.01)
+            #     limits!(axis_photons, max(0, present_time-10), max(10, present_time), minimum(photons[])*0.99, maximum(photons[])*1.01)
+            #     limits!(axis_concentration, max(0, present_time-10), max(10, present_time), minimum(concentration[])*0.99, maximum(concentration[])*1.01)
                 
-                # end
+            #     # end
 
-                # println(i)
-                sleep(0.01)
+            #     # println(i)
+            #     sleep(0.01)
+            # end
+
+            new_file = new_files[end]
+            # if endswith(new_file, ".sdt") || endswith(new_file[begin:end-6], ".sdt") || endswith(new_file[begin:end-8], ".sdt") || endswith(new_file[begin:end-9], ".sdt")
+            vector = SDTFile_single(joinpath(path, new_file))
+
+            file_params = vec_to_lifetime(vector, histogram_resolution=hist_res, laser_pulse_period=laser_pulse_period[], tcspc_window_size=tcspc_window_size[])
+            file_hist = file_params[2][2]
+            file_curve_fit = conv_irf_data(file_params[2][1], file_params[1], irf, file_params[2][2], histogram_resolution=hist_res)
+            file_lifetime = file_params[1][1]
+
+            if isnan(file_lifetime)
+                if i == 0
+                    file_lifetime = 1
+                else
+                    file_lifetime = lifetime[][end]
+                end
             end
+
+            file_photons = sum(file_hist)[1]
+            file_concentration = 1/(1/tau_0[] + K_q[]*file_lifetime)
+
+            if i == 0
+                t_0 = now()
+                i += 1
+            end
+
+            present_time = (now() - t_0)/Millisecond(1)/1000
+
+            hist[] = file_hist
+            curve_fit[] = file_curve_fit
+            push!(real_time[], present_time)
+            push!(lifetime[], file_lifetime)
+            push!(photons[], file_photons)
+            push!(concentration[], file_concentration)
+
+            notify(hist)
+            notify(curve_fit)
+            notify(real_time)
+            notify(lifetime)
+            notify(photons)
+            notify(concentration)
+
+            limits!(axis_histogram, 0, laser_pulse_period[], 0, maximum(hist[])*1.1)
+            limits!(axis_lifetime, max(0, present_time-10), max(10, present_time), minimum(lifetime[])*0.99, maximum(lifetime[])*1.01)
+            limits!(axis_photons, max(0, present_time-10), max(10, present_time), minimum(photons[])*0.99, maximum(photons[])*1.01)
+            limits!(axis_concentration, max(0, present_time-10), max(10, present_time), minimum(concentration[])*0.99, maximum(concentration[])*1.01)
+            
+            # end
+
+            # println(i)
+            sleep(0.01)
         end
 
         previous_files = current_files

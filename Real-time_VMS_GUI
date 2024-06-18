@@ -17,6 +17,7 @@ using Colors
 using FileIO
 using Images
 using Clipper
+using Luxor
 
 function points_inside_polygon(vertices, num_points)
     # Convert vertices to Clipper format
@@ -122,15 +123,36 @@ button_save = plotbuttongrid[1, 2] = Button(fig, label="Save", height = 40, widt
 dragging = false
 idx = 1
 
+ROI_matrix = Observable(zeros(512,1024))
+
 on(button_ROI.clicks) do _
     poly = deepcopy(region_points[])
 
     region_plot_C1 = poly!(axis_C1_fig, poly, color=RGBA(0.25,1,1,0.1), strokecolor=RGBA(0.25,1,1,0.75), strokewidth=2)
     region_plot_C2 = poly!(axis_C2_fig, poly, color=RGBA(1,0.25,1,0.1), strokecolor=RGBA(1,0.25,1,0.75), strokewidth=2)
 
+    polygon_coords = []
+
     for _ in 1:length(region_points[])
-        println(pop!(region_points[]))
+        x, y = pop!(region_points[])
+        # println(pop!(region_points[]))
+        push!(polygon_coords, (round(x), round(y)))
     end
+
+    # println(polygon_coords)
+
+    # polygon_points = [Luxor.Point(x, y) for (x, y) in polygon_coords]
+    # point = Luxor.Point(256, 512)
+
+    # for i in CartesianIndices(ROI_matrix[])
+    #     if isinside(Luxor.Point(i), polygon_points)
+    #         ROI_matrix[][i]
+    #     end
+    # end
+    
+    # is_inside = isinside(point, polygon_points)
+
+    # println(is_inside)
 
     notify(region_points)
 end
