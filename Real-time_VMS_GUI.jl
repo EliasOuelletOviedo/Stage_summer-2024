@@ -1261,8 +1261,8 @@ folderpath = get_folder_path()
 
 images = [Observable(zeros(Float64, 1024, 512)), Observable(zeros(Float64, 1024, 512)), Observable(zeros(Float64, 1024, 512))]
 
-# fig = Figure(size = (1440, 847))
-fig = Figure(size = (1920, 1026))
+fig = Figure(size = (1440, 847))
+# fig = Figure(size = (1920, 1026))
 
 fig[1, 1] = buttongrid = GLMakie.GridLayout(tellheight=false)
 fig[1, 2] = figgrid = GLMakie.GridLayout()
