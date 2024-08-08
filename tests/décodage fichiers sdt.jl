@@ -4,6 +4,7 @@ using StructTypes
 using Base64
 using DelimitedFiles
 using ZipFile
+using Base.Filesystem
 # using JuliaDB
 using Plots
 # using GR
@@ -39,35 +40,119 @@ struct BlockHeader
     block_length::UInt32
 end
 
-filepath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichier_test/single_c003.sdt"
-
-
-open(filepath,"r") do io
+filepath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-07-17/Single_256/Single_256_c01.sdt"
+# filepath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-07-17/Single_256/Single_256_c01.sdt"
+# filepath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-07-17/Image_64/Image_64_c10.sdt"
+# filepath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-07-17/Single_64/Single_64_c01.sdt"
+# filepath2 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-06-10/single/single_c001.sdt"
+# filepath2 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichiers_sdt/1.sdt"
+# folderpath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichiers_sdt"
+# folderpath2 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-06-10/single"
+# folderpath2 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichiers_sdt"
+open(filepath, "r") do io
     seek(io, 14)
-    header = read(io, 2)
-    seek(io, header[2]*16^2+header[1] + 22)
+    header = read(io, 12)
 
-    # println(header)
+    seek(io, header[12]*16^2 + header[11])
+    time = read(io, 18)
+    println(time)
 
-    # file_info = read(io, 22)
+    seek(io, header[12]*16^2 + header[11] + 82)
+    infos = read(io, 2)
+    histogram_resolution = infos[2]*16^2 + infos[1]
 
-    # println(file_info)
+    seek(io, header[2]*16^2 + header[1] + 2)
+    file_info = read(io, 20)
 
-    vector = read(io)
-    new_vector = UInt16[]
+    # shift_1 = file_info[8]*16^6 + file_info[7]*16^4 + file_info[6]*16^2 + file_info[5] - file_info[2]*16^2 - file_info[1]
+    # shift_2 = file_info[20]*16^6 + file_info[19]*16^4 + file_info[18]*16^2 + file_info[17]
 
-    for i in 1:2:length(vector)
-        push!(new_vector, vector[i+1] * 16^2 + vector[i])
-    end
+    # buffer = IOBuffer(read(io, shift_1))
+    # zip_file = ZipFile.Reader(buffer).files[1]
 
-    println((new_vector))
+    # # Pre-allocate storage for file_data
+    # file_data = Vector{UInt8}(undef, shift_2)
+    # read!(zip_file, file_data)
 
-    # zip = IOBuffer(read(io, file_info[10]*16^6 + file_info[9]*16^4 + file_info[8]*16^2 + file_info[7] - (file_info[6]*10^6 + file_info[5]*16^4 + file_info[4]*16^2 + file_info[3])))
-
-    # array = reinterpret(UInt16, read(ZipFile.Reader(zip).files[1], file_info[22]*16^6 + file_info[21]*16^4 + file_info[20]*16^2 + file_info[19]))
-
-    # println(size(array))
+    # println()
 end
+
+# println("\nIMAGE")
+
+# for file in readdir(folderpath)[2:end]
+#     open(joinpath(folderpath, file),"r") do io
+#         # seek(io, 14)
+#         header = read(io, 42)
+#         # seek(io, 1)
+#         # test = read(io, 2)
+#         # println(header[41:42])
+#         # println(test[2]*16^2+test[1])
+#         println(header[42]*16^2+header[41])
+#     end
+# end
+
+# println("\nSINGLE")
+
+# for file in readdir(folderpath2)[2:end]
+#     open(joinpath(folderpath2, file),"r") do io
+#         # seek(io, 14)
+#         header = read(io, 42)
+#         # println(header[41:42])
+#         println(header[42]*16^2+header[41])
+#     end
+# end
+
+
+# open(filepath,"r") do io
+#     # println(read(io, 42))
+
+#     seek(io, 14)
+#     header = read(io, 8)
+#     # println(header)
+
+#     seek(io, 24)
+#     test = read(io, 2)
+#     println(test)
+
+#     seek(io, test[2]*16^2 + test[1]+82)
+#     infos = read(io, 2)
+#     println(infos[2]*16^2 + infos[1])
+# end
+
+# open(filepath2,"r") do io
+#     seek(io, 14)
+#     header = read(io, 2)
+#     println(header)
+# end
+
+# open(filepath,"r") do io
+#     seek(io, 14)
+#     header = read(io, 2)
+#     # seek(io, header[2]*16^2+header[1] + 22)
+
+#     # println(read(io, 22))
+
+#     # println(header)
+
+#     # file_info = read(io, 22)
+
+#     # println(file_info)
+
+#     # vector = read(io)
+#     # new_vector = UInt16[]
+
+#     # for i in 1:2:length(vector)
+#     #     push!(new_vector, vector[i+1] * 16^2 + vector[i])
+#     # end
+
+#     # println((new_vector))
+
+#     # zip = IOBuffer(read(io, file_info[10]*16^6 + file_info[9]*16^4 + file_info[8]*16^2 + file_info[7] - (file_info[6]*10^6 + file_info[5]*16^4 + file_info[4]*16^2 + file_info[3])))
+
+#     # array = reinterpret(UInt16, read(ZipFile.Reader(zip).files[1], file_info[22]*16^6 + file_info[21]*16^4 + file_info[20]*16^2 + file_info[19]))
+
+#     # println(size(array))
+# end
 
 
 

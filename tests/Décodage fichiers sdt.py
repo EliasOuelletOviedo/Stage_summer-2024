@@ -4,6 +4,7 @@ import zipfile
 from typing import TYPE_CHECKING
 import numpy as np
 from sdtfile import SdtFile
+import matplotlib.pyplot as plt
 
 class BlockType:
     """BLOCK_HEADER.block_type field.
@@ -53,17 +54,18 @@ def indent(*args) -> str:
     )[2:]
 
 
-arg = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichiers_sdt/4.sdt"
+# arg = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-06-10/8x32x64/test_c001.sdt"
+# arg2 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichiers_sdt/10.sdt"
 
-filename = os.fspath(arg)
+# filename = os.fspath(arg)
 
-fh = open(arg, "rb")
+# fh = open(arg, "rb")
 
-print(str(fh.read()[:1000]))
+# print(str(fh.read()[:1000]))
 
-print("\n")
+# print("\n")
 
-print(np.size(np.fromfile(fh)))
+# print(np.size(np.fromfile(fh)))
 
 FILE_HEADER: list[tuple[str, str]] = [
     ('revision', 'i2'),
@@ -339,32 +341,58 @@ INFO_IDS: dict[str, str] = {
     ),
 }
 
-with open(arg, 'rb') as fh:
-    header = np.rec.fromfile(fh, dtype=FILE_HEADER, shape=1, byteorder='<')[0]
+# with open(arg, 'rb') as fh:
+#     header = np.rec.fromfile(fh, dtype=FILE_HEADER, shape=1, byteorder='<')[0]
     
-    fh.seek(header.data_block_offs)
-    bh = np.rec.fromfile(fh, dtype=BLOCK_HEADER, shape=1, byteorder='<')[0]
+#     fh.seek(header.data_block_offs)
+#     bh = np.rec.fromfile(fh, dtype=BLOCK_HEADER, shape=1, byteorder='<')[0]
 
-    bio = io.BytesIO(fh.read(bh.next_block_offs - bh.data_offs))
-    with zipfile.ZipFile(bio) as zf:
-        databytes = zf.read(zf.filelist[0].filename)  # data_block
-    del bio
+    # bio = io.BytesIO(fh.read(bh.next_block_offs - bh.data_offs))
+    # with zipfile.ZipFile(bio) as zf:
+    #     databytes = zf.read(zf.filelist[0].filename)  # data_block
+    # del bio
 
-    data = np.frombuffer(databytes, dtype="uint16", count=268435456)
+    # data = np.frombuffer(databytes, dtype="uint16", count=268435456)
 
 
-print(header)
-print(bh)
+# print(header)
+# print(bh)
 # print(bh.block_type)
 # print(bh.block_length)
 # print(len(databytes))
-print(len(databytes))
+# print(len(databytes))
 # print(data[:256])
 
-print(bh.next_block_offs - bh.data_offs)
-print(bh.next_block_offs)
-print(bh.data_offs)
+# print(bh.next_block_offs - bh.data_offs)
+# print(bh.next_block_offs)
+# print(bh.data_offs)
 # print(test)
+
+# with open(arg2, 'rb') as fh:
+#     header = np.rec.fromfile(fh, dtype=FILE_HEADER, shape=1, byteorder='<')[0]
+    
+#     fh.seek(header.data_block_offs)
+#     bh = np.rec.fromfile(fh, dtype=BLOCK_HEADER, shape=1, byteorder='<')[0]
+
+    # bio = io.BytesIO(fh.read(bh.next_block_offs - bh.data_offs))
+    # with zipfile.ZipFile(bio) as zf:
+    #     databytes = zf.read(zf.filelist[0].filename)  # data_block
+    # del bio
+
+    # data = np.frombuffer(databytes, dtype="uint16", count=268435456)
+
+
+# print(header)
+# print(bh)
+# print(bh.block_type)
+# print(bh.block_length)
+# print(len(databytes))
+# print(len(databytes))
+# print(data[:256])
+
+# print(bh.next_block_offs - bh.data_offs)
+# print(bh.next_block_offs)
+# print(bh.data_offs)
 
 
 # file = SdtFile(arg)
@@ -377,3 +405,86 @@ print(bh.data_offs)
 # print(file.data[0][0])
 
 # print(np.size(FILE_HEADER))
+
+image_64 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-07-17/Image_64/Image_64_c10.sdt"
+image_256 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-07-17/Image_256/Image_256_c10.sdt"
+single_64 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-07-17/Single_64/Single_64_c01.sdt"
+single_256 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-07-17/Single_256/Single_256_c01.sdt"
+
+single_1 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-06-10/single/single_c001.sdt"
+single_2 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-06-10/single/single_c002.sdt"
+single_3 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-06-10/single/single_c003.sdt"
+single_4 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-06-10/single/single_c004.sdt"
+single_5 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-06-10/single/single_c005.sdt"
+single_6 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-06-10/single/single_c006.sdt"
+single_7 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-06-10/single/single_c007.sdt"
+single_8 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-06-10/single/single_c008.sdt"
+single_9 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-06-10/single/single_c009.sdt"
+
+print(dir(SdtFile(single_1)))
+
+file_1 = list(SdtFile(single_1).measure_info[0][0])[57]
+file_2 = list(SdtFile(single_2).measure_info[0][0])[57]
+file_3 = list(SdtFile(single_3).measure_info[0][0])[57]
+file_4 = list(SdtFile(single_4).measure_info[0][0])[57]
+file_5 = list(SdtFile(single_5).measure_info[0][0])[57]
+file_6 = list(SdtFile(single_6).measure_info[0][0])[57]
+file_7 = list(SdtFile(single_7).measure_info[0][0])[57]
+file_8 = list(SdtFile(single_8).measure_info[0][0])[57]
+file_9 = list(SdtFile(single_9).measure_info[0][0])[57]
+
+# print(list(SdtFile(single_1).measure_info[0][0]))
+# print(list(SdtFile(single_2).measure_info[0][0]))
+
+# print(list(zip(file_1, file_2, file_3, file_4, file_5, file_6, file_7, file_8, file_9)))
+
+result = [a == b == c == d for a, b, c, d in zip(file_1, file_2, file_3, file_4)]
+
+print(result)
+print(len(result) - sum(result))
+
+liste = list(zip(file_1, file_2, file_3, file_4, file_5, file_6, file_7, file_8, file_9))
+# print(liste)
+
+plt.plot(liste[4], liste[2])
+plt.show()
+
+
+# with open(image_64, 'rb') as fh:
+#     header = np.rec.fromfile(fh, dtype=FILE_HEADER, shape=1, byteorder='<')[0]
+    
+#     fh.seek(header.data_block_offs)
+#     bh = np.rec.fromfile(fh, dtype=BLOCK_HEADER, shape=1, byteorder='<')[0]
+
+#     print(header)
+#     # print(bh)
+
+
+# with open(image_256, 'rb') as fh:
+#     header = np.rec.fromfile(fh, dtype=FILE_HEADER, shape=1, byteorder='<')[0]
+    
+#     fh.seek(header.data_block_offs)
+#     bh = np.rec.fromfile(fh, dtype=BLOCK_HEADER, shape=1, byteorder='<')[0]
+
+#     print(header)
+#     # print(bh)
+
+
+# with open(single_64, 'rb') as fh:
+#     header = np.rec.fromfile(fh, dtype=FILE_HEADER, shape=1, byteorder='<')[0]
+    
+#     fh.seek(header.data_block_offs)
+#     bh = np.rec.fromfile(fh, dtype=BLOCK_HEADER, shape=1, byteorder='<')[0]
+
+#     print(header)
+#     # print(bh)
+
+
+# with open(single_256, 'rb') as fh:
+#     header = np.rec.fromfile(fh, dtype=FILE_HEADER, shape=1, byteorder='<')[0]
+    
+#     fh.seek(header.data_block_offs)
+#     bh = np.rec.fromfile(fh, dtype=BLOCK_HEADER, shape=1, byteorder='<')[0]
+
+#     print(header)
+#     # print(bh)

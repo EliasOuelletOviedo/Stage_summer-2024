@@ -103,6 +103,9 @@ end
 @everywhere function find_common_files(previous_files, available_channels)
     filtered_files = [previous_files[i] for i in 1:3 if available_channels[i]]
 
+    # println(reduce(intersect, get_file_number.(filtered_file) for filtered_file in filtered_files))
+    # println(get_file_number.(filtered_file) for filtered_file in filtered_files)
+
     max_file_num = maximum(reduce(intersect, get_file_number.(filtered_file) for filtered_file in filtered_files))
 
     common_files = ["", "", ""]
@@ -477,7 +480,27 @@ end
 end
 
 @everywhere function start_real_time(folderpath)
-    folderpath, folderpath_correct = verify_folder(folderpath)
+    # folderpath, folderpath_correct = verify_folder(folderpath)
+    existing_folders = readdir(folderpath)
+    folderpath_correct = false
+
+    println("Waiting")
+
+    while running[] && !folderpath_correct
+        new_folders = setdiff(readdir(folderpath), existing_folders)
+
+        if !isempty(new_folders)
+            println("Folder found")
+            folderpath = joinpath(folderpath, new_folders[end], "Bliq VMS")
+            folderpath_correct = true
+        end
+
+        sleep(0.1)
+    end
+
+    println(folderpath)
+
+    sleep(5)
 
     if !initialized[] && folderpath_correct
         println("Folder correct")
@@ -504,12 +527,14 @@ end
         for n in 1:3
             try
                 previous_files[n] = readdir(channels_paths[n])
+                println("Channel $n : détecté")
             catch e
+                println("Channel $n : inexistant")
                 available_channels[n] = false
             end
         end
 
-        i = 0
+        i = 1
         j = 0
         N = [1, 1, 1]
         noise = [0.0, 0.0, 0.0]
@@ -517,16 +542,20 @@ end
 
         previous_time = now()
 
-        framerate = 31.25
-        sizex = 1024
-        sizey = 512
+        global framerate = 31.25
+        global sizex = 1024
+        global sizey = 512
 
         time = 0
 
-        initialized[] = true
+        if available_channels != (false, false, false)
+            initialized[] = true
+        end
     end
 
-    while running[]
+    println("Starting")
+
+    while running[] && available_channels != (false, false, false)
         while new_ROI[] != 0
             ROIs += 1
 
@@ -542,142 +571,170 @@ end
             new_ROI[] -= 1
         end
 
-        i += 1
+        # i += 1
 
         current_files = [available_channels[n] ? readdir(channels_paths[n]) : [] for n in 1:3]
 
         new_files = setdiff.(current_files, previous_files)
 
-        if all(isempty.(new_files) .== .!available_channels)
-            println("Files detected")
-            common_files = find_common_files(new_files, available_channels)
-        
-            println(common_files)
+        println(.!isempty.(new_files), "    ", available_channels)
 
-            files = [zeros(UInt8, sizex, sizey), zeros(UInt8, sizex, sizey), zeros(UInt8, sizex, sizey)]
+        if all(.!isempty.(new_files) .== available_channels)
+            println("File detected")
+            try
 
-            for channel in 1:3
-                if available_channels[channel]
-                    file = joinpath(channels_paths[channel], common_files[channel])
+                try
+                    common_files = find_common_files(current_files, available_channels)
+                catch e
+                    println(e)
+                end
 
-                    index = findfirst(==(common_files[channel]), current_files[channel])
+                println(1)
 
-                    println("Index : ",index)
-                    
-                    files[channel] = round.(UInt8, load(file)'*255)
+                files = [zeros(UInt8, sizex, sizey), zeros(UInt8, sizex, sizey), zeros(UInt8, sizex, sizey)]
 
-                    if i == 1
-                        arrays[channel] = files[channel]
+                for channel in 1:3
+                    if available_channels[channel]
+                        file = joinpath(channels_paths[channel], common_files[channel])
+
+                        try
+                            index = findfirst(==(common_files[channel]), current_files[channel])
+                        catch e
+                            println(e)
+                        end
+
+                        # println("Index : ", index)
+                        
+                        files[channel] = round.(UInt8, load(file)'*255)
 
                         if j == 0
                             framerate, sizex, sizey = get_file_metadata(file)
+                            println(framerate)
+                            j += 1
                         end
-                    elseif slider_averaging.value[] == 1
-                        arrays[channel] = files[channel]
-                    else
-                        if N[channel] < slider_averaging.value[]
-                            arrays[channel] = 1/(N[channel] + 1) .* (N[channel] .* arrays[channel] .+ files[channel])
-            
-                            N[channel] += 1
-                        else
-                            array = arrays[channel]
 
-                            if N[channel] > slider_averaging.value[]
-                                for k in 1:N[channel]-slider_averaging.value[]
-                                    array -= 255/N[channel] * load(joinpath(channels_paths[channel], current_files[channel][index-N[channel]+k]))'
-                                end
-            
-                                array *= N[channel]/slider_averaging.value[]
-            
-                                N[channel] = slider_averaging.value[]
-                            end
-                        
-                            array += 1/N[channel] * files[channel] - 255/N[channel] * load(joinpath(channels_paths[channel], current_files[channel][index-N[channel]+1]))'
-
-                            arrays[channel] = array
-                        end
-                    end
-
-                    # time = (get_file_number(file) + j)/framerate
-                    time = i
+                        if toggle_display.active[]
+                            if i == 1 
+                                arrays[channel] = files[channel]
+                            elseif slider_averaging.value[] == 1
+                                arrays[channel] = files[channel]
+                            else
+                                if N[channel] < slider_averaging.value[]
+                                    arrays[channel] = 1/(N[channel] + 1) .* (N[channel] .* arrays[channel] .+ files[channel])
                     
-                    if noise_size[] != 0
-                        noise[channel] = sum(files[channel].*(noise_matrix[])')/noise_size[]
+                                    N[channel] += 1
+                                else
+                                    array = arrays[channel]
+
+                                    if N[channel] > slider_averaging.value[]
+                                        for k in 1:N[channel]-slider_averaging.value[]
+                                            array -= 255/N[channel] * load(joinpath(channels_paths[channel], current_files[channel][index-N[channel]+k]))'
+                                        end
+                    
+                                        array *= N[channel]/slider_averaging.value[]
+                    
+                                        N[channel] = slider_averaging.value[]
+                                    end
+                                
+                                    array += 1/N[channel] * files[channel] - 255/N[channel] * load(joinpath(channels_paths[channel], current_files[channel][index-N[channel]+1]))'
+
+                                    arrays[channel] = array
+                                end
+                            end
+                        end
+
+                        time = (get_file_number(common_files[channel]))/framerate
+                        # time = i
+                        
+                        if noise_size[] != 0
+                            noise[channel] = sum(files[channel].*(noise_matrix[])')/noise_size[]
+                        else
+                            noise[channel] = 0
+                        end
+
+                        push!(intensity[channel][], max(0, sum(files[channel])/(sizex*sizey) - noise[channel]))
+
+                        for ROI in eachindex(ROI_intensity[channel])
+                            push!(ROI_intensity[channel][ROI][], max(0, sum(files[channel].*(ROI_matrix[][ROI+1,:,:])')/ROI_sizes[][ROI+1] - noise[channel]))
+                        end
                     else
-                        noise[channel] = 0
-                    end
+                        push!(intensity[channel][], NaN)
 
-                    push!(intensity[channel][], max(0, sum(files[channel])/(sizex*sizey) - noise[channel]))
-
-                    for ROI in eachindex(ROI_intensity[channel])
-                        push!(ROI_intensity[channel][ROI][], max(0, sum(files[channel].*(ROI_matrix[][ROI+1,:,:])')/ROI_sizes[][ROI+1] - noise[channel]))
+                        for ROI in eachindex(ROI_intensity[channel])
+                            push!(ROI_intensity[channel][ROI][], 0)
+                        end
                     end
+                end
+
+                println(1)
+
+                num = parse(UInt8, menu_ratio.selection[][2])
+                denum = parse(UInt8, menu_ratio.selection[][5])
+
+                if intensity[denum][][end] > 1
+                    push!(intensity[4][], intensity[num][][end]/intensity[denum][][end])
                 else
-                    push!(intensity[channel][], 0)
-
-                    for ROI in eachindex(ROI_intensity[channel])
-                        push!(ROI_intensity[channel][ROI][], 0)
-                    end
+                    push!(intensity[4][], 0)
                 end
-            end
 
-            num = parse(UInt8, menu_ratio.selection[][2])
-            denum = parse(UInt8, menu_ratio.selection[][5])
+                println(1)
 
-            if intensity[denum][][end] > 1
-                push!(intensity[4][], intensity[num][][end]/intensity[denum][][end])
-            else
-                push!(intensity[4][], 0)
-            end
-
-            for ROI in eachindex(ROI_intensity[4])
-                if !isempty(ROI_intensity[num][ROI][]) && !isempty(ROI_intensity[denum][ROI][])
-                    if ROI_intensity[denum][ROI][][end] > 1
-                        push!(ROI_intensity[4][ROI][], ROI_intensity[num][ROI][][end]/ROI_intensity[denum][ROI][][end])
-                        push!(ROI_real_time[ROI][], time)
-                    else
-                        push!(ROI_intensity[4][ROI][], 0)
-                        push!(ROI_real_time[ROI][], time)
-                    end
-                end
-            end
-
-            push!(real_time[], time)
-
-            if mod1(i, slider_refresh.value[]) == slider_refresh.value[]
-                if toggle_display.active[]
-                    for n in eachindex(images)
-                        images[n][] = arrays[n]
-                    end
-                end
-    
                 for ROI in eachindex(ROI_intensity[4])
-                    notify(ROI_real_time[ROI])
+                    if !isempty(ROI_intensity[num][ROI][]) && !isempty(ROI_intensity[denum][ROI][])
+                        if ROI_intensity[denum][ROI][][end] > 1
+                            push!(ROI_intensity[4][ROI][], ROI_intensity[num][ROI][][end]/ROI_intensity[denum][ROI][][end])
+                            push!(ROI_real_time[ROI][], time)
+                        else
+                            push!(ROI_intensity[4][ROI][], 0)
+                            push!(ROI_real_time[ROI][], time)
+                        end
+                    end
                 end
-    
-                notify(real_time)
-    
-                for n in 1:4
-                    autolimits!(plotgrid.content[n].content)
-                    xlims!(plotgrid.content[n].content, max(0, time - slider_time.value[]+1), max(slider_time.value[], time+1))
-                end
-            end
-    
-            if mod1(i, 10+slider_refresh.value[]) == 10+slider_refresh.value[]
-                current_time = now()
-                label_frequency.text = "Frequency : $(string(round(1/((current_time - previous_time)/Millisecond(1))*1000*(10+slider_refresh.value[]), sigdigits=3))) Hz"
-                previous_time = current_time
-    
-                label_number.text = "Files : $(round(UInt64, i+j))"
-            end
 
-            previous_files = current_files
-    
-            i += 1
-            sleep(0.001)
+                println(1)
+
+                push!(real_time[], time)
+
+                println(1)
+
+                if mod1(i, slider_refresh.value[]) == slider_refresh.value[]
+                    if toggle_display.active[]
+                        for n in eachindex(images)
+                            images[n][] = arrays[n]
+                        end
+                    end
+        
+                    for ROI in eachindex(ROI_intensity[4])
+                        notify(ROI_real_time[ROI])
+                    end
+        
+                    notify(real_time)
+        
+                    for n in 1:4
+                        autolimits!(plotgrid.content[n].content)
+                        xlims!(plotgrid.content[n].content, max(0, time - slider_time.value[]+1), max(slider_time.value[], time+1))
+                    end
+                end
+
+                if mod1(i, 10+slider_refresh.value[]) == 10+slider_refresh.value[]
+                    current_time = now()
+                    label_frequency.text = "Frequency : $(string(round(1/((current_time - previous_time)/Millisecond(1))*1000*(10+slider_refresh.value[]), sigdigits=3))) Hz"
+                    previous_time = current_time
+        
+                    label_number.text = "Files : $(round(UInt64, i+j))"
+                end
+
+                println(1)
+
+                previous_files = current_files
+        
+                i += 1
+            catch e
+                println(e)
+            end
         end
 
-        sleep(1)
+        sleep(0.1)
     end
 end
 
@@ -1136,9 +1193,9 @@ end
 
         for channel in 1:3
             if available_channels[channel]
-                if i == 1 && j == 0
-                    framerate, sizex, sizey = get_file_metadata(joinpath(channels_paths[channel], channels_files[channel][1]))
-                end
+                # if i == 1 && j == 0
+                #     framerate, sizex, sizey = get_file_metadata(joinpath(channels_paths[channel], channels_files[channel][1]))
+                # end
 
                 files[channel] = round.(UInt8, load(joinpath(channels_paths[channel], channels_files[channel][i]))'*255)
 
@@ -1244,10 +1301,70 @@ end
             label_number.text = "Files : $(round(UInt64, i))"
         end
 
+        try
+            set_close_to!(progress_bar, mod1(i, 100))
+        catch e
+            println(e)
+        end
+
         i += 1
         sleep(0.001)
     end
 end 
+
+@everywhere function start_save(folderpath)
+    channels_paths = [joinpath(folderpath, "C1"), joinpath(folderpath, "C2"), joinpath(folderpath, "C3")]
+    available_channels = [true, true, true]
+    channels_files = []
+
+    for n in 1:3
+        try
+            channels_file = readdir(channels_paths[n])
+
+            if channels_file[1] == ".DS_Store"
+                deleteat!(channels_file, 1)
+            end
+
+            sort!(channels_file, by=get_file_number)
+
+            push!(channels_files, channels_file)
+        catch e
+            push!(channels_files, [])
+
+            available_channels[n] = false
+        end
+    end
+
+    length = 0
+    id = 0
+    ROIs = 0
+
+    try
+        length = length(channels_files[1])
+        id = 1
+    catch
+        try
+            length = length(channels_files[2])
+            id = 2
+        catch
+            try
+                length = length(channels_files[3])
+                id = 3
+            catch
+                println("No files detected")
+            end
+        end
+    end
+
+    values = zeros(length, 4*(ROIs + 1) + 1)
+
+    println()
+
+    # for (channel, channel_path) in channels_paths
+
+
+    println(values)
+end
 
 image_colors = [RGB(1,0.25,0.25), RGB(0.25,1,0.25), RGB(0.25,0.5,1), RGB(0.25,1,1), RGB(1,0.25,1), RGB(1,1,0.25), RGB(1, 1, 1)]
 ROI_colors = [RGB(1,0,0), RGB(1,0.5,0), RGB(1,1,0), RGB(0,1,0), RGB(0,1,1), RGB(0,0,1), RGB(0.5,0,1), RGB(1,0,1), RGB(1,1,1)]
@@ -1259,7 +1376,7 @@ display_averaging_limits = 100
 
 folderpath = get_folder_path()
 
-images = [Observable(zeros(Float64, 1024, 512)), Observable(zeros(Float64, 1024, 512)), Observable(zeros(Float64, 1024, 512))]
+images = [Observable(zeros(Float16, 1024, 512)), Observable(zeros(Float16, 1024, 512)), Observable(zeros(Float16, 1024, 512))]
 
 fig = Figure(size = (1440, 847))
 # fig = Figure(size = (1920, 1026))
@@ -1270,9 +1387,9 @@ fig[1, 3] = plotgrid = GLMakie.GridLayout()
 
 colsize!(fig.layout, 1, GLMakie.Fixed(300))
 
-# progress_bar = buttongrid[0, 1:2] = Slider(fig, range = 1:0.01:100, snap=false, linewidth = 14, color_active=RGBf(0.8, 0.8, 0.8), color_active_dimmed=RGBf(0.8, 0.8, 0.8), color_inactive=:gray95)
-progress_bar_1 = buttongrid[0, 1:2] = Box(fig, cornerradius = 7, color=RGBf(0.8, 0.8, 0.8), strokecolor=:transparent, height = 14, width=260, halign=:left)
-progress_bar_2 = buttongrid[0, 1:2] = Box(fig, cornerradius = 7, color=RGBf(0.6, 0.6, 0.6), strokecolor=:transparent, height = 14, width=130, halign=:left)
+progress_bar = buttongrid[0, 1:2] = Slider(fig, range = 1:0.01:100, snap=false, linewidth = 14, color_active=RGBf(0.8, 0.8, 0.8), color_active_dimmed=RGBf(0.8, 0.8, 0.8), color_inactive=:gray95)
+# progress_bar_1 = buttongrid[0, 1:2] = Box(fig, cornerradius = 7, color=RGBf(0.8, 0.8, 0.8), strokecolor=:transparent, height = 14, width=260, halign=:left)
+# progress_bar_2 = buttongrid[0, 1:2] = Box(fig, cornerradius = 7, color=RGBf(0.6, 0.6, 0.6), strokecolor=:transparent, height = 14, width=130, halign=:left)
 # println(fieldnames(typeof(progress_bar.layoutobservables)))
 # println(progress_bar.layoutobservables)
 # progress_bar.blockscene.visible[] = false
@@ -1297,8 +1414,8 @@ label_color_C2 = buttongrid[7, 1] = Label(fig, "Color C2 :", halign=:right, font
 label_color_C3 = buttongrid[8, 1] = Label(fig, "Color C3 :", halign=:right, fontsize=16)
 label_ratio = buttongrid[9, 1] = Label(fig, "Ratio : ", halign=:right, fontsize=16)
 
-menu_mode = buttongrid[5, 2] = Menu(fig, options=["Playback", "Real-time"], default = "Playback", width = 120, height = 32, selection_cell_color_inactive=RGBf(0.8, 0.8, 0.8), cell_color_hover=RGBf(0.6, 0.6, 0.6), cell_color_active=RGBf(0.8, 0.8, 0.8), cell_color_inactive_even=RGBf(0.9, 0.9, 0.9), cell_color_inactive_odd=RGBf(0.9, 0.9, 0.9), fontsize=16, textcolor=:black)
-# menu_mode = buttongrid[5, 2] = Menu(fig, options=["Playback", "Real-time"], default = "Real-time", width = 120, height = 32, selection_cell_color_inactive=RGBf(0.8, 0.8, 0.8), cell_color_hover=RGBf(0.6, 0.6, 0.6), cell_color_active=RGBf(0.8, 0.8, 0.8), cell_color_inactive_even=RGBf(0.9, 0.9, 0.9), cell_color_inactive_odd=RGBf(0.9, 0.9, 0.9), fontsize=16, textcolor=:black)
+# menu_mode = buttongrid[5, 2] = Menu(fig, options=["Playback", "Real-time"], default = "Playback", width = 120, height = 32, selection_cell_color_inactive=RGBf(0.8, 0.8, 0.8), cell_color_hover=RGBf(0.6, 0.6, 0.6), cell_color_active=RGBf(0.8, 0.8, 0.8), cell_color_inactive_even=RGBf(0.9, 0.9, 0.9), cell_color_inactive_odd=RGBf(0.9, 0.9, 0.9), fontsize=16, textcolor=:black)
+menu_mode = buttongrid[5, 2] = Menu(fig, options=["Playback", "Real-time"], default = "Real-time", width = 120, height = 32, selection_cell_color_inactive=RGBf(0.8, 0.8, 0.8), cell_color_hover=RGBf(0.6, 0.6, 0.6), cell_color_active=RGBf(0.8, 0.8, 0.8), cell_color_inactive_even=RGBf(0.9, 0.9, 0.9), cell_color_inactive_odd=RGBf(0.9, 0.9, 0.9), fontsize=16, textcolor=:black)
 menu_color_C1 = buttongrid[6, 2] = Menu(fig, options=["Red", "Green", "Blue", "Cyan", "Magenta", "Yellow", "White"], default = "Red", width = 120, height = 32, selection_cell_color_inactive=RGBf(0.8, 0.8, 0.8), cell_color_hover=RGBf(0.6, 0.6, 0.6), cell_color_active=RGBf(0.8, 0.8, 0.8), cell_color_inactive_even=RGBf(0.9, 0.9, 0.9), cell_color_inactive_odd=RGBf(0.9, 0.9, 0.9), fontsize=16, textcolor=:black)
 menu_color_C2 = buttongrid[7, 2] = Menu(fig, options=["Red", "Green", "Blue", "Cyan", "Magenta", "Yellow", "White"], default = "Green", width = 120, height = 32, selection_cell_color_inactive=RGBf(0.8, 0.8, 0.8), cell_color_hover=RGBf(0.6, 0.6, 0.6), cell_color_active=RGBf(0.8, 0.8, 0.8), cell_color_inactive_even=RGBf(0.9, 0.9, 0.9), cell_color_inactive_odd=RGBf(0.9, 0.9, 0.9), fontsize=16, textcolor=:black)
 menu_color_C3 = buttongrid[8, 2] = Menu(fig, options=["Red", "Green", "Blue", "Cyan", "Magenta", "Yellow", "White"], default = "Blue", width = 120, height = 32, selection_cell_color_inactive=RGBf(0.8, 0.8, 0.8), cell_color_hover=RGBf(0.6, 0.6, 0.6), cell_color_active=RGBf(0.8, 0.8, 0.8), cell_color_inactive_even=RGBf(0.9, 0.9, 0.9), cell_color_inactive_odd=RGBf(0.9, 0.9, 0.9), fontsize=16, textcolor=:black)
@@ -1360,7 +1477,7 @@ idx = 1
 running = Observable(false)
 ran = Observable(false)
 saving = Observable(false)
-saved = false
+global saved = false
 initialized = Observable(false)
 current_ROI = Observable(1)
 current_noise = Observable(1)
@@ -1495,6 +1612,15 @@ on(button_save.clicks) do _
         saving[] = true
         println("Saving")
     end
+
+    for i in 1:100
+    #     progress_bar_2.width[] = i*2.6
+    #     notify(progress_bar_2.width)
+    #     println(progress_bar_2.width[])
+        set_close_to!(progress_bar, i)
+        println(i)
+        sleep(1)
+    end
 end
 
 on(button_ROI.clicks) do _
@@ -1600,13 +1726,6 @@ end
 
 on(menu_ratio.selection) do selection
     axis_ratio_plot.title = "Ratio of $selection"
-end
-
-on(textbox_time.displayed_string) do string
-    if length(string) > 3
-        textbox_time.displayed_string[] = string[begin:end-1]
-        string = string[begin:end-1]
-    end
 end
 
 on(textbox_time.stored_string) do string
