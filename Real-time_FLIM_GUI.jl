@@ -109,7 +109,7 @@ function irf_shift(data_irf, shift)
     return vec(shifted_irf)
 end
 
-function MLE_iterative_reconvolution(irf, data_xy; params, gating_function=ones(UInt8, 320), histogram_resolution=256, number_of_previous_pulses=5, laser_pulse_period=12.5)
+function MLE_iterative_reconvolution(irf, data_xy; params, gating_function=ones(UInt8, 256), histogram_resolution=256, number_of_previous_pulses=5, laser_pulse_period=12.5)
     """
     Curve fitting of fluorescence decay using Maximum Likelihood Estimation
     """
@@ -320,7 +320,7 @@ function LS_model_func_3_lt(data, t_1, A_1, t_2, A_2, t_3, d_0, y_offset)
     return A
 end
 
-function LS_iterative_reconvolution(irf, data_xy; guess=[2.0, 1.0], bounds=([0.0, -30], [12.5, 256]), irf_shift=0, gating_function=ones(UInt8, 320), histogram_resolution=256)
+function LS_iterative_reconvolution(irf, data_xy; guess=[2.0, 1.0], bounds=([0.0, -30], [12.5, 256]), irf_shift=0, gating_function=ones(UInt8, 256), histogram_resolution=256)
     """
     Curve fitting of fluorescence decay using Least Squares
     """
@@ -520,9 +520,9 @@ function start_real_time(lifetimes)
     if !initialized[]
         println("Initializing")
 
-        hist = Observable(zeros(320))
-        fit = Observable(zeros(320))
-        hist_time = Observable(zeros(320))
+        hist = Observable(zeros(256))
+        fit = Observable(zeros(256))
+        hist_time = Observable(zeros(256))
 
         lifetime_1 = Observable(Float64[])
         lifetime_2 = Observable(Float64[])
@@ -561,91 +561,100 @@ function start_real_time(lifetimes)
         params = ones(2*lifetimes+1)
         frequency = 1
 
+        previous_files = readdir(folderpath)
+
         i = 1
         t_0 = now()
     end
 
+    println(folderpath)
     println("Waiting")
 
-    while running[]
-        current_files = readdir(folderpath)
+    try
+        while running[]
+            current_files = readdir(folderpath)
 
-        new_files = setdiff(current_files, previous_files)
+            new_files = setdiff(current_files, previous_files)
 
-        sleep(0.001)
+            println(size(current_files), "    ", size(new_files))
 
-        if !isempty(new_files)
-            if i == 1
-                println("Files detected")
-            end
+            sleep(0.001)
 
-            vector, histogram_resolution = open_SDT_file(joinpath(folderpath, new_files[end]))
-
-            if i == 1
-                for n in 1:100
-                    vectors[n,begin:histogram_resolution] = vector
-                end
-            else
-                for n in 1:99
-                    vectors[n,begin:histogram_resolution] = vectors[n+1,begin:histogram_resolution]
+            if !isempty(new_files)
+                if i == 1
+                    println("Files detected")
                 end
 
-                vectors[end,begin:histogram_resolution] = vector
+                vector, histogram_resolution = open_SDT_file(joinpath(folderpath, new_files[end]))
+
+                if i == 1
+                    for n in 1:100
+                        vectors[n,begin:histogram_resolution] = vector
+                    end
+                else
+                    for n in 1:99
+                        vectors[n,begin:histogram_resolution] = vectors[n+1,begin:histogram_resolution]
+                    end
+
+                    vectors[end,begin:histogram_resolution] = vector
+                end
+
+                # vector = sum(vectors, dims=1)[1,:]/100
+
+                params, data = vec_to_lifetime(sum(vectors[end-slider_averaging.value[]+1:end,begin:histogram_resolution], dims=1)[1,:]/slider_averaging.value[], histogram_resolution=histogram_resolution, guess=params[1:2*lifetimes], tcspc_window_size=12.5, bin_size=irf_bin_size)
+                # params = vec_to_lifetime(vector, histogram_resolution=histogram_resolution)
+
+                hist[][1:length(data[2])] = data[2]
+                hist_time[][1:length(data[2])] = data[1]
+                fit[][1:length(data[2])] = conv_irf_data(data[1], params, irf, data[2], histogram_resolution=histogram_resolution)
+
+                if i == 1
+                    t_0 = now()
+                end
+
+                push!(lifetime_1[], params[1])
+                push!(counts[], sum(vectors[end-slider_averaging.value[]+1:end,:])/slider_averaging.value[])
+                push!(concentration[], 1/(1/parse(Float64, textbox_tau_0.stored_string[]) + parse(Float64, textbox_K.stored_string[])*params[2*menu_main_lifetime.i_selected[] - 1]))
+                # push!(concentration[], 1/(1/parse(Int8, textbox_tau_0.stored_string[]) + parse(Int8, textbox_tau_0.stored_string[])*params[2*menu_main_lifetime.i_selected[] - 1]))
+                push!(time[], (now() - t_0)/Millisecond(1)/1000)
+                # push!(time[], i)
+
+                if lifetimes == 2
+                    push!(lifetime_2[], params[3])
+                elseif lifetimes == 3
+                    push!(lifetime_2[], params[3])
+                    push!(lifetime_3[], params[5])
+                end
+
+                if mod1(i, 8) == 8
+                    current_time = now()
+                    label_frequency.text = "Frequency : $(string(round(1/((current_time - previous_time)/Millisecond(1))*1000*8, sigdigits=2))) Hz"
+                    previous_time = current_time
+
+                    # label_number.text = "Files : $(round(UInt64, i))"
+                end
+
+                if mod1(i, ceil(frequency/16)) == ceil(frequency/16)
+                    notify(hist_time)
+                    notify(time)
+
+                    autolimits!(axis_hist)
+                    autolimits!(axis_life)
+                    autolimits!(axis_counts)
+                    autolimits!(axis_conc)
+                    
+                    xlims!(axis_life, max(0, time[][end] - slider_time.value[]+0.1), max(slider_time.value[], time[][end]+0.1))
+                    xlims!(axis_counts, max(0, time[][end] - slider_time.value[]+0.1), max(slider_time.value[], time[][end]+0.1))
+                    xlims!(axis_conc, max(0, time[][end] - slider_time.value[]+0.1), max(slider_time.value[], time[][end]+0.1))
+                end
+
+                previous_files = current_files
+
+                i += 1
             end
-
-            # vector = sum(vectors, dims=1)[1,:]/100
-
-            params, data = vec_to_lifetime(sum(vectors[end-slider_averaging.value[]+1:end,begin:histogram_resolution], dims=1)[1,:]/slider_averaging.value[], histogram_resolution=histogram_resolution, guess=params[1:2*lifetimes])
-            # params = vec_to_lifetime(vector, histogram_resolution=histogram_resolution)
-
-            hist[][1:length(data[2])] = data[2]
-            hist_time[][1:length(data[2])] = data[1]
-            fit[][1:length(data[2])] = conv_irf_data(data[1], params, irf, data[2], histogram_resolution=histogram_resolution)
-
-            if i == 1
-                t_0 = now()
-            end
-
-            push!(lifetime_1[], params[1])
-            push!(counts[], sum(vectors[end-slider_averaging.value[]+1:end,:])/slider_averaging.value[])
-            push!(concentration[], 1/(1/parse(Float64, textbox_tau_0.stored_string[]) + parse(Float64, textbox_K.stored_string[])*params[2*menu_main_lifetime.i_selected[] - 1]))
-            # push!(concentration[], 1/(1/parse(Int8, textbox_tau_0.stored_string[]) + parse(Int8, textbox_tau_0.stored_string[])*params[2*menu_main_lifetime.i_selected[] - 1]))
-            push!(time[], (now() - t_0)/Millisecond(1)/1000)
-            # push!(time[], i)
-
-            if lifetimes == 2
-                push!(lifetime_2[], params[3])
-            elseif lifetimes == 3
-                push!(lifetime_2[], params[3])
-                push!(lifetime_3[], params[5])
-            end
-
-            if mod1(i, 8) == 8
-                current_time = now()
-                label_frequency.text = "Frequency : $(string(round(1/((current_time - previous_time)/Millisecond(1))*1000*8, sigdigits=2))) Hz"
-                previous_time = current_time
-
-                # label_number.text = "Files : $(round(UInt64, i))"
-            end
-
-            if mod1(i, ceil(frequency/16)) == ceil(frequency/16)
-                notify(hist_time)
-                notify(time)
-
-                autolimits!(axis_hist)
-                autolimits!(axis_life)
-                autolimits!(axis_counts)
-                autolimits!(axis_conc)
-                
-                xlims!(axis_life, max(0, time[][end] - slider_time.value[]+0.1), max(slider_time.value[], time[][end]+0.1))
-                xlims!(axis_counts, max(0, time[][end] - slider_time.value[]+0.1), max(slider_time.value[], time[][end]+0.1))
-                xlims!(axis_conc, max(0, time[][end] - slider_time.value[]+0.1), max(slider_time.value[], time[][end]+0.1))
-            end
-
-            previous_files = current_files
-
-            i += 1
         end
+    catch e
+        println(e)
     end
 end
 
@@ -657,9 +666,9 @@ function start_playback(lifetimes)
     if !initialized[]
         println("Initializing")
 
-        hist = Observable(zeros(320))
-        fit = Observable(zeros(320))
-        hist_time = Observable(zeros(320))
+        hist = Observable(zeros(256))
+        fit = Observable(zeros(256))
+        hist_time = Observable(zeros(256))
 
         lifetime_1 = Observable(Float64[])
         lifetime_2 = Observable(Float64[])
@@ -705,6 +714,7 @@ function start_playback(lifetimes)
     println("Starting")
 
     while running[]
+        sleep(0.001)
         for file in files
             if running[]
                 vector, histogram_resolution = open_SDT_file(joinpath(folderpath, file))
@@ -724,8 +734,10 @@ function start_playback(lifetimes)
 
                 # vector = sum(vectors, dims=1)[1,:]/100
 
-                params, data = vec_to_lifetime(sum(vectors[end-slider_averaging.value[]+1:end,begin:histogram_resolution], dims=1)[1,:]/slider_averaging.value[], histogram_resolution=histogram_resolution, guess=params[1:2*lifetimes])
+                params, data = vec_to_lifetime(sum(vectors[end-slider_averaging.value[]+1:end,begin:histogram_resolution], dims=1)[1,:]/slider_averaging.value[], histogram_resolution=histogram_resolution, guess=params[1:2*lifetimes], tcspc_window_size=12.5, bin_size=irf_bin_size)
                 # params = vec_to_lifetime(vector, histogram_resolution=histogram_resolution)
+
+                println(maximum(data[1]))
 
                 hist[][1:length(data[2])] = data[2]
                 hist_time[][1:length(data[2])] = data[1]

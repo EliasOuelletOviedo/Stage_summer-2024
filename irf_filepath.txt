@@ -1,1 +1,1 @@
-/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Stage_summer-2024/IRF_16X_gain4_750nm.sdt
+/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Stage_summer-2024/IRF_16X_750nm_gain4.sdt
