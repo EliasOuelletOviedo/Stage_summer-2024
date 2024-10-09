@@ -766,8 +766,8 @@ function start_playback(lifetimes)
 
                 if !isnan(params_raw[1])
                     params = params_raw
-                else
-                    println("Erreur : NaN $i")
+                # else
+                    # println("Erreur : NaN $i")
                 end
 
                 hist[][1:length(data[2])] = data[2]
@@ -879,13 +879,13 @@ function start_save()
 
                 if lifetimes == 2
                     push!(lifetime_2, params[3])
-                    push!(lifetime_i, (params[2]*params[1]^2 + (1 - params[2])*params[3]^2)/(params[2]*params[1] + (1 - params[2])*params[3]))
-                    push!(lifetime_m, (params[2]*params[1] + (1 - params[2])*params[3]))
+                    # push!(lifetime_i, (params[2]*params[1]^2 + (1 - params[2])*params[3]^2)/(params[2]*params[1] + (1 - params[2])*params[3]))
+                    # push!(lifetime_m, (params[2]*params[1] + (1 - params[2])*params[3]))
                 elseif lifetimes == 3
                     push!(lifetime_2, params[3])
                     push!(lifetime_3, params[5])
-                    push!(lifetime_i, (params[2]*params[1]^2 + params[4]*params[3]^2 + (1 - params[2] - params[4])*params[5]^2)/(params[2]*params[1] + params[4]*params[3] + (1 - params[2] - params[4])*params[5]))
-                    push!(lifetime_m, (params[2]*params[1] + params[4]*params[3] + (1 - params[2] - params[4])*params[5]))
+                    # push!(lifetime_i, (params[2]*params[1]^2 + params[4]*params[3]^2 + (1 - params[2] - params[4])*params[5]^2)/(params[2]*params[1] + params[4]*params[3] + (1 - params[2] - params[4])*params[5]))
+                    # push!(lifetime_m, (params[2]*params[1] + params[4]*params[3] + (1 - params[2] - params[4])*params[5]))
                 end
 
                 progress[] = i/length(files)
@@ -914,7 +914,9 @@ function start_save()
         end
     end
 
-    Threads.@spawn saving(menu_lifetimes.i_selected[])
+    if running[]
+        Threads.@spawn saving(menu_lifetimes.i_selected[])
+    end
 end
 
 set_theme!(backgroundcolor = :gray95)
@@ -1024,7 +1026,10 @@ on(button_stop.clicks) do _
     empty!(axis_counts)
     empty!(axis_conc)
 
-    delete!(legend)
+    try
+        delete!(legend)
+    catch
+    end
 end
 
 on(button_load.clicks) do _
