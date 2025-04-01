@@ -616,7 +616,7 @@ function start_real_time()
         lifetime = Observable(Float64[])
         counts = Observable(Float64[])
         concentration = Observable(Float64[])
-        signal = Observable(Float64[])
+        global signal = Observable(Float64[])
         time = Observable(Float64[])
         
         vectors = zeros(100, 256)
@@ -889,38 +889,38 @@ function start_playback()
     all_files = readdir(folderpath)
     files = filter(f -> occursin(".sdt", f), all_files)
 
-    if !initialized[]
-        println("Initializing")
+    # if !initialized[]
+    println("Initializing")
 
-        hist = Observable(zeros(256))
-        fit = Observable(zeros(256))
-        hist_time = Observable(zeros(256))
+    hist = Observable(zeros(256))
+    fit = Observable(zeros(256))
+    hist_time = Observable(zeros(256))
 
-        lifetime = Observable(Float64[])
-        counts = Observable(Float64[])
-        concentration = Observable(Float64[])
-        global signal = Observable(Float64[])
+    lifetime = Observable(Float64[])
+    counts = Observable(Float64[])
+    concentration = Observable(Float64[])
+    global signal = Observable(Float64[])
 
-        time = Observable(Float64[])
+    time = Observable(Float64[])
 
-        vectors = zeros(100, 256)
+    vectors = zeros(100, 256)
 
-        barplot!(axis_hist, hist_time, hist, gap = 0, color=Makie.wong_colors()[1])
-        lines!(axis_hist, hist_time, fit, color=Makie.wong_colors()[6])
-        lines!(axis_counts, time, counts, color=Makie.wong_colors()[1])
-        lines!(axis_conc, time, concentration, color=Makie.wong_colors()[1])
-        lines!(axis_signal, time, signal, color=Makie.wong_colors()[1])
+    barplot!(axis_hist, hist_time, hist, gap = 0, color=Makie.wong_colors()[1])
+    lines!(axis_hist, hist_time, fit, color=Makie.wong_colors()[6])
+    lines!(axis_counts, time, counts, color=Makie.wong_colors()[1])
+    lines!(axis_conc, time, concentration, color=Makie.wong_colors()[1])
+    lines!(axis_signal, time, signal, color=Makie.wong_colors()[1])
 
-        previous_time = now()
-        current_time = now()
-        initialized[] = true
-        params = ones(3)
-        frequency = 1
-        erreur_I = 0
+    previous_time = now()
+    current_time = now()
+    initialized[] = true
+    params = ones(3)
+    frequency = 1
+    erreur_I = 0
 
-        i = 1
-        t_0 = now()
-    end
+    i = 1
+    t_0 = now()
+    # end
 
     println("Starting")
     add_to_monitor("Starting")
@@ -969,6 +969,10 @@ function start_playback()
                 end
 
                 erreur_I += erreur*dt
+
+                if i == 1
+                    erreur_I = 0
+                end
 
                 if checkbox_inverted.active[]
                     signal_value = clamp(-(params_sliders.sliders[3].value[]*erreur + params_sliders.sliders[4].value[]*erreur_I), 0, 100)
@@ -1402,7 +1406,7 @@ on(button_active.clicks) do _
         button_active.label = "ACTIVE"
 
         add_to_monitor("Activated")
-        @async start_signal(parse(Float64, textbox_fps.stored_string[]), parse(Float64, textbox_fps.stored_string[]), parse(Float64, textbox_min.stored_string[]))
+        @async start_signal(parse(Float64, textbox_fps.stored_string[]), parse(Float64, textbox_fps.stored_string[])/10, parse(Float64, textbox_min.stored_string[]))
     end
 end
 
