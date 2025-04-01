@@ -575,7 +575,8 @@ end
 
 function connect_to_port(portName)
     try
-        ser = LibSerialPort.open("/dev/tty." * portName, 115200)
+        # ser = LibSerialPort.open("/dev/tty." * portName, 115200)
+        ser = LibSerialPort.open(portName, 115200)
         LibSerialPort.set_read_timeout(ser, 3)
         sleep(0.1)
         add_to_monitor("Connection successful")
