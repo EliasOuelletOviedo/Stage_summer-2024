@@ -575,8 +575,8 @@ end
 
 function connect_to_port(portName)
     try
-        # ser = LibSerialPort.open("/dev/tty." * portName, 115200)
-        ser = LibSerialPort.open(portName, 115200)
+        ser = LibSerialPort.open("/dev/tty." * portName, 115200)
+        # ser = LibSerialPort.open(portName, 115200)
         LibSerialPort.set_read_timeout(ser, 3)
         sleep(0.1)
         add_to_monitor("Connection successful")
@@ -601,44 +601,45 @@ function send_command(serialConn, commandStr)
     # return response
 end
 
-function clear()
+function clear(serial)
     send_command(serial, "C Z\nC R\n")
 end
 
 function start_real_time()
     println(folderpath)
-    if !initialized[]
-        println("Initializing")
+    # if !initialized[]
+    println("Initializing")
 
-        hist = Observable(zeros(256))
-        fit = Observable(zeros(256))
-        hist_time = Observable(zeros(256))
-        
-        lifetime = Observable(Float64[])
-        counts = Observable(Float64[])
-        concentration = Observable(Float64[])
-        global signal = Observable(Float64[])
-        time = Observable(Float64[])
-        
-        vectors = zeros(100, 256)
-        
-        barplot!(axis_hist, hist_time, hist, gap=0, color=Makie.wong_colors()[1])
-        lines!(axis_hist, hist_time, fit, color=Makie.wong_colors()[6])
-        lines!(axis_counts, time, counts, color=Makie.wong_colors()[1])
-        lines!(axis_conc, time, concentration, color=Makie.wong_colors()[1])
-        lines!(axis_signal, time, signal, color=Makie.wong_colors()[1])
-        
-        previous_time = now()
-        current_time = now()
-        initialized[] = true
-        params = ones(3)
-        frequency = 1
-        erreur_I = 0
-        
-        i = 1
-        t_0 = now()
-        previous_files = readdir(folderpath)
-    end
+    hist = Observable(zeros(256))
+    fit = Observable(zeros(256))
+    hist_time = Observable(zeros(256))
+    
+    lifetime = Observable(Float64[])
+    counts = Observable(Float64[])
+    # concentration = Observable(Float64[])
+    global signal = Observable(Float64[])
+    time = Observable(Float64[])
+    
+    vectors = zeros(100, 256)
+    
+    barplot!(axis_hist, hist_time, hist, gap=0, color=Makie.wong_colors()[1])
+    lines!(axis_hist, hist_time, fit, color=Makie.wong_colors()[6])
+    lines!(axis_counts, time, counts, color=Makie.wong_colors()[1])
+    # lines!(axis_conc, time, concentration, color=Makie.wong_colors()[1])
+    lines!(axis_life, time, lifetime, color=Makie.wong_colors()[1])
+    lines!(axis_signal, time, signal, color=Makie.wong_colors()[1])
+    
+    previous_time = now()
+    current_time = now()
+    initialized[] = true
+    params = ones(3)
+    frequency = 1
+    erreur_I = 0
+    
+    i = 1
+    t_0 = now()
+    previous_files = readdir(folderpath)
+    # end
 
     println("Starting real time")
     println(folderpath)
@@ -680,13 +681,19 @@ function start_real_time()
                 hist_time[][1:length(data[2])] = data[1]
                 fit[][1:length(data[2])] = conv_irf_data(data[1], params, irf, data[2], histogram_resolution=histogram_resolution)
 
-                erreur = params_sliders.sliders[5].value[] - (parse(Float64, textbox_tau_0.stored_string[])/params[1] - 1) / parse(Float64, textbox_K.stored_string[])*1000
+                # erreur = params_sliders.sliders[5].value[] - (parse(Float64, textbox_tau_0.stored_string[])/params[1] - 1) / parse(Float64, textbox_K.stored_string[])*1000
+                erreur = params_sliders.sliders[5].value[] - params[1]
                 dt = 0
 
                 try
                     dt = (now() - t_0)/Millisecond(1)/1000 - time[][end]
                 catch e
                     println(e)
+                end
+
+                if reset_I[]
+                    erreur_I = 0
+                    reset_I[] = false
                 end
 
                 erreur_I += erreur * dt
@@ -699,7 +706,7 @@ function start_real_time()
 
                 push!(lifetime[], params[1])
                 push!(counts[], sum(vectors[end-params_sliders.sliders[2].value[]+1:end, :]) / params_sliders.sliders[2].value[])
-                push!(concentration[], (parse(Float64, textbox_tau_0.stored_string[])/params[1] - 1) / parse(Float64, textbox_K.stored_string[])*1000)
+                # push!(concentration[], (parse(Float64, textbox_tau_0.stored_string[])/params[1] - 1) / parse(Float64, textbox_K.stored_string[])*1000)
                 push!(signal[], signal_value)
                 push!(time[], (now() - t_0)/Millisecond(1)/1000)
 
@@ -722,11 +729,13 @@ function start_real_time()
                     
                     autolimits!(axis_hist)
                     autolimits!(axis_counts)
-                    autolimits!(axis_conc)
+                    # autolimits!(axis_conc)
+                    autolimits!(axis_life)
                     # autolimits!(axis_signal)
                     
                     xlims!(axis_counts, max(0, time[][end] - params_sliders.sliders[1].value[] + 0.1), max(params_sliders.sliders[1].value[], time[][end] + 0.1))
-                    xlims!(axis_conc, max(0, time[][end] - params_sliders.sliders[1].value[] + 0.1), max(params_sliders.sliders[1].value[], time[][end] + 0.1))
+                    # xlims!(axis_conc, max(0, time[][end] - params_sliders.sliders[1].value[] + 0.1), max(params_sliders.sliders[1].value[], time[][end] + 0.1))
+                    xlims!(axis_life, max(0, time[][end] - params_sliders.sliders[1].value[] + 0.1), max(params_sliders.sliders[1].value[], time[][end] + 0.1))
                     xlims!(axis_signal, max(0, time[][end] - params_sliders.sliders[1].value[] + 0.1), max(params_sliders.sliders[1].value[], time[][end] + 0.1))
                 end
 
@@ -899,7 +908,7 @@ function start_playback()
 
     lifetime = Observable(Float64[])
     counts = Observable(Float64[])
-    concentration = Observable(Float64[])
+    # concentration = Observable(Float64[])
     global signal = Observable(Float64[])
 
     time = Observable(Float64[])
@@ -909,7 +918,8 @@ function start_playback()
     barplot!(axis_hist, hist_time, hist, gap = 0, color=Makie.wong_colors()[1])
     lines!(axis_hist, hist_time, fit, color=Makie.wong_colors()[6])
     lines!(axis_counts, time, counts, color=Makie.wong_colors()[1])
-    lines!(axis_conc, time, concentration, color=Makie.wong_colors()[1])
+    # lines!(axis_conc, time, concentration, color=Makie.wong_colors()[1])
+    lines!(axis_life, time, lifetime, color=Makie.wong_colors()[1])
     lines!(axis_signal, time, signal, color=Makie.wong_colors()[1])
 
     previous_time = now()
@@ -960,13 +970,19 @@ function start_playback()
                     t_0 = now()
                 end
 
-                erreur = params_sliders.sliders[5].value[] - (parse(Float64, textbox_tau_0.stored_string[])/params[1] - 1)/parse(Float64, textbox_K.stored_string[])*1000
+                # erreur = params_sliders.sliders[5].value[] - (parse(Float64, textbox_tau_0.stored_string[])/params[1] - 1)/parse(Float64, textbox_K.stored_string[])*1000
+                erreur = params_sliders.sliders[5].value[] - params[1]
                 dt = 0
 
                 try
                     dt = (now() - t_0)/Millisecond(1)/1000 - time[][end]
                 catch e
                     println(e)
+                end
+
+                if reset_I[]
+                    erreur_I = 0
+                    reset_I[] = false
                 end
 
                 erreur_I += erreur*dt
@@ -983,7 +999,7 @@ function start_playback()
 
                 push!(lifetime[], params[1])
                 push!(counts[], sum(vectors[end-params_sliders.sliders[2].value[]+1:end,:])/params_sliders.sliders[2].value[])
-                push!(concentration[], (parse(Float64, textbox_tau_0.stored_string[])/params[1] - 1)/parse(Float64, textbox_K.stored_string[])*1000)
+                # push!(concentration[], (parse(Float64, textbox_tau_0.stored_string[])/params[1] - 1)/parse(Float64, textbox_K.stored_string[])*1000)
                 push!(signal[], signal_value)
                 push!(time[], (now() - t_0)/Millisecond(1)/1000)
 
@@ -1006,11 +1022,13 @@ function start_playback()
 
                     autolimits!(axis_hist)
                     autolimits!(axis_counts)
-                    autolimits!(axis_conc)
+                    # autolimits!(axis_conc)
+                    autolimits!(axis_life)
                     # autolimits!(axis_signal)
                     
                     xlims!(axis_counts, max(0, time[][end] - params_sliders.sliders[1].value[] + 0.1), max(params_sliders.sliders[1].value[], time[][end] + 0.1))
-                    xlims!(axis_conc, max(0, time[][end] - params_sliders.sliders[1].value[] + 0.1), max(params_sliders.sliders[1].value[], time[][end] + 0.1))
+                    # xlims!(axis_conc, max(0, time[][end] - params_sliders.sliders[1].value[] + 0.1), max(params_sliders.sliders[1].value[], time[][end] + 0.1))
+                    xlims!(axis_life, max(0, time[][end] - params_sliders.sliders[1].value[] + 0.1), max(params_sliders.sliders[1].value[], time[][end] + 0.1))
                     xlims!(axis_signal, max(0, time[][end] - params_sliders.sliders[1].value[] + 0.1), max(params_sliders.sliders[1].value[], time[][end] + 0.1))
                 end
 
@@ -1130,16 +1148,20 @@ function start_signal(frequency=100, refresh=1, min=3)
                 signal_val = signal[][end]
                 # println(signal_val)
 
-                if signal_val < min_val/2
-                    send_command(serial, "A 0 DO 1 0\n")
+                if menu_output.selection[] == "Digital"
+                    if signal_val < min_val/2
+                        send_command(serial, "A 0 DO 1 0\n")
 
-                elseif signal_val > 100 - min_val/2
-                    send_command(serial, "A 0 DO 1 1\n")
+                    elseif signal_val > 100 - min_val/2
+                        send_command(serial, "A 0 DO 1 1\n")
 
+                    else
+                        signal_val = round(Int, clamp(signal_val, min_val, max_val))
+
+                        send_command(serial, "A 0 DP 1 $frequency $signal_val\n")
+                    end
                 else
-                    signal_val = round(Int, clamp(signal_val, min_val, max_val))
-
-                    send_command(serial, "A 0 DP 1 $frequency $signal_val\n")
+                    send_command(serial, "A 0 AO 1 $(signal_val*10)\n")
                 end
 
                 i += 1
@@ -1161,7 +1183,8 @@ fig[2, 1] = buttongrid = GridLayout(tellwidth=true)
 
 global axis_hist    = plotgrid[1, 1] = Axis(fig, alignmode = Outside(), title="Histogram", xlabel = "Time [ns]", ylabel = "Photon counts", titlesize=16)
 global axis_counts  = plotgrid[2, 1] = Axis(fig, alignmode = Outside(), title="Photon counts", xlabel = "Time [s]", ylabel = "Photon counts", titlesize=16)
-global axis_conc    = plotgrid[1, 3] = Axis(fig, alignmode = Outside(), title="Ion concentration", xlabel = "Time [s]", ylabel = "Ion concentration [mM]", titlesize=16)
+# global axis_conc    = plotgrid[1, 3] = Axis(fig, alignmode = Outside(), title="Ion concentration", xlabel = "Time [s]", ylabel = "Ion concentration [mM]", titlesize=16)
+global axis_life    = plotgrid[1, 3] = Axis(fig, alignmode = Outside(), title="Lifetime", xlabel = "Time [s]", ylabel = "Lifetime [ns]", titlesize=16)
 global axis_signal  = plotgrid[2, 3] = Axis(fig, alignmode = Outside(), title="Light intensity", xlabel = "Time [s]", ylabel = "[%]", titlesize=16)
 
 ylims!(axis_signal, -5, 105)
@@ -1209,6 +1232,7 @@ textbox_attributes = Dict(
     :boxcolor_focused_invalid  => RGBf(1, 0.9, 0.9),
     :boxcolor_hover            => off_white,
     :cornerradius              => 4,
+    :halign              => :right,
     :height                    => 26,
     :placeholder               => " ",
     :textpadding               => (10, 8, 8, 4.5),
@@ -1223,13 +1247,15 @@ Box(buttongrid[2, 3]; box_attributes...)
 Box(buttongrid[3, 3]; merge(box_attributes, Dict(:cornerradius => -0.1))...)
 Box(buttongrid[1, 6]; box_attributes...)
 Box(buttongrid[2, 6]; box_attributes...)
-Box(buttongrid[3, 6]; box_attributes...)
+# Box(buttongrid[3, 6]; box_attributes...)
+Box(buttongrid[3, 6]; merge(box_attributes, Dict(:cornerradius => -0.1))...)
 
 button_start    = Button(buttongrid[1, 2]; merge(button_attributes, Dict(:label => "START"))...)
 button_stop     = Button(buttongrid[1, 3]; merge(button_attributes, Dict(:label => "CLEAR"))...)
 button_load     = Button(buttongrid[2, 2]; merge(button_attributes, Dict(:label => "LOAD"))...)
 button_load_IRF = Button(buttongrid[2, 3]; merge(button_attributes, Dict(:label => "LOAD IRF"))...)
-button_save     = Button(buttongrid[3, 2]; merge(button_attributes, Dict(:label => "SAVE"))...)
+# button_save     = Button(buttongrid[3, 2]; merge(button_attributes, Dict(:label => "SAVE"))...)
+button_reset     = Button(buttongrid[3, 2]; merge(button_attributes, Dict(:label => "RESET"))...)
 
 menu_mode = Menu(buttongrid[3, 3],
     cell_color_active=RGBf(0.8, 0.8, 0.8),
@@ -1245,10 +1271,14 @@ menu_mode = Menu(buttongrid[3, 3],
     width = 120
 )
 
-label_K = Label(buttongrid[1:3, 4:5][1, 1], text=L"$K_q$ [$\text{M}^{-1}$] :", halign=:right)
-textbox_K = Textbox(buttongrid[1:3, 4:5][1, 2]; textbox_attributes...)
-textbox_K.displayed_string[] = "204"
-textbox_K.stored_string[] = "204"
+# label_K = Label(buttongrid[1:3, 4:5][1, 1], text=L"$K_q$ [$\text{M}^{-1}$] :", halign=:right)
+# textbox_K = Textbox(buttongrid[1:3, 4:5][1, 2]; textbox_attributes...)
+# textbox_K.displayed_string[] = "204"
+# textbox_K.stored_string[] = "204"
+
+portname_textbox = Textbox(buttongrid[1:3, 4:5][1,1:2]; merge(textbox_attributes, Dict(:cornerradius => 6, :height => 26, :width => 180))...)
+portname_textbox.displayed_string[] = "usbmodem2302"
+portname_textbox.stored_string[] = "usbmodem2302"
 
 label_tau_0 = Label(buttongrid[1:3, 4:5][2, 1], text=L"$\tau_0$ [ns] :", halign=:right)
 textbox_tau_0 = Textbox(buttongrid[1:3, 4:5][2, 2]; textbox_attributes...)
@@ -1260,17 +1290,31 @@ textbox_fps = Textbox(buttongrid[1:3, 4:5][3, 2]; textbox_attributes...)
 textbox_fps.displayed_string[] = "50"
 textbox_fps.stored_string[] = "50"
 
-label_min = Label(buttongrid[1:3, 4:5][4, 1], text=L"\text{puff min. [ms] :}", halign=:right)
+label_min = Label(buttongrid[1:3, 4:5][4, 1], text=L"\text{Minimum [ms] :}", halign=:right)
 textbox_min = Textbox(buttongrid[1:3, 4:5][4, 2]; textbox_attributes...)
 textbox_min.displayed_string[] = "3"
 textbox_min.stored_string[] = "3"
 
-button_active = Button(buttongrid[1, 6],; merge(button_attributes, Dict(:label => "INACTIVE"))...)
-button_connect = Button(buttongrid[2, 6]; merge(button_attributes, Dict(:label => "Connect"))...)
+button_active = Button(buttongrid[1, 6],; merge(button_attributes, Dict(:label => "Activate"), Dict(:buttoncolor => mid_gray), Dict(:buttoncolor_hover => dark_gray))...)
+button_connect = Button(buttongrid[2, 6]; merge(button_attributes, Dict(:label => "Connect"), Dict(:buttoncolor => mid_gray), Dict(:buttoncolor_hover => dark_gray))...)
 
-portname_textbox = Textbox(buttongrid[3, 6]; merge(textbox_attributes, Dict(:borderwidth => 0, :cornerradius => 6, :height => 40, :textpadding => (12, 8, 8, 12), :width => 120))...)
-portname_textbox.displayed_string[] = "usbmodem2302"
-portname_textbox.stored_string[] = "usbmodem2302"
+# portname_textbox = Textbox(buttongrid[3, 6]; merge(textbox_attributes, Dict(:borderwidth => 0, :cornerradius => 6, :height => 40, :textpadding => (12, 8, 8, 12), :width => 120))...)
+# portname_textbox.displayed_string[] = "usbmodem2302"
+# portname_textbox.stored_string[] = "usbmodem2302"
+
+menu_output = Menu(buttongrid[3, 6],
+    cell_color_active = RGBf(0.8, 0.8, 0.8),
+    cell_color_inactive_even = RGBf(0.9, 0.9, 0.9),
+    cell_color_inactive_odd = RGBf(0.9, 0.9, 0.9),
+    cell_color_hover = RGBf(0.6, 0.6, 0.6),
+    default = "Digital",
+    fontsize = 20,
+    height = 40,
+    options = ["Analog", "Digital"],
+    selection_cell_color_inactive = RGBf(0.8, 0.8, 0.8),
+    textcolor = :black,
+    width = 120
+)
 
 monitor_box = Box(buttongrid[1:3, 7],
     color = :white,
@@ -1292,11 +1336,11 @@ global monitor = Label(buttongrid[1:3, 7],
 
 params_sliders = SliderGrid(
     buttongrid[1:3, 8],
-    NamedTuple(merge(slider_attributes, Dict( :format => "{:d}", :label => "Time range", :range => 1:1:600, :startvalue => 30))),
-    NamedTuple(merge(slider_attributes, Dict( :format => "{:d}", :label => "Averaging", :range => 1:1:100, :startvalue => 1))),
-    NamedTuple(merge(slider_attributes, Dict( :format => "{:.2f}", :label => "Proportional", :range => 0:0.01:1, :startvalue => 0))),
-    NamedTuple(merge(slider_attributes, Dict( :format => "{:.2f}", :label => "Integral", :range => 0:0.01:1, :startvalue => 0))),
-    NamedTuple(merge(slider_attributes, Dict( :format => "{:.1f}", :label => "Setpoint", :range => 0:0.1:100, :startvalue => 25))),
+    NamedTuple(merge(slider_attributes, Dict(:format => "{:d}",   :label => "Time range",   :range => 1:1:600,   :startvalue => 30))),
+    NamedTuple(merge(slider_attributes, Dict(:format => "{:d}",   :label => "Averaging",    :range => 1:1:100,   :startvalue => 1))),
+    NamedTuple(merge(slider_attributes, Dict(:format => "{:d}",   :label => "Proportional", :range => 0:1:100,   :startvalue => 0))),
+    NamedTuple(merge(slider_attributes, Dict(:format => "{:.1f}", :label => "Integral",     :range => 0:1:100,   :startvalue => 0))),
+    NamedTuple(merge(slider_attributes, Dict(:format => "{:.2f}", :label => "Setpoint",     :range => 0:0.01:10, :startvalue => 2.50))),
     width = 360
 )
 
@@ -1315,10 +1359,12 @@ global running = Observable(false)
 global pause = Observable(false)
 global active = Observable(false)
 global connected = Observable(false)
+global reset_I = Observable(false)
 # global inverted = Observable(false)
 global signal_intensity = 0
 
-setpoint = hlines!(axis_conc, params_sliders.sliders[5].value[], color=Makie.wong_colors()[2])
+# setpoint = hlines!(axis_conc, params_sliders.sliders[5].value[], color=Makie.wong_colors()[2])
+setpoint = hlines!(axis_life, params_sliders.sliders[5].value[], color=Makie.wong_colors()[2])
 
 on(button_start.clicks) do _
     if !running[]
@@ -1350,15 +1396,21 @@ on(button_stop.clicks) do _
     pause[] = false
     initialized[] = false
 
+    if connected[]
+        clear(serial)
+    end
+
     button_start.label = "START"
     button_stop.label = "CLEAR"
 
     empty!(axis_hist)
     empty!(axis_counts)
-    empty!(axis_conc)
+    # empty!(axis_conc)
+    empty!(axis_life)
     empty!(axis_signal)
 
-    global setpoint = hlines!(axis_conc, params_sliders.sliders[5].value[], color=Makie.wong_colors()[2])
+    # global setpoint = hlines!(axis_conc, params_sliders.sliders[5].value[], color=Makie.wong_colors()[2])
+    global setpoint = hlines!(axis_life, params_sliders.sliders[5].value[], color=Makie.wong_colors()[2])
 end
 
 on(button_load.clicks) do _
@@ -1370,12 +1422,33 @@ on(button_load_IRF.clicks) do _
     global irf_bin_size = get_irf_bin_size(irf)
 end
 
-on(button_save.clicks) do _
-    start_save()
+# on(button_save.clicks) do _
+#     start_save()
+# end
+
+on(button_reset.clicks) do _
+    reset_I[] = true
 end
 
 on(button_connect.clicks) do _
-    if !connected[]
+    if connected[]
+        clear(serial)
+        LibSerialPort.close(serial)
+        add_to_monitor("Disconnection successful")
+        add_to_monitor("Deactivated")
+        println("Disconnection successful")
+
+        button_connect.label[] = "Connect"
+        button_active.label = "Activate"
+        connected[] = false
+        active[] = false
+
+        button_active.buttoncolor[] = mid_gray
+        button_active.buttoncolor_hover[] = dark_gray
+
+        button_connect.buttoncolor[] = mid_gray
+        button_connect.buttoncolor_hover[] = dark_gray
+    else
         global serial = connect_to_port(portname_textbox.stored_string[])
 
         sleep(0.1)
@@ -1388,26 +1461,33 @@ on(button_connect.clicks) do _
         end
 
         button_connect.label[] = "Disconnect"
-    else
-        LibSerialPort.close(serial)
-        add_to_monitor("Disconnection successful")
-        println("Disconnection successful")
-        button_connect.label[] = "Connect"
-        connected[] = false
+
+        button_connect.buttoncolor[] = light_gray
+        button_connect.buttoncolor_hover[] = mid_gray
     end
 end
 
 on(button_active.clicks) do _
-    if active[]
-        active[] = false
-        button_active.label = "INACTIVE"
-        add_to_monitor("Deactivated")
-    else
-        active[] = true
-        button_active.label = "ACTIVE"
+    if connected[]
+        if active[]
+            active[] = false
+            button_active.label = "Activate"
 
-        add_to_monitor("Activated")
-        @async start_signal(parse(Float64, textbox_fps.stored_string[]), parse(Float64, textbox_fps.stored_string[])/10, parse(Float64, textbox_min.stored_string[]))
+            button_active.buttoncolor[] = mid_gray
+            button_active.buttoncolor_hover[] = dark_gray
+
+            add_to_monitor("Deactivated")
+            clear(serial)
+        else
+            active[] = true
+            button_active.label = "Deactivate"
+
+            button_active.buttoncolor[] = light_gray
+            button_active.buttoncolor_hover[] = mid_gray
+
+            add_to_monitor("Activated")
+            @async start_signal(parse(Float64, textbox_fps.stored_string[]), parse(Float64, textbox_fps.stored_string[])/10, parse(Float64, textbox_min.stored_string[]))
+        end
     end
 end
 
