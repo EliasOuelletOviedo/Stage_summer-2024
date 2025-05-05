@@ -10,6 +10,7 @@ using Dates
 using DelimitedFiles
 using LibSerialPort
 using DataStructures
+using BenchmarkTools
 
 dark_gray = RGBf(0.4, 0.4, 0.4)
 mid_gray = RGBf(0.6, 0.6, 0.6)
@@ -32,10 +33,6 @@ nanmean(x, dims) = mapslices(nanmean, x, dims=dims)
 nanstd(x) = std(filter(!isnan, x))
 nanstd(x, dims) = mapslices(nanstd, x, dims=dims)
 
-nanmax(x) = maximum(filter(!isnan, x))
-nanmin(x) = minimum(filter(!isnan, x))
-
-is_zero(x) = x == 0
 smaller_or_eq_zero(x) = x <= 0
 
 function get_irf(; channel=1)
@@ -506,55 +503,36 @@ function reshape_to_vec(file, histogram_resolution)
     return sum(reshape(file, (histogram_resolution, :)), dims = 2)[:,1]
 end
 
-function optimized_sum(file, histogram_resolution)
-    len = length(file)
-    result = zeros(Int, histogram_resolution)
-
-    @threads for i in 1:histogram_resolution
-        idx_start = (i-1) * (len ÷ histogram_resolution) + 1
-        idx_end = i * (len ÷ histogram_resolution)
-        result[i] = sum(file[idx_start:idx_end])
-    end
-
-    return result
-end
-
 function open_SDT_file(filepath)
-    open(filepath,"r") do io
+    open(filepath, "r") do io
         seek(io, 14)
-        header = read(io, 12)
+        header = read!(io, Vector{UInt8}(undef, 12))
 
-        seek(io, header[12]*16^2 + header[11]+82)
-        infos = read(io, 2)
-        histogram_resolution = infos[2]*16^2 + infos[1]
+        seek(io, header[12]*0x100 + header[11] + 82)
+        infos = read!(io, Vector{UInt8}(undef, 2))
+        histogram_resolution = infos[2]*0x100 + infos[1]
 
-        if header[8]*16^2+header[7] == 512 || header[8]*16^2+header[7] == 128
-            seek(io, header[2]*16^2+header[1]+22)
-
-            vector = read(io)
-            new_vector = UInt16[]
-
-            for i in 1:2:length(vector)
-                push!(new_vector, vector[i+1]*16^2 + vector[i])
-            end
-
+        if (header[8]*0x100 + header[7]) in (512, 128)
+            seek(io, header[2]*0x100 + header[1] + 22)
+            vector = read(io)  # lit tout le reste du fichier
+            # Conversion rapide en UInt16 sans boucle
+            n = div(length(vector), 2)
+            new_vector = reinterpret(UInt16, vector[1:2*n])
             return new_vector, histogram_resolution
         else
-            seek(io, header[2]*16^2+header[1]+2)
-
-            file_info = read(io, 20)
-
-            shift_1 = file_info[8]*16^6 + file_info[7]*16^4 + file_info[6]*16^2 + file_info[5] - file_info[2]*16^2 - file_info[1]
-            shift_2 = file_info[20]*16^6 + file_info[19]*16^4 + file_info[18]*16^2 + file_info[17]
+            seek(io, header[2]*0x100 + header[1] + 2)
+            file_info = read!(io, Vector{UInt8}(undef, 20))
+            shift_1 = file_info[8]*0x1000000 + file_info[7]*0x10000 + file_info[6]*0x100 + file_info[5] -
+                      (file_info[2]*0x100 + file_info[1])
+            shift_2 = file_info[20]*0x1000000 + file_info[19]*0x10000 + file_info[18]*0x100 + file_info[17]
 
             buffer = IOBuffer(read(io, shift_1))
-            zip_file = ZipFile.Reader(buffer).files[1]
+            zip_file = first(ZipFile.Reader(buffer).files)
 
             file_data = Vector{UInt8}(undef, shift_2)
             read!(zip_file, file_data)
 
             vector = reshape_to_vec(reinterpret(UInt16, file_data), histogram_resolution)
-    
             return vector, histogram_resolution
         end
     end
@@ -607,7 +585,6 @@ end
 
 function start_real_time()
     println(folderpath)
-    # if !initialized[]
     println("Initializing")
 
     hist = Observable(zeros(256))
@@ -631,7 +608,6 @@ function start_real_time()
     
     previous_time = now()
     current_time = now()
-    initialized[] = true
     params = ones(3)
     frequency = 1
     erreur_I = 0
@@ -894,13 +870,51 @@ end
 #     end
 # end
 
+function analyse_time(times)
+    try
+        println("Analysing")
+
+        deltas = zeros(length(times)-1)
+
+        for (i, time) in enumerate(times[2:end])
+            deltas[i] = (time - times[i])*1000
+        end
+
+        stdev = std(deltas)
+        meann = mean(deltas)
+        mediann = median(deltas)
+
+        for (i, delta) in enumerate(deltas)
+            if delta > meann + 3*stdev
+                deltas[i] = meann
+            end
+        end
+
+        stdev = std(deltas)
+        meann = mean(deltas)
+        mediann = median(deltas)
+
+        hist!(axis_counts, deltas, color=Makie.wong_colors()[1], bins=50)
+        vlines!(axis_counts, meann, color=Makie.wong_colors()[2])
+        vlines!(axis_counts, mediann, color=Makie.wong_colors()[3])
+        autolimits!(axis_counts)
+
+        println("Analyse done")
+        println("Mean : $meann")
+        println("Median : $mediann")
+        println("Stdev : $stdev")
+        println("Max : $(maximum(deltas))")
+        println("Min : $(minimum(deltas))")
+    catch e
+        println(e)
+    end
+end
+
 function start_playback()
+    GC.gc()
     println(folderpath)
     all_files = readdir(folderpath)
     files = filter(f -> occursin(".sdt", f), all_files)
-
-    # if !initialized[]
-    println("Initializing")
 
     hist = Observable(zeros(256))
     fit = Observable(zeros(256))
@@ -908,9 +922,7 @@ function start_playback()
 
     lifetime = Observable(Float64[])
     counts = Observable(Float64[])
-    # concentration = Observable(Float64[])
     global signal = Observable(Float64[])
-
     time = Observable(Float64[])
 
     vectors = zeros(100, 256)
@@ -918,130 +930,274 @@ function start_playback()
     barplot!(axis_hist, hist_time, hist, gap = 0, color=Makie.wong_colors()[1])
     lines!(axis_hist, hist_time, fit, color=Makie.wong_colors()[6])
     lines!(axis_counts, time, counts, color=Makie.wong_colors()[1])
-    # lines!(axis_conc, time, concentration, color=Makie.wong_colors()[1])
     lines!(axis_life, time, lifetime, color=Makie.wong_colors()[1])
     lines!(axis_signal, time, signal, color=Makie.wong_colors()[1])
 
     previous_time = now()
     current_time = now()
-    initialized[] = true
     params = ones(3)
     frequency = 1
     erreur_I = 0
 
     i = 1
     t_0 = now()
-    # end
+    dt = 0
 
     println("Starting")
     add_to_monitor("Starting")
 
     while running[]
-        sleep(0.001)
+        n_vectors = size(vectors, 1)
+        hist_res = 256
+
+        sleep(0.0001)
+
         for file in files
-            if running[]
-                vector, histogram_resolution = open_SDT_file(joinpath(folderpath, file))
+            averaging = params_sliders.sliders[2].value[]
+            setpoint_val = params_sliders.sliders[5].value[]
+            prop_val = params_sliders.sliders[3].value[]
+            integ_val = params_sliders.sliders[4].value[]
+            time_range = params_sliders.sliders[1].value[]
+            inverted = checkbox_inverted.active[]
+            
+            if !running[]
+                break
+            end
 
-                if i == 1
-                    for n in 1:100
-                        vectors[n,begin:histogram_resolution] = vector
-                    end
-                else
-                    for n in 1:99
-                        vectors[n,begin:histogram_resolution] = vectors[n+1,begin:histogram_resolution]
-                    end
+            vector, histogram_resolution = open_SDT_file(joinpath(folderpath, file))
+            hist_res = histogram_resolution
 
-                    vectors[end,begin:histogram_resolution] = vector
-                end
-                
-                final_vector = sum(vectors[end-params_sliders.sliders[2].value[]+1:end,begin:histogram_resolution], dims=1)[1,:]/params_sliders.sliders[2].value[]
+            if i == 1
+                vectors[:, 1:histogram_resolution] .= reshape(vector, (1, :))
+            else
+                vectors[1:end-1, 1:histogram_resolution] .= vectors[2:end, 1:histogram_resolution]
+                vectors[end, 1:histogram_resolution] .= vector
+            end
 
-                params_raw, data = vec_to_lifetime(final_vector, histogram_resolution=histogram_resolution, guess=params[1:2], tcspc_window_size=12.5, bin_size=irf_bin_size)
+            idx_start = max(1, n_vectors - averaging + 1)
+            final_vector = @views sum(vectors[idx_start:end, 1:hist_res]; dims=1)[1, :] / averaging
 
-                if !isnan(params_raw[1])
-                    params = params_raw
-                end
+            # try
+            params_raw, data = vec_to_lifetime(final_vector, histogram_resolution=hist_res, guess=params[1:2], tcspc_window_size=12.5, bin_size=irf_bin_size)
+            # params_raw, data = vec_to_lifetime(final_vector, irf[1], histogram_resolution=hist_res, guess=params[1:2], tcspc_window_size=12.5)
+            # catch e
+            #     println(e)
+            # end
 
-                hist[][1:length(data[2])] = data[2]
-                hist_time[][1:length(data[2])] = data[1]
-                fit[][1:length(data[2])] = conv_irf_data(data[1], params, irf, data[2], histogram_resolution=histogram_resolution)
+            if !isnan(params_raw[1])
+                params = params_raw
+            end
 
-                if i == 1
-                    t_0 = now()
-                end
+            @inbounds hist[][1:length(data[2])] = data[2]
+            @inbounds hist_time[][1:length(data[2])] = data[1]
+            @inbounds fit[][1:length(data[2])] = conv_irf_data(data[1], params, irf, data[2], histogram_resolution=hist_res)
 
-                # erreur = params_sliders.sliders[5].value[] - (parse(Float64, textbox_tau_0.stored_string[])/params[1] - 1)/parse(Float64, textbox_K.stored_string[])*1000
-                erreur = params_sliders.sliders[5].value[] - params[1]
-                dt = 0
+            if i == 1
+                t_0 = now()
+            end
 
-                try
-                    dt = (now() - t_0)/Millisecond(1)/1000 - time[][end]
-                catch e
-                    println(e)
-                end
+            erreur = setpoint_val - params[1]
 
-                if reset_I[]
-                    erreur_I = 0
-                    reset_I[] = false
-                end
+            # Calcul de dt optimisé
+            t_now = now()
+            last_time = isempty(time[]) ? 0.0 : time[][end]
+            dt = (t_now - t_0) / Millisecond(1) / 1000 - last_time
 
-                erreur_I += erreur*dt
+            if reset_I[]
+                erreur_I = 0
+                reset_I[] = false
+            end
 
-                if i == 1
-                    erreur_I = 0
-                end
+            erreur_I += erreur * dt
 
-                if checkbox_inverted.active[]
-                    signal_value = clamp(-(params_sliders.sliders[3].value[]*erreur + params_sliders.sliders[4].value[]*erreur_I), 0, 100)
-                else
-                    signal_value = clamp(params_sliders.sliders[3].value[]*erreur + params_sliders.sliders[4].value[]*erreur_I, 0, 100)
-                end
+            if i == 1
+                erreur_I = 0
+            end
 
-                push!(lifetime[], params[1])
-                push!(counts[], sum(vectors[end-params_sliders.sliders[2].value[]+1:end,:])/params_sliders.sliders[2].value[])
-                # push!(concentration[], (parse(Float64, textbox_tau_0.stored_string[])/params[1] - 1)/parse(Float64, textbox_K.stored_string[])*1000)
-                push!(signal[], signal_value)
-                push!(time[], (now() - t_0)/Millisecond(1)/1000)
+            if inverted
+                signal_value = clamp(-(prop_val * erreur + integ_val * erreur_I), 0, 100)
+            else
+                signal_value = clamp(prop_val * erreur + integ_val * erreur_I, 0, 100)
+            end
 
-                # send_command(serial, "A 0 AO 1 $(signal_value*50)\n")
+            # push! reste nécessaire pour Observable
+            push!(lifetime[], params[1])
+            push!(counts[], sum(@view vectors[idx_start:end, :]) / averaging)
+            push!(signal[], signal_value)
+            push!(time[], (t_now - t_0) / Millisecond(1) / 1000)
 
-                # Box_function(signal_value)
+            # Fréquence et affichage
+            if mod1(i, 32) == 32
+                current_time = t_now
+                freq = 1 / ((current_time - previous_time) / Millisecond(1)) * 1000 * 32
+                frequency = round(freq, sigdigits=2)
+                label_frequency.text = "Frequency : $frequency Hz"
+                previous_time = current_time
 
-                if mod1(i, 16) == 16
-                    current_time = now()
-                    frequency = round(1/((current_time - previous_time)/Millisecond(1))*1000*16, sigdigits=2)
-                    label_frequency.text = "Frequency : $frequency Hz"
-                    previous_time = current_time
-        
-                    label_number.text = "Files : $(round(UInt64, i))"
-                end
+                label_number.text = "Files : $(round(UInt64, i))"
+            end
 
-                if mod1(i, ceil(frequency/16)) == ceil(frequency/16)
-                    notify(hist_time)
-                    notify(time)
+            if mod1(i, ceil(frequency / 8)) == ceil(frequency / 8)
+                x_min = max(0, time[][end] - time_range + 0.1)
+                x_max = max(time_range, time[][end] + 0.1)
 
-                    autolimits!(axis_hist)
-                    autolimits!(axis_counts)
-                    # autolimits!(axis_conc)
-                    autolimits!(axis_life)
-                    # autolimits!(axis_signal)
-                    
-                    xlims!(axis_counts, max(0, time[][end] - params_sliders.sliders[1].value[] + 0.1), max(params_sliders.sliders[1].value[], time[][end] + 0.1))
-                    # xlims!(axis_conc, max(0, time[][end] - params_sliders.sliders[1].value[] + 0.1), max(params_sliders.sliders[1].value[], time[][end] + 0.1))
-                    xlims!(axis_life, max(0, time[][end] - params_sliders.sliders[1].value[] + 0.1), max(params_sliders.sliders[1].value[], time[][end] + 0.1))
-                    xlims!(axis_signal, max(0, time[][end] - params_sliders.sliders[1].value[] + 0.1), max(params_sliders.sliders[1].value[], time[][end] + 0.1))
-                end
+                notify(hist_time)
+                notify(time)
 
-                i += 1
-                sleep(0.001)
+                autolimits!(axis_hist)
+                autolimits!(axis_counts)
+                autolimits!(axis_life)
 
-                while pause[]
-                    sleep(0.1)
-                end
+                xlims!(axis_counts, x_min, x_max)
+                xlims!(axis_life, x_min, x_max)
+                xlims!(axis_signal, x_min, x_max)
+            end
+
+            i += 1
+            # Suppression du sleep inutile ici (lecture séquentielle rapide)
+            sleep(0.0001)
+
+            while pause[]
+                sleep(0.05) # sleep plus court pour meilleure réactivité
             end
         end
     end
+    # ...existing code...
+
+    analyse_time(time[])
 end
+
+# function start_playback()
+#     println(folderpath)
+#     all_files = readdir(folderpath)
+#     files = filter(f -> occursin(".sdt", f), all_files)
+
+#     hist = Observable(zeros(256))
+#     fit = Observable(zeros(256))
+#     hist_time = Observable(zeros(256))
+
+#     lifetime = Observable(Float64[])
+#     counts = Observable(Float64[])
+#     global signal = Observable(Float64[])
+#     time = Observable(Float64[])
+
+#     vectors = zeros(100, 256)
+
+#     barplot!(axis_hist, hist_time, hist, gap = 0, color=Makie.wong_colors()[1])
+#     lines!(axis_hist, hist_time, fit, color=Makie.wong_colors()[6])
+#     lines!(axis_counts, time, counts, color=Makie.wong_colors()[1])
+#     lines!(axis_life, time, lifetime, color=Makie.wong_colors()[1])
+#     lines!(axis_signal, time, signal, color=Makie.wong_colors()[1])
+
+#     previous_time = now()
+#     current_time = now()
+#     params = ones(3)
+#     frequency = 1
+#     erreur_I = 0
+
+#     i = 1
+#     t_0 = now()
+
+#     println("Starting")
+#     add_to_monitor("Starting")
+
+#     while running[]
+#         sleep(0.00001)
+#         for file in files
+#             if running[]
+#                 vector, histogram_resolution = open_SDT_file(joinpath(folderpath, file))
+
+#                 if i == 1
+#                     vectors[:, 1:histogram_resolution] .= reshape(vector, (1, :))
+#                 else
+#                     vectors[1:end-1, 1:histogram_resolution] .= vectors[2:end, 1:histogram_resolution]
+#                     vectors[end, 1:histogram_resolution] .= vector
+#                 end
+
+#                 averaging = params_sliders.sliders[2].value[]
+                
+#                 final_vector = sum(vectors[end-averaging+1:end,begin:histogram_resolution], dims=1)[1,:]/averaging
+
+#                 params_raw, data = vec_to_lifetime(final_vector, histogram_resolution=histogram_resolution, guess=params[1:2], tcspc_window_size=12.5, bin_size=irf_bin_size)
+
+#                 if !isnan(params_raw[1])
+#                     params = params_raw
+#                 end
+
+#                 hist[][1:length(data[2])] = data[2]
+#                 hist_time[][1:length(data[2])] = data[1]
+#                 fit[][1:length(data[2])] = conv_irf_data(data[1], params, irf, data[2], histogram_resolution=histogram_resolution)
+
+#                 if i == 1
+#                     t_0 = now()
+#                 end
+
+#                 erreur = params_sliders.sliders[5].value[] - params[1]
+#                 dt = 0
+
+#                 try
+#                     dt = (now() - t_0)/Millisecond(1)/1000 - time[][end]
+#                 catch e
+#                     println(e)
+#                 end
+
+#                 if reset_I[]
+#                     erreur_I = 0
+#                     reset_I[] = false
+#                 end
+
+#                 erreur_I += erreur*dt
+
+#                 if i == 1
+#                     erreur_I = 0
+#                 end
+
+#                 if checkbox_inverted.active[]
+#                     signal_value = clamp(-(params_sliders.sliders[3].value[]*erreur + params_sliders.sliders[4].value[]*erreur_I), 0, 100)
+#                 else
+#                     signal_value = clamp(params_sliders.sliders[3].value[]*erreur + params_sliders.sliders[4].value[]*erreur_I, 0, 100)
+#                 end
+
+#                 push!(lifetime[], params[1])
+#                 push!(counts[], sum(vectors[end-averaging+1:end,:])/averaging)
+#                 push!(signal[], signal_value)
+#                 push!(time[], (now() - t_0)/Millisecond(1)/1000)
+
+#                 if mod1(i, 32) == 32
+#                     current_time = now()
+#                     frequency = round(1/((current_time - previous_time)/Millisecond(1))*1000*32, sigdigits=2)
+#                     label_frequency.text = "Frequency : $frequency Hz"
+#                     previous_time = current_time
+        
+#                     label_number.text = "Files : $(round(UInt64, i))"
+#                 end
+
+#                 if mod1(i, ceil(frequency/8)) == ceil(frequency/8)
+#                     x_min = max(0, time[][end] - params_sliders.sliders[1].value[] + 0.1)
+#                     x_max = max(params_sliders.sliders[1].value[], time[][end] + 0.1)
+
+#                     notify(hist_time)
+#                     notify(time)
+
+#                     autolimits!(axis_hist)
+#                     autolimits!(axis_counts)
+#                     autolimits!(axis_life)
+                    
+#                     xlims!(axis_counts, x_min, x_max)
+#                     xlims!(axis_life, x_min, x_max)
+#                     xlims!(axis_signal, x_min, x_max)
+#                 end
+
+#                 i += 1
+#                 sleep(0.00001)
+
+#                 while pause[]
+#                     sleep(0.1)
+#                 end
+#             end
+#         end
+#     end
+# end
 
 function start_save()
     running[] = true
@@ -1354,16 +1510,13 @@ global irf = get_irf()
 global irf_bin_size = get_irf_bin_size(irf)
 global folderpath = get_folder_path("FLIM")
 global serial = nothing
-global initialized = Observable(false)
 global running = Observable(false)
 global pause = Observable(false)
 global active = Observable(false)
 global connected = Observable(false)
 global reset_I = Observable(false)
-# global inverted = Observable(false)
 global signal_intensity = 0
 
-# setpoint = hlines!(axis_conc, params_sliders.sliders[5].value[], color=Makie.wong_colors()[2])
 setpoint = hlines!(axis_life, params_sliders.sliders[5].value[], color=Makie.wong_colors()[2])
 
 on(button_start.clicks) do _
@@ -1394,7 +1547,6 @@ end
 on(button_stop.clicks) do _
     running[] = false
     pause[] = false
-    initialized[] = false
 
     if connected[]
         clear(serial)
@@ -1405,11 +1557,9 @@ on(button_stop.clicks) do _
 
     empty!(axis_hist)
     empty!(axis_counts)
-    # empty!(axis_conc)
     empty!(axis_life)
     empty!(axis_signal)
 
-    # global setpoint = hlines!(axis_conc, params_sliders.sliders[5].value[], color=Makie.wong_colors()[2])
     global setpoint = hlines!(axis_life, params_sliders.sliders[5].value[], color=Makie.wong_colors()[2])
 end
 
