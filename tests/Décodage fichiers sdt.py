@@ -341,18 +341,103 @@ INFO_IDS: dict[str, str] = {
     ),
 }
 
-# with open(arg, 'rb') as fh:
+import numpy as np
+import pandas as pd
+
+def extract_fields(rec, filename):
+    """
+    Parcourt un numpy.record 'rec' et renvoie un DataFrame
+    avec les colonnes : Filename, Groupe, Champ, Valeur.
+    Ignore les champs 'times' et 'data'.
+    """
+    rows = []
+    for name in rec.dtype.names:
+        if name in ('times', 'data'):
+            continue
+        val = rec[name]
+        # Si c'est une structure imbriquée
+        if hasattr(val, 'dtype') and val.dtype.fields:
+            for subname in val.dtype.names:
+                subval = val[subname]
+                display_val = subval if isinstance(subval, np.ndarray) else (
+                    subval.item() if hasattr(subval, 'item') else subval
+                )
+                rows.append({
+                    'Filename': filename,
+                    'Groupe': name,
+                    'Champ': subname,
+                    'Valeur': display_val
+                })
+        else:
+            if isinstance(val, (bytes, bytearray)):
+                try:
+                    display_val = val.decode('ascii').rstrip('\x00')
+                except:
+                    display_val = val
+            else:
+                display_val = val.item() if hasattr(val, 'item') else val
+            rows.append({
+                'Filename': filename,
+                'Groupe': 'measure_info',
+                'Champ': name,
+                'Valeur': display_val
+            })
+    return pd.DataFrame(rows)
+
+
+# filepath = "/Users/eliasouellet-oviedo/Documents/Stage2/Partie 2/Test_2_7/test_c00001.sdt"
+filepath_1 = "/Users/eliasouellet-oviedo/Documents/Stage2/Partie 2/Test_2_7/test_c00030.sdt"
+filepath_2 = '/Users/eliasouellet-oviedo/Documents/Stage2/Partie 2/Puffs (5ms et 20ms à 40 Hz)/test6_c0001.sdt'
+
+folderpath = "/Users/eliasouellet-oviedo/Documents/Stage2/Partie 2/Puffs (5ms et 20ms à 40 Hz)"
+
+dir = os.fsencode(folderpath)
+
+file_1 = SdtFile(filepath_1)
+rec_1 = file_1.__dict__['measure_info'][0]
+df_1 = extract_fields(rec_1, 'test_c00030.sdt')
+df_1.to_csv("1 : test_c00030")
+
+file_2 = SdtFile(filepath_2)
+rec_2 = file_2.__dict__['measure_info'][0]
+df_2 = extract_fields(rec_2, 'Puffs (5ms et 20ms à 40 Hz)/test6_c0003.sdt')
+df_2.to_csv("2 : test6_c0003")
+
+# for file in os.listdir(dir):
+#     filepath = os.path.join(folderpath, os.fsdecode(file))
+#     # print(filepath)
+#     data = SdtFile(filepath)
+#     rec = data.__dict__['measure_info'][0]
+#     frac_sec = rec['StopInfo']['stop_time']
+#     print(f"stop_time : ", rec['StopInfo']['stop_time'])
+#     print(f"cortime : ", rec['FCSInfo']['cortime'])
+#     print(f"end_time : ", rec['FCSInfo']['end_time'])
+#     print(f"first_frame_time : ", rec['HISTInfoExt']['first_frame_time'])
+#     print(f"frame_time : ", rec['HISTInfoExt']['frame_time'])
+#     print(f"line_time : ", rec['HISTInfoExt']['line_time'])
+#     print(f"pixel_time : ", rec['HISTInfoExt']['pixel_time'])
+#     print("\n")
+
+
+
+# print(file.__dict__)
+# print(file.__dict__["measure_info"][0][0])
+# print(file.__dict__)
+
+
+
+# with open(filepath, 'rb') as fh:
 #     header = np.rec.fromfile(fh, dtype=FILE_HEADER, shape=1, byteorder='<')[0]
     
 #     fh.seek(header.data_block_offs)
 #     bh = np.rec.fromfile(fh, dtype=BLOCK_HEADER, shape=1, byteorder='<')[0]
 
-    # bio = io.BytesIO(fh.read(bh.next_block_offs - bh.data_offs))
-    # with zipfile.ZipFile(bio) as zf:
-    #     databytes = zf.read(zf.filelist[0].filename)  # data_block
-    # del bio
+#     bio = io.BytesIO(fh.read(bh.next_block_offs - bh.data_offs))
+#     with zipfile.ZipFile(bio) as zf:
+#         databytes = zf.read(zf.filelist[0].filename)  # data_block
+#     del bio
 
-    # data = np.frombuffer(databytes, dtype="uint16", count=268435456)
+#     data = np.frombuffer(databytes, dtype="uint16", count=268435456)
 
 
 # print(header)
@@ -406,48 +491,48 @@ INFO_IDS: dict[str, str] = {
 
 # print(np.size(FILE_HEADER))
 
-image_64 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-07-17/Image_64/Image_64_c10.sdt"
-image_256 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-07-17/Image_256/Image_256_c10.sdt"
-single_64 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-07-17/Single_64/Single_64_c01.sdt"
-single_256 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-07-17/Single_256/Single_256_c01.sdt"
+# image_64 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-07-17/Image_64/Image_64_c10.sdt"
+# image_256 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-07-17/Image_256/Image_256_c10.sdt"
+# single_64 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-07-17/Single_64/Single_64_c01.sdt"
+# single_256 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-07-17/Single_256/Single_256_c01.sdt"
 
-single_1 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-06-10/single/single_c001.sdt"
-single_2 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-06-10/single/single_c002.sdt"
-single_3 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-06-10/single/single_c003.sdt"
-single_4 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-06-10/single/single_c004.sdt"
-single_5 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-06-10/single/single_c005.sdt"
-single_6 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-06-10/single/single_c006.sdt"
-single_7 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-06-10/single/single_c007.sdt"
-single_8 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-06-10/single/single_c008.sdt"
-single_9 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-06-10/single/single_c009.sdt"
+# single_1 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-06-10/single/single_c001.sdt"
+# single_2 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-06-10/single/single_c002.sdt"
+# single_3 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-06-10/single/single_c003.sdt"
+# single_4 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-06-10/single/single_c004.sdt"
+# single_5 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-06-10/single/single_c005.sdt"
+# single_6 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-06-10/single/single_c006.sdt"
+# single_7 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-06-10/single/single_c007.sdt"
+# single_8 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-06-10/single/single_c008.sdt"
+# single_9 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-06-10/single/single_c009.sdt"
 
-print(dir(SdtFile(single_1)))
+# print(dir(SdtFile(single_1)))
 
-file_1 = list(SdtFile(single_1).measure_info[0][0])[57]
-file_2 = list(SdtFile(single_2).measure_info[0][0])[57]
-file_3 = list(SdtFile(single_3).measure_info[0][0])[57]
-file_4 = list(SdtFile(single_4).measure_info[0][0])[57]
-file_5 = list(SdtFile(single_5).measure_info[0][0])[57]
-file_6 = list(SdtFile(single_6).measure_info[0][0])[57]
-file_7 = list(SdtFile(single_7).measure_info[0][0])[57]
-file_8 = list(SdtFile(single_8).measure_info[0][0])[57]
-file_9 = list(SdtFile(single_9).measure_info[0][0])[57]
+# file_1 = list(SdtFile(single_1).measure_info[0][0])[57]
+# file_2 = list(SdtFile(single_2).measure_info[0][0])[57]
+# file_3 = list(SdtFile(single_3).measure_info[0][0])[57]
+# file_4 = list(SdtFile(single_4).measure_info[0][0])[57]
+# file_5 = list(SdtFile(single_5).measure_info[0][0])[57]
+# file_6 = list(SdtFile(single_6).measure_info[0][0])[57]
+# file_7 = list(SdtFile(single_7).measure_info[0][0])[57]
+# file_8 = list(SdtFile(single_8).measure_info[0][0])[57]
+# file_9 = list(SdtFile(single_9).measure_info[0][0])[57]
 
 # print(list(SdtFile(single_1).measure_info[0][0]))
 # print(list(SdtFile(single_2).measure_info[0][0]))
 
 # print(list(zip(file_1, file_2, file_3, file_4, file_5, file_6, file_7, file_8, file_9)))
 
-result = [a == b == c == d for a, b, c, d in zip(file_1, file_2, file_3, file_4)]
+# result = [a == b == c == d for a, b, c, d in zip(file_1, file_2, file_3, file_4)]
 
-print(result)
-print(len(result) - sum(result))
+# print(result)
+# print(len(result) - sum(result))
 
-liste = list(zip(file_1, file_2, file_3, file_4, file_5, file_6, file_7, file_8, file_9))
-# print(liste)
+# liste = list(zip(file_1, file_2, file_3, file_4, file_5, file_6, file_7, file_8, file_9))
+# # print(liste)
 
-plt.plot(liste[4], liste[2])
-plt.show()
+# plt.plot(liste[4], liste[2])
+# plt.show()
 
 
 # with open(image_64, 'rb') as fh:

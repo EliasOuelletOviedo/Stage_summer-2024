@@ -20,13 +20,11 @@ off_white = RGBf(0.9, 0.9, 0.9)
 try
     LibSerialPort.close(serial)
 catch
-    # Nothing to close
-    println("No serial connection to close.")
 end
 
 sp_o = pyimport("scipy.optimize")
+sdt = pyimport("sdtfile")
 
-# functions ignoring NaNs
 nanmean(x) = mean(filter(!isnan, x))
 nanmean(x, dims) = mapslices(nanmean, x, dims=dims)
 
@@ -36,10 +34,6 @@ nanstd(x, dims) = mapslices(nanstd, x, dims=dims)
 smaller_or_eq_zero(x) = x <= 0
 
 function get_irf(; channel=1)
-    """
-    Loads an .sdt IRF file. If irf_filepath.txt exists, load the IRF from this filepath, otherwise, open a file dialog create irf_filepath.txt
-    """
-
     println("Getting IRF file...")
 
     if isfile("irf_filepath.txt")
@@ -51,13 +45,13 @@ function get_irf(; channel=1)
             write(io, filepath)
         end
     end
-    sdt = pyimport("sdtfile") # use python package sdtfile
+
     file = sdt.SdtFile(filepath)
     data = convert.(Int64, file.data[channel])
-    median_irf = round(median(data)) # get median
-    data = data.-round(Int, 1.25*median_irf) # remove noise from the IRF
-    data[data .<= 0] .= 0 # set negative values to 0
-    times = convert.(Float64, vec(file.times[1]).*1e9) # convert from seconds to nanoseconds
+    median_irf = round(median(data))
+    data = data.-round(Int, 1.25*median_irf)
+    data[data .<= 0] .= 0
+    times = convert.(Float64, vec(file.times[1]).*1e9)
     data = [times, vec(data)]
 
     println("Done")
@@ -67,10 +61,6 @@ function get_irf(; channel=1)
 end
 
 function get_new_irf(; channel=1)
-    """
-    Loads an .sdt IRF file. If irf_filepath.txt exists, load the IRF from this filepath, otherwise, open a file dialog create irf_filepath.txt
-    """
-
     println("Getting IRF file...")
 
     filepath = pick_file()
@@ -79,13 +69,13 @@ function get_new_irf(; channel=1)
         write(io, filepath)
     end
 
-    sdt = pyimport("sdtfile") # use python package sdtfile
+    sdt = pyimport("sdtfile")
     file = sdt.SdtFile(filepath)
     data = convert.(Int64, file.data[channel])
-    median_irf = round(median(data)) # get median
-    data = data.-round(Int, 1.25*median_irf) # remove noise from the IRF
-    data[data .<= 0] .= 0 # set negative values to 0
-    times = convert.(Float64, vec(file.times[1]).*1e9) # convert from seconds to nanoseconds
+    median_irf = round(median(data))
+    data = data.-round(Int, 1.25*median_irf)
+    data[data .<= 0] .= 0
+    times = convert.(Float64, vec(file.times[1]).*1e9)
     data = [times, vec(data)]
 
     println("Done")
@@ -95,10 +85,6 @@ function get_new_irf(; channel=1)
 end
 
 function get_irf_bin_size(irf)
-    """
-    Gets the bin size in nanoseconds from the IRF.
-    """
-    # irf = get_irf()
     h = Inf
     for (i, t) in enumerate(irf[1])
         if i == 1
@@ -112,347 +98,107 @@ function get_irf_bin_size(irf)
 end
 
 function convolve(irf, decay, y_data; histogram_resolution=256)
-    """
-    Convolves the IRF with fluorescence decay
-    """
     irf_data = deepcopy(irf)
     size_data = size(decay)[1]
+
     if size_data > length(irf_data)
         append!(irf_data, zeros(size_data-length(irf_data), 1))
     else
         irf_data = irf_data[1:size_data]
     end
+
     exp_fft = fft(decay)
     irf_data_fft = fft(irf_data)
     y = real.(ifft(irf_data_fft .* exp_fft))
     y = y*(sum(y_data)/sum(y[1:histogram_resolution]))
+
     return y
 end
 
 function irf_shift(data_irf, shift)
-    """
-    Shifts the IRF by a number of bins
-    REF: Enderlein, 1997
-    """
     if isnan(shift)
         shift = 0
     end
+
     n = length(data_irf[1])
     channel = collect(1:1:length(data_irf[1]))
     irf = convert.(Int, data_irf[2])
+
     index_1 = reshape(convert(Vector{Int64}, ((channel .- (floor(shift) - 1)).% n .% n).% n), 1, :) .+ 1
     index_1[index_1 .< 1] .+= length(index_1)
     index_2 = reshape(convert(Vector{Int64}, ((channel .- (ceil(shift) - 1)).% n .+ n).% n), 1, :) .+ 1
     index_2[index_2 .< 1] .+= length(index_2)
     terme_1 = (1 - shift + floor(shift)) .* irf[index_1]
     terme_2 = (shift - floor(shift)) .* irf[index_2]
+
     shifted_irf = terme_1 + terme_2
+
     return vec(shifted_irf)
 end
 
-function MLE_iterative_reconvolution(irf, data_xy; params, gating_function=ones(UInt8, 256), histogram_resolution=256, number_of_previous_pulses=5, laser_pulse_period=12.5)
-    """
-    Curve fitting of fluorescence decay using Maximum Likelihood Estimation
-    """
-    #global x_data = vec(deepcopy(data_xy[1]))
-    #global y_data = vec(deepcopy(data_xy[2])).*gating_function
-    #global irf = deepcopy(irf)
-    #global histogram_resolution_fit = histogram_resolution
+function MLE_iterative_reconvolution(irf, data_xy; params, gating_function=ones(UInt8, 256), histogram_resolution=256)
     x_data = vec(data_xy[1])
     y_data = vec(data_xy[2]).*gating_function
     irf = deepcopy(irf)
-    #argmax_y_data = argmax(y_data)
-
-    number_of_lifetimes = convert(Int, round((length(params))/2))
     params_copy = deepcopy(params)
-    min_offset = floor(mean(y_data[1:argmax(y_data)-10]))+ceil(std(y_data[1:argmax(y_data)-10])) # get height before the peak of the decay
+    min_offset = floor(mean(y_data[1:argmax(y_data)-10]))+ceil(std(y_data[1:argmax(y_data)-10]))
+    
     if min_offset < 5
         min_offset = 5
     end
+
     push!(params_copy, min_offset)
-    if number_of_lifetimes == 1
-        bounds = [(0.1, 12.5), (-16, 64), (0, min_offset)]
-        res = sp_o.minimize(MLE_model_func, params_copy, args=(x_data, y_data, irf, gating_function, histogram_resolution, number_of_previous_pulses, laser_pulse_period), bounds=bounds, method="L-BFGS-B")
-        if res["x"] == bounds[1][1] || res["x"] == bounds[1][2]
-            return [NaN, NaN, NaN]
-        end
-        #res = sp_o.minimize(MLE_model_func, params_copy, tol=1e-3)
-    elseif number_of_lifetimes == 2
-        bounds = [(0.1, 12.5), (0.0, 1.0), (0.1, 12.5), (-30, histogram_resolution), (0, min_offset)]
-        res = sp_o.minimize(MLE_model_func, params_copy, args=(x_data, y_data, irf, gating_function, histogram_resolution, number_of_previous_pulses, laser_pulse_period), bounds=bounds, method="L-BFGS-B", options=Dict("maxiter" => 100000))
-    elseif number_of_lifetimes == 3
-        bounds = [(0.1, 12.5), (0.0, 1.0), (0.1, 12.5), (0.0, 1.0), (0.1, 12.5), (-30, histogram_resolution), (0, min_offset)]
-        res = sp_o.minimize(MLE_model_func, params_copy, args=(x_data, y_data, irf, gating_function, histogram_resolution, number_of_previous_pulses, laser_pulse_period), bounds=bounds, method="L-BFGS-B", options=Dict("maxiter" => 100000))
+    
+    bounds = [(0.1, 12.5), (-16, 64), (0, min_offset)]
+    res = sp_o.minimize(MLE_model_func, params_copy, args=(x_data, y_data, irf, gating_function, histogram_resolution), bounds=bounds, method="SLSQP")
+    # res = sp_o.minimize(MLE_model_func, params_copy, args=(x_data, y_data, irf, gating_function, histogram_resolution), bounds=bounds, method="L-BFGS-B")
+
+    if res["x"] == bounds[1][1] || res["x"] == bounds[1][2] || !res["success"] || (res["fun"] > 5 && sum(y_data) < 10000)
+        return [NaN, NaN, NaN]
     end
-    if !res["success"]
-        if number_of_lifetimes == 1
-            return [NaN, NaN, NaN]
-        elseif number_of_lifetimes == 2
-            return [NaN, NaN, NaN, NaN, NaN]
-        elseif number_of_lifetimes == 3
-            return [NaN, NaN, NaN, NaN, NaN, NaN, NaN]
-        end
-    end
-    #fit = conv_irf_data(x_data, res["x"])
-    #chi2 = sum((y_data.-fit).^2 ./ (histogram_resolution.*y_data.+1))
-    #println(chi2)
-    #if chi2 > 3
-    if res["fun"] > 5 && sum(y_data) < 10000
-        println("Ignoring bad fit with optimization result: ", res["fun"], " found values: ", res["x"])
-        if number_of_lifetimes == 1
-            return [NaN, NaN, NaN]
-        elseif number_of_lifetimes == 2
-            return [NaN, NaN, NaN, NaN, NaN]
-        elseif number_of_lifetimes == 3
-            return [NaN, NaN, NaN, NaN, NaN, NaN, NaN]
-        end
-    end
-    if number_of_lifetimes == 2 && res["x"][3] > res["x"][1]
-        t_1 = res["x"][1]
-        t_2 = res["x"][3]
-        res["x"][1] = t_2
-        res["x"][3] = t_1
-        res["x"][2] = 1-res["x"][2]
-    end
+
     return res["x"]
 end
 
-function MLE_model_func(params, x_data, y_data, irf, gating_function, histogram_resolution, number_of_previous_pulses, laser_pulse_period)
-    """
-    Model function for MLE optimizer.
-    # REF: Bajzer, et al. 1991
-    # REF: Maus, et al. 2001
-    """
-    number_of_lifetimes = convert(Int, round((length(params)-1)/2))
-    if number_of_lifetimes == 1 || number_of_lifetimes == 0
-        exp_val_c = conv_irf_data(x_data, (params[1], params[2], params[3]), irf, y_data, histogram_resolution=histogram_resolution, number_of_previous_pulses=number_of_previous_pulses, laser_pulse_period=laser_pulse_period).*gating_function
-    elseif number_of_lifetimes == 2
-        exp_val_c = conv_irf_data(x_data, (params[1], params[2], params[3], params[4], params[5]), irf, y_data, histogram_resolution=histogram_resolution, number_of_previous_pulses=number_of_previous_pulses, laser_pulse_period=laser_pulse_period).*gating_function
-    elseif number_of_lifetimes == 3
-        exp_val_c = conv_irf_data(x_data, (params[1], params[2], params[3], params[4], params[5], params[6], params[7]), irf, y_data, histogram_resolution=histogram_resolution, number_of_previous_pulses=number_of_previous_pulses, laser_pulse_period=laser_pulse_period).*gating_function
-    end
- 
-    output_resolution = histogram_resolution
-    #downsample_ratio = Int(histogram_resolution/output_resolution)
-    #new_y_data = zeros(output_resolution)
-    #new_decay = zeros(output_resolution)
-    #for (downsampled_i, i) in enumerate(1:downsample_ratio:histogram_resolution)
-    #    new_y_data[downsampled_i] = sum(y_data[i:i+downsample_ratio-1])
-    #    new_decay[downsampled_i] = sum(exp_val_c[i:i+downsample_ratio-1])
-    #    #new_data[i÷downsample_ratio] = Int(floor(sum(data[i-downsample_ratio+1:i])/downsample_ratio))
-    #end
-
-    #Nbins = 64
-    #new_y = zeros(Nbins)
-    #new_decay = zeros(Nbins)
-    #for i in 1:1:Nbins
-    #    new_y[i] = y_data[floor(Int, 2*(i-1)+j)]+y_data[floor(Int, 2*i)]
-    #    new_decay[i] = exp_val_c[floor(Int, 2*i-1)]+exp_val_c[floor(Int, 2*i)]
-    #end
-    #y_data = new_y_data
-    #exp_val_c = new_decay
-    #output_resolution=256
-
-    #y_data[y_data .<= 0.0] .= 1e-256
-    #exp_val_c[exp_val_c .<= 0.0] .= 1e-256
-    replace!(x->smaller_or_eq_zero(x) ? 1e-256 : x, y_data) # replace values that are smaller or equal to zero by 1e-256 (very small but not zero)
-    replace!(x->smaller_or_eq_zero(x) ? 1e-256 : x, exp_val_c) # same as above. This is because log(0) is undefined
+function MLE_model_func(params, x_data, y_data, irf, gating_function, histogram_resolution)
+    exp_val_c = conv_irf_data(x_data, params, irf, y_data, histogram_resolution=histogram_resolution).*gating_function
+    replace!(x->smaller_or_eq_zero(x) ? 1e-256 : x, y_data)
+    replace!(x->smaller_or_eq_zero(x) ? 1e-256 : x, exp_val_c)
     ln_data = log.(y_data./exp_val_c)
-    poisson_deviance = 2*sum(y_data.*ln_data.-y_data.+exp_val_c)/(output_resolution-length(params))
-    #poisson_deviance = sum((y_data.*ln_data))/(256-length(params))
-    #println("Params: ", params, " poisson_deviance: ", poisson_deviance)
-    #fig = CairoMakie.Figure()
-    #ax = CairoMakie.Axis(fig[1, 1])
-    #lines!(ax, 1:1:output_resolution, y_data[1:output_resolution], color=:grey)
-    #lines!(ax, 1:1:output_resolution, exp_val_c[1:output_resolution], color=:red)
-    #display(fig)
+    poisson_deviance = 2*sum(y_data.*ln_data.-y_data.+exp_val_c)/(histogram_resolution-length(params))
+
     return poisson_deviance
 end
 
-function conv_irf_data(x_data, params, irf, y_data; histogram_resolution=256, number_of_previous_pulses=5, laser_pulse_period=12.5)
-    """
-    Creates decay function from parameters
-    """
-    number_of_params = length(params)
-    if number_of_params == 3
-        t_1 = params[1]
-        d_0 = params[2]
-        y_offset = params[3]
-        data = deepcopy(x_data)
-        irf_data = deepcopy(irf)
-        irf_y_data = irf_shift(irf_data, d_0)
-        exp_1 = exp.(-data./t_1)
-        for previous_pulse in 1:1:number_of_previous_pulses
-            exp_1 += exp.(-(data.+laser_pulse_period.*previous_pulse)./t_1)
-        end
-        decay = convolve(irf_y_data, exp_1, y_data, histogram_resolution=histogram_resolution).+y_offset
-        return decay
-    elseif number_of_params == 5
-        t_1 = params[1]
-        A_1 = params[2]
-        t_2 = params[3]
-        d_0 = params[4]
-        y_offset = params[5]
-        data = deepcopy(x_data)
-        irf_data = deepcopy(irf)
-        irf_y_data = irf_shift(irf_data, d_0)
-        exp_1 = A_1.*exp.(-data./t_1)
-        exp_2 = (1.0-A_1).*exp.(-data./t_2)
-        for previous_pulse in 1:1:number_of_previous_pulses
-            exp_1 += A_1.*exp.(-(data.+laser_pulse_period.*previous_pulse)./t_1)
-            exp_2 += (1.0-A_1).*exp.(-(data.+laser_pulse_period.*previous_pulse)./t_2)
-        end
-        decay = convolve(irf_y_data, (exp_1.+exp_2), y_data, histogram_resolution=histogram_resolution).+y_offset
-        return decay
-    elseif number_of_params == 7
-        t_1 = params[1]
-        A_1 = params[2]
-        t_2 = params[3]
-        A_2 = params[4]
-        t_3 = params[5]
-        d_0 = params[6]
-        y_offset = params[7]
-        data = deepcopy(x_data)
-        irf_data = deepcopy(irf)
-        irf_y_data = irf_shift(irf_data, d_0)
-        exp_1 = A_1.*exp.(-data./t_1)
-        exp_2 = A_2.*exp.(-data./t_2)
-        exp_3 = (1.0-A_1-A_2).*exp.(-data./t_3)
-        for previous_pulse in 1:1:number_of_previous_pulses
-            exp_1 += A_1.*exp.(-(data.+laser_pulse_period.*previous_pulse)./t_1)
-            exp_2 += A_2.*exp.(-(data.+laser_pulse_period.*previous_pulse)./t_1)
-            exp_3 += (1.0-A_1-A_2).*exp.(-(data.+laser_pulse_period.*previous_pulse)./t_3)
-        end
-        decay = convolve(irf_y_data, (exp_1.+exp_2.+exp_3), y_data, histogram_resolution=histogram_resolution).+y_offset
-        return decay
+function conv_irf_data(x_data, params, irf, y_data; histogram_resolution=256)
+    t_1 = params[1]
+    d_0 = params[2]
+    y_offset = params[3]
+    data = deepcopy(x_data)
+    irf_data = deepcopy(irf)
+    irf_y_data = irf_shift(irf_data, d_0)
+    exp_1 = exp.(-data./t_1)
+
+    for previous_pulse in 1:1:5
+        exp_1 += exp.(-(data.+12.5.*previous_pulse)./t_1)
     end
+    
+    return convolve(irf_y_data, exp_1, y_data, histogram_resolution=histogram_resolution).+y_offset
 end
 
-function LS_model_func_1_lt(data, t_1, d_0, y_offset)
-    """
-    Model function for LS optimizer for 1 lifetime
-    """
-    x_data = data[1]
-    irf = data[2]
-    y_data = data[3]
-    A = conv_irf_data(x_data, [t_1, d_0, y_offset], irf, y_data, histogram_resolution=histogram_resolution_fit).*gating_function
-    return A
-end
+function vec_to_lifetime(x; bin_size=3.9088729e-2, guess=[2.0, 1.0], histogram_resolution=256)
+    x_data = vec(collect(bin_size:bin_size:histogram_resolution*bin_size))
 
-function LS_model_func_2_lt(data, t_1, A_1, t_2, d_0, y_offset)
-    """
-    Model function for LS optimizer for 2 lifetimes
-    """
-    x_data = data[1]
-    irf = data[2]
-    y_data = data[3]
-    A = conv_irf_data(x_data, [t_1, A_1, t_2, d_0, y_offset], irf, y_data, histogram_resolution=histogram_resolution_fit).*gating_function
-    return A
-end
-
-function LS_model_func_3_lt(data, t_1, A_1, t_2, A_2, t_3, d_0, y_offset)
-    """
-    Model function for LS optimizer for 3 lifetimes
-    """
-    x_data = x_data[1]
-    irf = x_data[2]
-    y_data = data[3]
-    A = conv_irf_data(x_data, [t_1, A_1, t_2, A_2, t_3, d_0, y_offset], irf, y_data, histogram_resolution=histogram_resolution_fit).*gating_function
-    return A
-end
-
-function LS_iterative_reconvolution(irf, data_xy; guess=[2.0, 1.0], bounds=([0.0, -30], [12.5, 256]), irf_shift=0, gating_function=ones(UInt8, 256), histogram_resolution=256)
-    """
-    Curve fitting of fluorescence decay using Least Squares
-    """
-    x_data = vec(deepcopy(data_xy[1]))
-    y_data = vec(deepcopy(data_xy[2])).*gating_function
-    #global y_data = vec(deepcopy(data_xy[2])).*gating_function
-    #global irf = deepcopy(irf)
-    #global histogram_resolution_fit = histogram_resolution
-    number_of_lifetimes = convert(Int, round((length(guess))/2))
-    data = [x_data, irf, y_data]
-
-    min_offset = floor(mean(y_data[1:argmax(y_data)-10]))+ceil(std(y_data[1:argmax(y_data)-10]))
-    guess_copy = deepcopy(guess)
-    if min_offset < 5
-        min_offset = 5
-    end
-    push!(guess_copy, min_offset)
-    if number_of_lifetimes == 1
-        try
-            res, cov = sp_o.curve_fit(LS_model_func_1_lt, data, y_data, guess_copy, method="lm")
-        catch e
-            res = [NaN, 0.0, 0.0]
-        end
-        #res, cov = sp_o.curve_fit(LS_model_func_1_lt, x_data, y_data, guess_copy, method="lm")
-    elseif number_of_lifetimes == 2
-        bounds = ([0.0, 0.0, 0.0, -30, 0.0], [12.5, 1.0, 12.5, histogram_resolution, min_offset])
-        try
-            res, cov = sp_o.curve_fit(LS_model_func_2_lt, data, y_data, guess_copy, bounds=bounds) 
-        catch
-            res = [NaN, NaN, NaN, 0.0, 0.0]
-        end
-        if res[3] > res[1]
-            tau_1 = res[1]
-            tau_2 = res[3]
-            res[1] = tau_2
-            res[3] = tau_1
-            res[2] = 1-res[2]
-        end
-    elseif number_of_lifetimes == 3
-        bounds = ([0.0, 0.0, 0.0, 0.0, 0.0, -30, 0.0], [12.5, 1.0, 12.5, 1.0, 12.5, histogram_resolution, min_offset])
-        res, cov = sp_o.curve_fit(LS_model_func_3_lt, data, y_data, guess_copy, bounds=bounds)
-    end
-    return res
-end
-
-function vec_to_lifetime(x; bin_size=3.9088729e-2, hist_size_threshold=100, method="MLE", broadcast_call=false, guess=[2.0, 1.0], laser_pulse_period=12.5, histogram_resolution=256, number_of_previous_pulses=5, tcspc_window_size=10, tac_low_cut=5.0980392, tac_high_cut=94.901962)
-    """
-    Calculate fluorescence lifetime from vector of counts
-    """
-    if broadcast_call
-        x = x[2]
-    end
-    total_channels = Int(round(laser_pulse_period*histogram_resolution/tcspc_window_size))
-    append!(vec(x), zeros(total_channels-histogram_resolution))
-    x_data = vec(collect(bin_size:bin_size:total_channels*bin_size))
-    if sum(x) < hist_size_threshold
-        if method == "Intensity"
-            # Instead of fluorescence lifetime, calculate number of photons in histogram
-            return sum(x)
-        #elseif method == "Estimate"
-        #    return ([0], [x_data, vec(x)])
-        end
-        if broadcast_call
-            return NaN
-        else
-            return NaN, [x_data, vec(x)]
-        end
+    if sum(x) < 100
+        return sum(x)
     else
-        if method == "Intensity"
-            return sum(x)
-        #elseif method == "Estimate"
-        #    return ([lifetime_estimate(x[1:histogram_resolution], bin_size=bin_size)], [x_data[1:histogram_resolution], vec(x)[1:histogram_resolution]])
-        #elseif method == "CNN"
-        #    return CNN(reshape(x[1:histogram_resolution], 256, 1, 1))
-        end
-        global gating_function = ones(UInt8, total_channels)
-        gating_function[1:round(Int, tac_low_cut/100*histogram_resolution)] .= 0
-        gating_function[round(Int, tac_high_cut/100*histogram_resolution):total_channels] .= 0
-        if method == "MLE"
-            data_xy = [x_data, vec(x)]
-            tau_fit = MLE_iterative_reconvolution(irf, data_xy, params=guess, gating_function=gating_function, histogram_resolution=histogram_resolution, number_of_previous_pulses=number_of_previous_pulses, laser_pulse_period=laser_pulse_period)
-            if broadcast_call
-                return tau_fit[1]
-            end
-        elseif method == "LS"
-            data_xy = [x_data, vec(x)]
-            tau_fit = LS_iterative_reconvolution(irf, data_xy, guess=guess, gating_function=gating_function, histogram_resolution=histogram_resolution)
-            if broadcast_call
-                return tau_fit[1]
-            end
-        end
+        global gating_function = ones(UInt8, histogram_resolution)
+        gating_function[1:round(Int, 0.050980392*histogram_resolution)] .= 0
+        gating_function[round(Int, 0.94901962*histogram_resolution):histogram_resolution] .= 0
+
+        data_xy = [x_data, vec(x)]
+        tau_fit = MLE_iterative_reconvolution(irf, data_xy, params=guess, gating_function=gating_function, histogram_resolution=histogram_resolution)
+
         return tau_fit, data_xy
     end
 end
@@ -511,6 +257,10 @@ function open_SDT_file(filepath)
         seek(io, header[12]*0x100 + header[11] + 82)
         infos = read!(io, Vector{UInt8}(undef, 2))
         histogram_resolution = infos[2]*0x100 + infos[1]
+    
+        seek(io, header[12]*0x100 + header[11] + 215)
+        infos_2 = read!(io, Vector{UInt8}(undef, 4))
+        time = reinterpret(Float32, infos_2)[1]
 
         if (header[8]*0x100 + header[7]) in (512, 128)
             seek(io, header[2]*0x100 + header[1] + 22)
@@ -518,7 +268,7 @@ function open_SDT_file(filepath)
             # Conversion rapide en UInt16 sans boucle
             n = div(length(vector), 2)
             new_vector = reinterpret(UInt16, vector[1:2*n])
-            return new_vector, histogram_resolution
+            return new_vector, histogram_resolution, time
         else
             seek(io, header[2]*0x100 + header[1] + 2)
             file_info = read!(io, Vector{UInt8}(undef, 20))
@@ -533,10 +283,49 @@ function open_SDT_file(filepath)
             read!(zip_file, file_data)
 
             vector = reshape_to_vec(reinterpret(UInt16, file_data), histogram_resolution)
-            return vector, histogram_resolution
+            return vector, histogram_resolution, time
         end
     end
 end
+
+# function open_SDT_file(filepath)
+#     open(filepath, "r") do io
+#         seek(io, 14)
+#         header = read!(io, Vector{UInt8}(undef, 12))
+
+#         seek(io, header[12]*0x100 + header[11] + 82)
+#         infos = read!(io, Vector{UInt8}(undef, 2))
+#         histogram_resolution = infos[2]*0x100 + infos[1]
+    
+#         seek(io, header[12]*0x100 + header[11] + 215)
+#         infos_2 = read!(io, Vector{UInt8}(undef, 4))
+#         time = reinterpret(Float32, infos_2)
+
+#         if (header[8]*0x100 + header[7]) in (512, 128)
+#             seek(io, header[2]*0x100 + header[1] + 22)
+#             vector = read(io)  # lit tout le reste du fichier
+#             # Conversion rapide en UInt16 sans boucle
+#             n = div(length(vector), 2)
+#             new_vector = reinterpret(UInt16, vector[1:2*n])
+#             return new_vector, histogram_resolution
+#         else
+#             seek(io, header[2]*0x100 + header[1] + 2)
+#             file_info = read!(io, Vector{UInt8}(undef, 20))
+#             shift_1 = file_info[8]*0x1000000 + file_info[7]*0x10000 + file_info[6]*0x100 + file_info[5] -
+#                       (file_info[2]*0x100 + file_info[1])
+#             shift_2 = file_info[20]*0x1000000 + file_info[19]*0x10000 + file_info[18]*0x100 + file_info[17]
+
+#             buffer = IOBuffer(read(io, shift_1))
+#             zip_file = first(ZipFile.Reader(buffer).files)
+
+#             file_data = Vector{UInt8}(undef, shift_2)
+#             read!(zip_file, file_data)
+
+#             vector = reshape_to_vec(reinterpret(UInt16, file_data), histogram_resolution)
+#             return vector, histogram_resolution
+#         end
+#     end
+# end
 
 function add_to_monitor(msg::String)
     currentText = monitor.text[]
@@ -648,7 +437,7 @@ function start_real_time()
 
                 avg_vector = sum(vectors[end-params_sliders.sliders[2].value[]+1:end, 1:histogram_resolution], dims=1)[1, :] / params_sliders.sliders[2].value[]
                 
-                params_raw, data = vec_to_lifetime(avg_vector, histogram_resolution=histogram_resolution, guess=params[1:2], tcspc_window_size=12.5, bin_size=irf_bin_size)
+                params_raw, data = vec_to_lifetime(avg_vector, bin_size=irf_bin_size, guess=params[1:2], histogram_resolution=histogram_resolution)
                 if !isnan(params_raw[1])
                     params = params_raw
                 end
@@ -870,203 +659,6 @@ end
 #     end
 # end
 
-function analyse_time(times)
-    try
-        println("Analysing")
-
-        deltas = zeros(length(times)-1)
-
-        for (i, time) in enumerate(times[2:end])
-            deltas[i] = (time - times[i])*1000
-        end
-
-        stdev = std(deltas)
-        meann = mean(deltas)
-        mediann = median(deltas)
-
-        for (i, delta) in enumerate(deltas)
-            if delta > meann + 3*stdev
-                deltas[i] = meann
-            end
-        end
-
-        stdev = std(deltas)
-        meann = mean(deltas)
-        mediann = median(deltas)
-
-        hist!(axis_counts, deltas, color=Makie.wong_colors()[1], bins=50)
-        vlines!(axis_counts, meann, color=Makie.wong_colors()[2])
-        vlines!(axis_counts, mediann, color=Makie.wong_colors()[3])
-        autolimits!(axis_counts)
-
-        println("Analyse done")
-        println("Mean : $meann")
-        println("Median : $mediann")
-        println("Stdev : $stdev")
-        println("Max : $(maximum(deltas))")
-        println("Min : $(minimum(deltas))")
-    catch e
-        println(e)
-    end
-end
-
-function start_playback()
-    GC.gc()
-    println(folderpath)
-    all_files = readdir(folderpath)
-    files = filter(f -> occursin(".sdt", f), all_files)
-
-    hist = Observable(zeros(256))
-    fit = Observable(zeros(256))
-    hist_time = Observable(zeros(256))
-
-    lifetime = Observable(Float64[])
-    counts = Observable(Float64[])
-    global signal = Observable(Float64[])
-    time = Observable(Float64[])
-
-    vectors = zeros(100, 256)
-
-    barplot!(axis_hist, hist_time, hist, gap = 0, color=Makie.wong_colors()[1])
-    lines!(axis_hist, hist_time, fit, color=Makie.wong_colors()[6])
-    lines!(axis_counts, time, counts, color=Makie.wong_colors()[1])
-    lines!(axis_life, time, lifetime, color=Makie.wong_colors()[1])
-    lines!(axis_signal, time, signal, color=Makie.wong_colors()[1])
-
-    previous_time = now()
-    current_time = now()
-    params = ones(3)
-    frequency = 1
-    erreur_I = 0
-
-    i = 1
-    t_0 = now()
-    dt = 0
-
-    println("Starting")
-    add_to_monitor("Starting")
-
-    while running[]
-        n_vectors = size(vectors, 1)
-        hist_res = 256
-
-        sleep(0.0001)
-
-        for file in files
-            averaging = params_sliders.sliders[2].value[]
-            setpoint_val = params_sliders.sliders[5].value[]
-            prop_val = params_sliders.sliders[3].value[]
-            integ_val = params_sliders.sliders[4].value[]
-            time_range = params_sliders.sliders[1].value[]
-            inverted = checkbox_inverted.active[]
-            
-            if !running[]
-                break
-            end
-
-            vector, histogram_resolution = open_SDT_file(joinpath(folderpath, file))
-            hist_res = histogram_resolution
-
-            if i == 1
-                vectors[:, 1:histogram_resolution] .= reshape(vector, (1, :))
-            else
-                vectors[1:end-1, 1:histogram_resolution] .= vectors[2:end, 1:histogram_resolution]
-                vectors[end, 1:histogram_resolution] .= vector
-            end
-
-            idx_start = max(1, n_vectors - averaging + 1)
-            final_vector = @views sum(vectors[idx_start:end, 1:hist_res]; dims=1)[1, :] / averaging
-
-            # try
-            params_raw, data = vec_to_lifetime(final_vector, histogram_resolution=hist_res, guess=params[1:2], tcspc_window_size=12.5, bin_size=irf_bin_size)
-            # params_raw, data = vec_to_lifetime(final_vector, irf[1], histogram_resolution=hist_res, guess=params[1:2], tcspc_window_size=12.5)
-            # catch e
-            #     println(e)
-            # end
-
-            if !isnan(params_raw[1])
-                params = params_raw
-            end
-
-            @inbounds hist[][1:length(data[2])] = data[2]
-            @inbounds hist_time[][1:length(data[2])] = data[1]
-            @inbounds fit[][1:length(data[2])] = conv_irf_data(data[1], params, irf, data[2], histogram_resolution=hist_res)
-
-            if i == 1
-                t_0 = now()
-            end
-
-            erreur = setpoint_val - params[1]
-
-            # Calcul de dt optimisé
-            t_now = now()
-            last_time = isempty(time[]) ? 0.0 : time[][end]
-            dt = (t_now - t_0) / Millisecond(1) / 1000 - last_time
-
-            if reset_I[]
-                erreur_I = 0
-                reset_I[] = false
-            end
-
-            erreur_I += erreur * dt
-
-            if i == 1
-                erreur_I = 0
-            end
-
-            if inverted
-                signal_value = clamp(-(prop_val * erreur + integ_val * erreur_I), 0, 100)
-            else
-                signal_value = clamp(prop_val * erreur + integ_val * erreur_I, 0, 100)
-            end
-
-            # push! reste nécessaire pour Observable
-            push!(lifetime[], params[1])
-            push!(counts[], sum(@view vectors[idx_start:end, :]) / averaging)
-            push!(signal[], signal_value)
-            push!(time[], (t_now - t_0) / Millisecond(1) / 1000)
-
-            # Fréquence et affichage
-            if mod1(i, 32) == 32
-                current_time = t_now
-                freq = 1 / ((current_time - previous_time) / Millisecond(1)) * 1000 * 32
-                frequency = round(freq, sigdigits=2)
-                label_frequency.text = "Frequency : $frequency Hz"
-                previous_time = current_time
-
-                label_number.text = "Files : $(round(UInt64, i))"
-            end
-
-            if mod1(i, ceil(frequency / 8)) == ceil(frequency / 8)
-                x_min = max(0, time[][end] - time_range + 0.1)
-                x_max = max(time_range, time[][end] + 0.1)
-
-                notify(hist_time)
-                notify(time)
-
-                autolimits!(axis_hist)
-                autolimits!(axis_counts)
-                autolimits!(axis_life)
-
-                xlims!(axis_counts, x_min, x_max)
-                xlims!(axis_life, x_min, x_max)
-                xlims!(axis_signal, x_min, x_max)
-            end
-
-            i += 1
-            # Suppression du sleep inutile ici (lecture séquentielle rapide)
-            sleep(0.0001)
-
-            while pause[]
-                sleep(0.05) # sleep plus court pour meilleure réactivité
-            end
-        end
-    end
-    # ...existing code...
-
-    analyse_time(time[])
-end
-
 # function start_playback()
 #     println(folderpath)
 #     all_files = readdir(folderpath)
@@ -1198,6 +790,259 @@ end
 #         end
 #     end
 # end
+
+function analyse_time(times)
+    try
+        println("Analysing")
+
+        deltas = zeros(length(times)-1)
+
+        for (i, time) in enumerate(times[2:end])
+            deltas[i] = (time - times[i])*1000
+        end
+
+        # deltas = times
+
+        stdev = std(deltas)
+        meann = mean(deltas)
+        mediann = median(deltas)
+
+        for (i, delta) in enumerate(deltas)
+            if delta > meann + 3*stdev
+                deltas[i] = meann
+            end
+        end
+
+        stdev = std(deltas)
+        meann = mean(deltas)
+        mediann = median(deltas)
+
+        hist!(axis_counts, deltas, color=Makie.wong_colors()[1], bins=50)
+        vlines!(axis_counts, meann, color=Makie.wong_colors()[2])
+        vlines!(axis_counts, mediann, color=Makie.wong_colors()[3])
+        autolimits!(axis_counts)
+
+        println("Analyse done")
+        println("Mean : $(round(meann, digits = 2))")
+        println("Median : $(round(mediann, digits = 2))")
+        println("Stdev : $(round(stdev, digits = 2))")
+        println("Max : $(round(maximum(deltas), digits = 2))")
+        println("Min : $(round(minimum(deltas), digits = 2))")
+    catch e
+        println(e)
+    end
+end
+
+function start_playback()
+    GC.gc()
+    println(folderpath)
+    all_files = readdir(folderpath)
+    files = filter(f -> occursin(".sdt", f), all_files)
+
+    hist = Observable(zeros(256))
+    fit = Observable(zeros(256))
+    hist_time = Observable(zeros(256))
+
+    lifetime = Observable(Float64[])
+    counts = Observable(Float64[])
+    global signal = Observable(Float64[])
+    times = Observable(Float64[])
+
+    vectors = zeros(100, 256)
+
+    barplot!(axis_hist, hist_time, hist, gap = 0, color=Makie.wong_colors()[1])
+    lines!(axis_hist, hist_time, fit, color=Makie.wong_colors()[6])
+    lines!(axis_counts, times, counts, color=Makie.wong_colors()[1])
+    lines!(axis_life, times, lifetime, color=Makie.wong_colors()[1])
+    lines!(axis_signal, times, signal, color=Makie.wong_colors()[1])
+
+    params = ones(3)
+    erreur_I = 0
+    display_period = 1/3
+
+    i = 1
+    n = 1
+    t_0 = now()
+    cum_time = 0
+    dt = 0
+
+    println("Starting playback")
+    add_to_monitor("Starting")
+
+    while running[]
+        n_vectors = size(vectors, 1)
+        histogram_resolution = 256
+
+        sleep(0.0001)
+
+        for file in files
+            averaging = params_sliders.sliders[2].value[]
+            setpoint_val = params_sliders.sliders[5].value[]
+            prop_val = params_sliders.sliders[3].value[]
+            integ_val = params_sliders.sliders[4].value[]
+            time_range = params_sliders.sliders[1].value[]
+            inverted = checkbox_inverted.active[]
+            
+            if !running[]
+                break
+            end
+
+            vector, histogram_resolution, time = open_SDT_file(joinpath(folderpath, file))
+            cum_time += time
+            # println(time)
+            
+            if i == 1
+                vectors[:, 1:histogram_resolution] .= reshape(vector, (1, :))
+            else
+                vectors[1:end-1, 1:histogram_resolution] .= vectors[2:end, 1:histogram_resolution]
+                vectors[end, 1:histogram_resolution] .= vector
+            end
+
+            idx_start = max(1, n_vectors - averaging + 1)
+            final_vector = @views sum(vectors[idx_start:end, 1:histogram_resolution]; dims=1)[1, :] / averaging
+
+            params_raw, data = vec_to_lifetime(final_vector, bin_size=irf_bin_size, guess=params[1:2], histogram_resolution=histogram_resolution)
+
+            if !isnan(params_raw[1])
+                params = params_raw
+            end
+
+            @inbounds hist[][1:length(data[2])] = data[2]
+            @inbounds hist_time[][1:length(data[2])] = data[1]
+            @inbounds fit[][1:length(data[2])] = conv_irf_data(data[1], params, irf, data[2], histogram_resolution=histogram_resolution)
+
+            if i == 1
+                t_0 = now()
+            end
+
+            erreur = setpoint_val - params[1]
+            
+            t_now = now()
+            delta_t = (t_now - t_0) / Microsecond(1) / 1e6
+
+            if reset_I[]
+                erreur_I = 0
+                reset_I[] = false
+            end
+
+            erreur_I += erreur * time
+
+            if i == 1
+                erreur_I = 0
+            end
+
+            if inverted
+                signal_value = clamp(-(prop_val * erreur + integ_val * erreur_I), 0, 100)
+            else
+                signal_value = clamp(prop_val * erreur + integ_val * erreur_I, 0, 100)
+            end
+
+            push!(lifetime[], params[1])
+            push!(counts[], sum(@view vectors[idx_start:end, :]) / averaging)
+            push!(signal[], signal_value)
+            push!(times[], cum_time)
+
+            if counts[][end] > 2e5
+                println(i)
+            end
+
+            instant_freq =  i / (delta_t + 1e-6)
+            nb_i = ceil(instant_freq*display_period)
+
+            if mod1(i, nb_i) == nb_i
+                if mod1(n, 3) == 3
+                    label_frequency.text = "Frequency : $(round(instant_freq, sigdigits=2)) Hz"
+                    label_number.text = "Files : $i"
+                end
+
+                x_min = max(0, times[][end] - time_range + 0.1)
+                x_max = max(time_range, times[][end] + 0.1)
+
+                notify(hist_time)
+                notify(times)
+
+                autolimits!(axis_hist)
+                autolimits!(axis_counts)
+                autolimits!(axis_life)
+
+                xlims!(axis_counts, x_min, x_max)
+                xlims!(axis_life, x_min, x_max)
+                xlims!(axis_signal, x_min, x_max)
+
+                n += 1
+            end
+
+            i += 1
+            sleep(0.0001)
+
+            while pause[]
+                sleep(0.05)
+            end
+        end
+    end
+end
+
+function start_analysis()
+    GC.gc()
+    println(folderpath)
+    all_files = readdir(folderpath)
+    files = filter(f -> occursin(".sdt", f), all_files)
+    nb_files = length(files)
+    checkpoints = round.(Int, nb_files .* (0:0.5:100) ./ 100)
+
+    lifetime = Float64[]
+    counts = Float64[]
+    times = Float64[]
+
+    params = ones(3)
+
+    i = 1
+    previous_time = 0
+
+    println("Starting analysis")
+    add_to_monitor("Starting analysis")
+
+    histogram_resolution = 256
+
+    box_progress.width = 16
+
+    for file in files
+        try
+            if !running[]
+                break
+            end
+
+            vector, histogram_resolution, time = open_SDT_file(joinpath(folderpath, file))
+            vector = convert(Vector{Float64}, vector)
+            previous_time += time
+
+            params_raw, data = vec_to_lifetime(vector, bin_size=irf_bin_size, guess=params[1:2], histogram_resolution=histogram_resolution)
+
+            if !isnan(params_raw[1])
+                params = params_raw
+            end
+
+            push!(lifetime, params[1])
+            push!(counts, sum(vector))
+            push!(times, previous_time)
+
+            i += 1
+
+            sleep(0.0001)
+
+            if i in checkpoints
+                box_progress.width = 8 + 1345*i/nb_files
+                label_progress.text = "$(round(Int, i/nb_files*100)) %"
+            end
+
+            while pause[]
+                sleep(0.05)
+            end
+        catch e
+            println(e)
+        end
+    end
+end
 
 function start_save()
     running[] = true
@@ -1336,6 +1181,7 @@ fig = Figure(size = (1440, 847))
 
 fig[1, 1] = plotgrid = GridLayout()
 fig[2, 1] = buttongrid = GridLayout(tellwidth=true)
+fig[3, 1] = progressgrid = GridLayout(tellwidth=false)
 
 global axis_hist    = plotgrid[1, 1] = Axis(fig, alignmode = Outside(), title="Histogram", xlabel = "Time [ns]", ylabel = "Photon counts", titlesize=16)
 global axis_counts  = plotgrid[2, 1] = Axis(fig, alignmode = Outside(), title="Photon counts", xlabel = "Time [s]", ylabel = "Photon counts", titlesize=16)
@@ -1421,7 +1267,7 @@ menu_mode = Menu(buttongrid[3, 3],
     default = "Playback",
     fontsize=20,
     height = 40,
-    options=["Real-time", "Playback"],
+    options=["Real-time", "Playback", "Analysis"],
     selection_cell_color_inactive=RGBf(0.8, 0.8, 0.8),
     textcolor=:black,
     width = 120
@@ -1492,13 +1338,33 @@ global monitor = Label(buttongrid[1:3, 7],
 
 params_sliders = SliderGrid(
     buttongrid[1:3, 8],
-    NamedTuple(merge(slider_attributes, Dict(:format => "{:d}",   :label => "Time range",   :range => 1:1:600,   :startvalue => 30))),
+    NamedTuple(merge(slider_attributes, Dict(:format => "{:d}",   :label => "Time range",   :range => 10:10:6000,   :startvalue => 30))),
     NamedTuple(merge(slider_attributes, Dict(:format => "{:d}",   :label => "Averaging",    :range => 1:1:100,   :startvalue => 1))),
     NamedTuple(merge(slider_attributes, Dict(:format => "{:d}",   :label => "Proportional", :range => 0:1:100,   :startvalue => 0))),
     NamedTuple(merge(slider_attributes, Dict(:format => "{:.1f}", :label => "Integral",     :range => 0:1:100,   :startvalue => 0))),
     NamedTuple(merge(slider_attributes, Dict(:format => "{:.2f}", :label => "Setpoint",     :range => 0:0.01:10, :startvalue => 2.50))),
     width = 360
 )
+
+Box(progressgrid[1, 1],
+    color = light_gray,
+    cornerradius = 4,
+    halign = :left,
+    height = 8,
+    strokevisible=false,
+    width = 1353
+)
+
+box_progress = Box(progressgrid[1, 1],
+    color = mid_gray,
+    cornerradius = 4,
+    halign = :left,
+    height = 8,
+    strokevisible=false,
+    width = 0
+)
+
+label_progress = Label(progressgrid[1, 2], text="0 %", halign=:right, tellwidth = false)
 
 colgap!(buttongrid, 3, 50)
 colgap!(buttongrid, 5, 50)
@@ -1528,6 +1394,8 @@ on(button_start.clicks) do _
 
         if menu_mode.selection[] == "Playback"
             @async start_playback()
+        elseif menu_mode.selection[] == "Analysis"
+            @async start_analysis()
         else
             @async start_real_time()
         end
