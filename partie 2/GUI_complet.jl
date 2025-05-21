@@ -11,52 +11,54 @@ using DelimitedFiles
 using LibSerialPort
 using DataStructures
 using BenchmarkTools
+using Optim
+using LineSearches
+using CSV
+using DataFrames
 
-dark_gray = RGBf(0.4, 0.4, 0.4)
-mid_gray = RGBf(0.6, 0.6, 0.6)
-light_gray = RGBf(0.8, 0.8, 0.8)
-off_white = RGBf(0.9, 0.9, 0.9)
+dark_gray  = RGBf(0.5, 0.5, 0.5)
+mid_gray   = RGBf(0.7, 0.7, 0.7)
+light_gray = RGBf(0.85, 0.85, 0.85)
+off_white  = RGBf(0.9, 0.9, 0.9)
 
 try
     LibSerialPort.close(serial)
 catch
 end
 
-sp_o = pyimport("scipy.optimize")
-sdt = pyimport("sdtfile")
-
-nanmean(x) = mean(filter(!isnan, x))
-nanmean(x, dims) = mapslices(nanmean, x, dims=dims)
-
-nanstd(x) = std(filter(!isnan, x))
-nanstd(x, dims) = mapslices(nanstd, x, dims=dims)
-
+isnotnan(x) = !isnan(x)
 smaller_or_eq_zero(x) = x <= 0
 
 function get_irf(; channel=1)
-    println("Getting IRF file...")
-
+    """
+    Loads an .sdt IRF file. If irf_filepath.txt exists, load the IRF from this filepath, otherwise, open a file dialog create irf_filepath.txt
+    """
     if isfile("irf_filepath.txt")
         filepath = open(f->read(f, String), "irf_filepath.txt")
+        if !ispath(filepath)
+            println("IRF filepath does not exist. Please select valid .sdt file.")
+            filepath = open_dialog("IRF: Choose .sdt file to open.")
+            open("irf_filepath.txt", "w") do io
+                write(io, filepath)
+            end
+        end
     else
-        filepath = pick_file()
-
+        filepath = open_dialog("IRF: Choose .sdt file to open.")
         open("irf_filepath.txt", "w") do io
             write(io, filepath)
         end
     end
 
+    sdt = pyimport("sdtfile")
     file = sdt.SdtFile(filepath)
-    data = convert.(Int64, file.data[channel])
-    median_irf = round(median(data))
-    data = data.-round(Int, 1.25*median_irf)
-    data[data .<= 0] .= 0
+    counts = convert.(Int64, file.data[channel])
+    median_irf = round(median(counts))
+    counts = counts.-round(Int, median_irf)
+    counts[counts .<= 0] .= 0
     times = convert.(Float64, vec(file.times[1]).*1e9)
-    data = [times, vec(data)]
-
-    println("Done")
-    println()
-
+    data = zeros(Float64, length(times), 2)::Matrix{Float64}
+    data[:, 1] = times
+    data[:, 2] = vec(counts)
     return data
 end
 
@@ -84,122 +86,179 @@ function get_new_irf(; channel=1)
     return data
 end
 
-function get_irf_bin_size(irf)
-    h = Inf
-    for (i, t) in enumerate(irf[1])
+function get_irf_bin_size()
+    """
+    Gets the bin size in nanoseconds from the IRF.
+    """
+    irf = get_irf()
+    h = Inf::Float64
+    for i in 1:1:length(irf[:, 1])
         if i == 1
             continue
         end
-        if irf[1][i]-irf[1][i-1] < h
-            h = irf[1][i]-irf[1][i-1]
+        if irf[i, 1]-irf[i-1, 1] < h
+            h = irf[i, 1]-irf[i-1, 1]
         end
     end
-    return float(h)
+    return h
 end
 
-function convolve(irf, decay, y_data; histogram_resolution=256)
-    irf_data = deepcopy(irf)
-    size_data = size(decay)[1]
+function convolve(irf::Vector{Float64}, decay::Vector{Float64}; histogram_resolution=256::Int64)
+    """
+    Convolves the IRF with fluorescence decay
+    """
+    y = real.(ifft_plan*((fft_plan*irf) .* (fft_plan*decay)))
 
-    if size_data > length(irf_data)
-        append!(irf_data, zeros(size_data-length(irf_data), 1))
-    else
-        irf_data = irf_data[1:size_data]
-    end
-
-    exp_fft = fft(decay)
-    irf_data_fft = fft(irf_data)
-    y = real.(ifft(irf_data_fft .* exp_fft))
-    y = y*(sum(y_data)/sum(y[1:histogram_resolution]))
-
-    return y
+    return (y/sum(y[13:histogram_resolution-12]))::Vector{Float64}
 end
 
-function irf_shift(data_irf, shift)
+function irf_shift(data_irf::Matrix{Float64}, shift)
+    """
+    Translation of the IRF to account for systematic delays in instrument
+    REF: Enderlein, 1997
+    """
     if isnan(shift)
         shift = 0
     end
 
-    n = length(data_irf[1])
-    channel = collect(1:1:length(data_irf[1]))
-    irf = convert.(Int, data_irf[2])
-
-    index_1 = reshape(convert(Vector{Int64}, ((channel .- (floor(shift) - 1)).% n .% n).% n), 1, :) .+ 1
+    n = length(data_irf[:, 1])
+    channel = collect(1:1:length(data_irf[:, 1]))
+    irf_counts = data_irf[:, 2]
+    
+    index_1 = vec( ((channel .- (floor(Int, shift) - 1)).% n .% n).% n) .+ 1
     index_1[index_1 .< 1] .+= length(index_1)
-    index_2 = reshape(convert(Vector{Int64}, ((channel .- (ceil(shift) - 1)).% n .+ n).% n), 1, :) .+ 1
+    index_2 = vec(((channel .- (ceil(Int, shift) - 1)).% n .+ n).% n) .+ 1
     index_2[index_2 .< 1] .+= length(index_2)
-    terme_1 = (1 - shift + floor(shift)) .* irf[index_1]
-    terme_2 = (shift - floor(shift)) .* irf[index_2]
-
-    shifted_irf = terme_1 + terme_2
-
-    return vec(shifted_irf)
+    
+    return vec((1 - shift + floor(shift)) .* irf_counts[index_1] + (shift - floor(shift)) .* irf_counts[index_2])::Vector{Float64}
 end
 
-function MLE_iterative_reconvolution(irf, data_xy; params, gating_function=ones(UInt8, 256), histogram_resolution=256)
-    x_data = vec(data_xy[1])
-    y_data = vec(data_xy[2]).*gating_function
-    irf = deepcopy(irf)
-    params_copy = deepcopy(params)
-    min_offset = floor(mean(y_data[1:argmax(y_data)-10]))+ceil(std(y_data[1:argmax(y_data)-10]))
-    
-    if min_offset < 5
-        min_offset = 5
-    end
-
-    push!(params_copy, min_offset)
-    
-    bounds = [(0.1, 12.5), (-16, 64), (0, min_offset)]
-    res = sp_o.minimize(MLE_model_func, params_copy, args=(x_data, y_data, irf, gating_function, histogram_resolution), bounds=bounds, method="SLSQP")
-    # res = sp_o.minimize(MLE_model_func, params_copy, args=(x_data, y_data, irf, gating_function, histogram_resolution), bounds=bounds, method="L-BFGS-B")
-
-    if res["x"] == bounds[1][1] || res["x"] == bounds[1][2] || !res["success"] || (res["fun"] > 5 && sum(y_data) < 10000)
-        return [NaN, NaN, NaN]
-    end
-
-    return res["x"]
+function conv_irf_data(x_data::Vector{Float64}, params::Tuple{Float64, Float64, Float64}, irf::Matrix{Float64}; histogram_resolution=256::Int64)
+    return convolve(irf_shift(irf, params[2]), exp.(-x_data./params[1]), histogram_resolution=histogram_resolution)
 end
 
-function MLE_model_func(params, x_data, y_data, irf, gating_function, histogram_resolution)
-    exp_val_c = conv_irf_data(x_data, params, irf, y_data, histogram_resolution=histogram_resolution).*gating_function
-    replace!(x->smaller_or_eq_zero(x) ? 1e-256 : x, y_data)
+function MLE_model_func(params::Vector{Float64}, x_data::Vector{Float64}, y_data::Vector{Float64}, irf::Matrix{Float64}, gating_function::Vector{UInt8}, histogram_resolution::Int64)
+    """
+    Model function for MLE optimizer.
+    # REF: Bajzer, et al. 1991
+    # REF: Maus, et al. 2001
+    """
+    poisson_deviance = 0.0::Float64
+
+    exp_val_c = gating_function.*((1-params[3]).*conv_irf_data(x_data, (params[1], params[2], params[3]), irf, histogram_resolution=histogram_resolution).+params[3]).*float(sum(y_data))
+
     replace!(x->smaller_or_eq_zero(x) ? 1e-256 : x, exp_val_c)
     ln_data = log.(y_data./exp_val_c)
     poisson_deviance = 2*sum(y_data.*ln_data.-y_data.+exp_val_c)/(histogram_resolution-length(params))
 
-    return poisson_deviance
-end
-
-function conv_irf_data(x_data, params, irf, y_data; histogram_resolution=256)
-    t_1 = params[1]
-    d_0 = params[2]
-    y_offset = params[3]
-    data = deepcopy(x_data)
-    irf_data = deepcopy(irf)
-    irf_y_data = irf_shift(irf_data, d_0)
-    exp_1 = exp.(-data./t_1)
-
-    for previous_pulse in 1:1:5
-        exp_1 += exp.(-(data.+12.5.*previous_pulse)./t_1)
+    if isnan(poisson_deviance)
+        println(params, " ", poisson_deviance)
+        println(exp_val_c)
+        println(y_data)
     end
-    
-    return convolve(irf_y_data, exp_1, y_data, histogram_resolution=histogram_resolution).+y_offset
+
+    return poisson_deviance::Float64
 end
 
-function vec_to_lifetime(x; bin_size=3.9088729e-2, guess=[2.0, 1.0], histogram_resolution=256)
-    x_data = vec(collect(bin_size:bin_size:histogram_resolution*bin_size))
+function find_mean_arrival_time(counts)
+    num = 0.0
+    for (i, c) in enumerate(counts)
+        num += i*c
+    end
+    return num/sum(counts)
+end
 
+function lifetime_estimate(counts)
+    mean_irf_arrival_time = find_mean_arrival_time(irf[:, 2])
+    mean_data_arrival_time = find_mean_arrival_time(counts)
+    return (mean_data_arrival_time-mean_irf_arrival_time)*irf_bin_size
+end
+
+function MLE_iterative_reconvolution_jl(irf::Matrix{Float64}, data_xy::Vector{Vector{Float64}}; params, gating_function=ones(UInt8, 320), histogram_resolution=256, laser_pulse_period=12.5, fixed_parameters=Float64[NaN, NaN, NaN])
+    """
+    Curve fitting of fluorescence decay using Maximum Likelihood Estimation
+    """
+    x_data = vec(data_xy[1])
+    y_data = vec(data_xy[2]).*gating_function
+    replace!(x->smaller_or_eq_zero(x) ? 1e-256 : x, y_data)
+    irf = deepcopy(irf)
+
+    params_copy = deepcopy(params)
+
+    if all(isnotnan.(fixed_parameters))
+        return fixed_parameters
+    end
+
+    params_copy[1] = lifetime_estimate(y_data)
+    lower_bounds = Float64[2*irf_bin_size, -16.0, 0.0]
+    upper_bounds = Float64[laser_pulse_period*2, 32.0, 1.0]
+
+    if any(isnotnan.(fixed_parameters))
+        for i in 1:1:length(fixed_parameters)
+            if !isnan(fixed_parameters[i])
+                if fixed_parameters[i] < lower_bounds[i]
+                    fixed_parameters[i] = lower_bounds[i]
+                elseif fixed_parameters[i] > upper_bounds[i]
+                    fixed_parameters[i] = upper[i]
+                end
+                params_copy[i] = fixed_parameters[i]
+                if fixed_parameters[i]-1e-6 >= lower_bounds[i]
+                    lower_bounds[i] = fixed_parameters[i]-1e-6
+                end
+                if fixed_parameters[i]+1e-6 <= upper_bounds[i]
+                    upper_bounds[i] = fixed_parameters[i]+1e-6
+                end
+            end
+        end
+    end
+
+    fit = optimize(x->MLE_model_func(x, x_data, y_data, irf, gating_function, histogram_resolution), lower_bounds, upper_bounds, params_copy, Fminbox(LBFGS(linesearch = LineSearches.BackTracking())), Optim.Options(outer_iterations=5, x_abstol=5e-16, outer_x_abstol=5e-16, allow_f_increases=false))
+    res = Optim.minimizer(fit)
+    
+    if res[1] == lower_bounds[1] || res[1] == upper_bounds[1] || !Optim.converged(fit)
+        return Float64[NaN, NaN, NaN]
+    end
+
+    if Optim.minimum(fit) > 5 && sum(y_data) < 50000
+        println("Ignoring bad fit with optimization result: ", Optim.minimum(fit), " found values: ", res)
+        return Float64[NaN, NaN, NaN]
+    end
+
+    return res::Vector{Float64}
+end
+
+function vec_to_lifetime(x; guess=[3.0, 1.0, 1e-6], laser_pulse_period=12.5, histogram_resolution=256, tac_low_cut=5.0980392, tac_high_cut=94.901962, fixed_parameters=Float64[NaN, NaN, NaN])
+    """
+    Calculate fluorescence lifetime from vector of counts
+    """
+    total_channels = round(Int, laser_pulse_period*histogram_resolution/tcspc_window_size)
+    x_data = vec(collect(irf_bin_size:irf_bin_size:total_channels*irf_bin_size))
+
+    # if total_channels != histogram_resolution
+    #     println("Mismatch")
+    #     global fft_plan = plan_fft(zeros(Float64, total_channels))
+    #     global ifft_plan = plan_ifft(zeros(Float64, total_channels))
+    #     new_irf = zeros(Float64, total_channels, 2)
+    #     new_irf[:, 1] = collect(irf_bin_size:irf_bin_size:irf_bin_size*total_channels)
+    #     new_irf[1:length(irf[:, 2]), 2] = irf[:, 2]
+    #     global irf = new_irf
+    #     append!(vec(x), zeros(total_channels-histogram_resolution))
+    # end
+    
     if sum(x) < 100
-        return sum(x)
+        return Float64[NaN], [x_data, vec(x)]::Vector{Vector{Float64}}
     else
-        global gating_function = ones(UInt8, histogram_resolution)
-        gating_function[1:round(Int, 0.050980392*histogram_resolution)] .= 0
-        gating_function[round(Int, 0.94901962*histogram_resolution):histogram_resolution] .= 0
+        gating_function = ones(UInt8, total_channels)
+        gating_function[1:round(Int, tac_low_cut/100*histogram_resolution)] .= 0
+
+        # tac_low_cut_index = round(Int, tac_low_cut/100*histogram_resolution)
+        gating_function[round(Int, tac_high_cut/100*histogram_resolution):total_channels] .= 0
+        # tcspc_high_cut_index = total_channels-round(Int, tac_high_cut/100*histogram_resolution)
 
         data_xy = [x_data, vec(x)]
-        tau_fit = MLE_iterative_reconvolution(irf, data_xy, params=guess, gating_function=gating_function, histogram_resolution=histogram_resolution)
+        tau_fit = MLE_iterative_reconvolution_jl(irf, data_xy, params=guess, gating_function=gating_function, histogram_resolution=total_channels, fixed_parameters=fixed_parameters, laser_pulse_period=laser_pulse_period)
 
-        return tau_fit, data_xy
+        return tau_fit::Vector{Float64}, data_xy::Vector{Vector{Float64}}
     end
 end
 
@@ -288,45 +347,6 @@ function open_SDT_file(filepath)
     end
 end
 
-# function open_SDT_file(filepath)
-#     open(filepath, "r") do io
-#         seek(io, 14)
-#         header = read!(io, Vector{UInt8}(undef, 12))
-
-#         seek(io, header[12]*0x100 + header[11] + 82)
-#         infos = read!(io, Vector{UInt8}(undef, 2))
-#         histogram_resolution = infos[2]*0x100 + infos[1]
-    
-#         seek(io, header[12]*0x100 + header[11] + 215)
-#         infos_2 = read!(io, Vector{UInt8}(undef, 4))
-#         time = reinterpret(Float32, infos_2)
-
-#         if (header[8]*0x100 + header[7]) in (512, 128)
-#             seek(io, header[2]*0x100 + header[1] + 22)
-#             vector = read(io)  # lit tout le reste du fichier
-#             # Conversion rapide en UInt16 sans boucle
-#             n = div(length(vector), 2)
-#             new_vector = reinterpret(UInt16, vector[1:2*n])
-#             return new_vector, histogram_resolution
-#         else
-#             seek(io, header[2]*0x100 + header[1] + 2)
-#             file_info = read!(io, Vector{UInt8}(undef, 20))
-#             shift_1 = file_info[8]*0x1000000 + file_info[7]*0x10000 + file_info[6]*0x100 + file_info[5] -
-#                       (file_info[2]*0x100 + file_info[1])
-#             shift_2 = file_info[20]*0x1000000 + file_info[19]*0x10000 + file_info[18]*0x100 + file_info[17]
-
-#             buffer = IOBuffer(read(io, shift_1))
-#             zip_file = first(ZipFile.Reader(buffer).files)
-
-#             file_data = Vector{UInt8}(undef, shift_2)
-#             read!(zip_file, file_data)
-
-#             vector = reshape_to_vec(reinterpret(UInt16, file_data), histogram_resolution)
-#             return vector, histogram_resolution
-#         end
-#     end
-# end
-
 function add_to_monitor(msg::String)
     currentText = monitor.text[]
     lines = split(currentText, "\n")
@@ -372,436 +392,17 @@ function clear(serial)
     send_command(serial, "C Z\nC R\n")
 end
 
-function start_real_time()
-    println(folderpath)
-    println("Initializing")
-
-    hist = Observable(zeros(256))
-    fit = Observable(zeros(256))
-    hist_time = Observable(zeros(256))
-    
-    lifetime = Observable(Float64[])
-    counts = Observable(Float64[])
-    # concentration = Observable(Float64[])
-    global signal = Observable(Float64[])
-    time = Observable(Float64[])
-    
-    vectors = zeros(100, 256)
-    
-    barplot!(axis_hist, hist_time, hist, gap=0, color=Makie.wong_colors()[1])
-    lines!(axis_hist, hist_time, fit, color=Makie.wong_colors()[6])
-    lines!(axis_counts, time, counts, color=Makie.wong_colors()[1])
-    # lines!(axis_conc, time, concentration, color=Makie.wong_colors()[1])
-    lines!(axis_life, time, lifetime, color=Makie.wong_colors()[1])
-    lines!(axis_signal, time, signal, color=Makie.wong_colors()[1])
-    
-    previous_time = now()
-    current_time = now()
-    params = ones(3)
-    frequency = 1
-    erreur_I = 0
-    
-    i = 1
-    t_0 = now()
-    previous_files = readdir(folderpath)
-    # end
-
-    println("Starting real time")
-    println(folderpath)
-
-    while running[]
-        try
-            current_files = readdir(folderpath)
-            new_files = setdiff(current_files, previous_files)
-            sleep(0.001)
-            
-            if !isempty(new_files)
-                if i == 1
-                    println("Files detected")
-                end
-
-                println(new_files[end])
-
-                vector, histogram_resolution = open_SDT_file(joinpath(folderpath, new_files[end]))
-                
-                if i == 1
-                    for n in 1:100
-                        vectors[n, 1:histogram_resolution] = vector
-                    end
-                else
-                    for n in 1:99
-                        vectors[n, 1:histogram_resolution] = vectors[n+1, 1:histogram_resolution]
-                    end
-                    vectors[end, 1:histogram_resolution] = vector
-                end
-
-                avg_vector = sum(vectors[end-params_sliders.sliders[2].value[]+1:end, 1:histogram_resolution], dims=1)[1, :] / params_sliders.sliders[2].value[]
-                
-                params_raw, data = vec_to_lifetime(avg_vector, bin_size=irf_bin_size, guess=params[1:2], histogram_resolution=histogram_resolution)
-                if !isnan(params_raw[1])
-                    params = params_raw
-                end
-
-                hist[][1:length(data[2])] = data[2]
-                hist_time[][1:length(data[2])] = data[1]
-                fit[][1:length(data[2])] = conv_irf_data(data[1], params, irf, data[2], histogram_resolution=histogram_resolution)
-
-                # erreur = params_sliders.sliders[5].value[] - (parse(Float64, textbox_tau_0.stored_string[])/params[1] - 1) / parse(Float64, textbox_K.stored_string[])*1000
-                erreur = params_sliders.sliders[5].value[] - params[1]
-                dt = 0
-
-                try
-                    dt = (now() - t_0)/Millisecond(1)/1000 - time[][end]
-                catch e
-                    println(e)
-                end
-
-                if reset_I[]
-                    erreur_I = 0
-                    reset_I[] = false
-                end
-
-                erreur_I += erreur * dt
-
-                if checkbox_inverted.active[]
-                    signal_value = clamp(-(params_sliders.sliders[3].value[]*erreur + params_sliders.sliders[4].value[]*erreur_I), 0, 100)
-                else
-                    signal_value = clamp(params_sliders.sliders[3].value[]*erreur + params_sliders.sliders[4].value[]*erreur_I, 0, 100)
-                end
-
-                push!(lifetime[], params[1])
-                push!(counts[], sum(vectors[end-params_sliders.sliders[2].value[]+1:end, :]) / params_sliders.sliders[2].value[])
-                # push!(concentration[], (parse(Float64, textbox_tau_0.stored_string[])/params[1] - 1) / parse(Float64, textbox_K.stored_string[])*1000)
-                push!(signal[], signal_value)
-                push!(time[], (now() - t_0)/Millisecond(1)/1000)
-
-                # send_command(serialConn, "A 0 AO 1 $(signal[][end]*1000)\n")
-                
-                if i == 1
-                    t_0 = now()
-                end
-
-                if mod1(i, 8) == 8
-                    current_time = now()
-                    frequency = round(1/((current_time - previous_time)/Millisecond(1))*1000*8, sigdigits=2)
-                    label_frequency.text = "Frequency : $(string(frequency)) Hz"
-                    previous_time = current_time
-                end
-
-                if mod1(i, ceil(frequency/16)) == ceil(frequency/16)
-                    notify(hist_time)
-                    notify(time)
-                    
-                    autolimits!(axis_hist)
-                    autolimits!(axis_counts)
-                    # autolimits!(axis_conc)
-                    autolimits!(axis_life)
-                    # autolimits!(axis_signal)
-                    
-                    xlims!(axis_counts, max(0, time[][end] - params_sliders.sliders[1].value[] + 0.1), max(params_sliders.sliders[1].value[], time[][end] + 0.1))
-                    # xlims!(axis_conc, max(0, time[][end] - params_sliders.sliders[1].value[] + 0.1), max(params_sliders.sliders[1].value[], time[][end] + 0.1))
-                    xlims!(axis_life, max(0, time[][end] - params_sliders.sliders[1].value[] + 0.1), max(params_sliders.sliders[1].value[], time[][end] + 0.1))
-                    xlims!(axis_signal, max(0, time[][end] - params_sliders.sliders[1].value[] + 0.1), max(params_sliders.sliders[1].value[], time[][end] + 0.1))
-                end
-
-                previous_files = current_files
-                i += 1
-            end
-
-            while pause[]
-                sleep(0.1)
-            end
-        catch e
-            println(e)
-        end
-    end
-end
-
-# function start_real_time(lifetimes)
-#     if !initialized[]
-#         println("Initializing")
-
-#         hist = Observable(zeros(256))
-#         fit = Observable(zeros(256))
-#         hist_time = Observable(zeros(256))
-
-#         lifetime_1 = Observable(Float64[])
-#         lifetime_2 = Observable(Float64[])
-#         lifetime_3 = Observable(Float64[])
-#         lifetime_i = Observable(Float64[])
-#         lifetime_m = Observable(Float64[])
-#         counts = Observable(Float64[])
-#         concentration = Observable(Float64[])
-
-#         time = Observable(Float64[])
-
-#         vectors = zeros(100, 256)
-
-#         barplot!(axis_hist, hist_time, hist, gap = 0, color=Makie.wong_colors()[1])
-#         lines!(axis_hist, hist_time, fit, color=Makie.wong_colors()[6])
-#         # lines!(axis_life, time, lifetime_1, color=Makie.wong_colors()[1], label = L"\tau_1")
-#         lines!(axis_counts, time, counts, color=Makie.wong_colors()[1])
-#         lines!(axis_conc, time, concentration, color=Makie.wong_colors()[menu_main_lifetime.i_selected[]])
-
-#         if lifetimes == 2
-#             # lines!(axis_life, time, lifetime_2, color=Makie.wong_colors()[2], label = L"\tau_2")
-#             # lines!(axis_life, time, lifetime_i, color=Makie.wong_colors()[3], label = L"\tau_i")
-#             # lines!(axis_life, time, lifetime_m, color=Makie.wong_colors()[4], label = L"\tau_m")
-#         elseif lifetimes == 3
-#             # lines!(axis_life, time, lifetime_2, color=Makie.wong_colors()[2], label = L"\tau_2")
-#             # lines!(axis_life, time, lifetime_3, color=Makie.wong_colors()[3], label = L"\tau_3")
-#             # lines!(axis_life, time, lifetime_i, color=Makie.wong_colors()[4], label = L"\tau_i")
-#             # lines!(axis_life, time, lifetime_m, color=Makie.wong_colors()[5], label = L"\tau_m")
-#         end
-
-#         # global legend = axislegend(axis_life)
-
-#         previous_time = now()
-#         current_time = now()
-#         initialized[] = true
-#         params = ones(2*lifetimes+1)
-#         frequency = 1
-
-#         previous_files = readdir(folderpath)
-
-#         i = 1
-#         t_0 = now()
-#     end
-
-#     println(folderpath)
-#     println("Waiting")
-
-#     while running[]
-#         current_files = readdir(folderpath)
-
-#         new_files = setdiff(current_files, previous_files)
-
-#         sleep(0.001)
-
-#         if !isempty(new_files)
-#             if i == 1
-#                 println("Files detected")
-#             end
-
-#             vector, histogram_resolution = open_SDT_file(joinpath(folderpath, new_files[end]))
-
-#             if i == 1
-#                 for n in 1:100
-#                     vectors[n,begin:histogram_resolution] = vector
-#                 end
-#             else
-#                 for n in 1:99
-#                     vectors[n,begin:histogram_resolution] = vectors[n+1,begin:histogram_resolution]
-#                 end
-
-#                 vectors[end,begin:histogram_resolution] = vector
-#             end
-
-#             # vector = sum(vectors, dims=1)[1,:]/100
-
-#             params_raw, data = vec_to_lifetime(sum(vectors[end-slider_averaging.value[]+1:end,begin:histogram_resolution], dims=1)[1,:]/slider_averaging.value[], histogram_resolution=histogram_resolution, guess=params[1:2*lifetimes], tcspc_window_size=12.5, bin_size=irf_bin_size)
-
-#             if !isnan(params_raw[1])
-#                 params = params_raw
-#             end
-
-#             hist[][1:length(data[2])] = data[2]
-#             hist_time[][1:length(data[2])] = data[1]
-#             fit[][1:length(data[2])] = conv_irf_data(data[1], params, irf, data[2], histogram_resolution=histogram_resolution)
-
-#             push!(lifetime_1[], params[1])
-#             push!(counts[], sum(vectors[end-slider_averaging.value[]+1:end,:])/slider_averaging.value[])
-#             push!(concentration[], 1/(1/parse(Float64, textbox_tau_0.stored_string[]) + parse(Float64, textbox_K.stored_string[])*params[2*menu_main_lifetime.i_selected[] - 1]))
-
-#             if lifetimes == 2
-#                 push!(lifetime_2[], params[3])
-#             elseif lifetimes == 3
-#                 push!(lifetime_2[], params[3])
-#                 push!(lifetime_3[], params[5])
-#             end
-
-#             push!(time[], (now() - t_0)/Millisecond(1)/1000)
-
-#             if i == 1
-#                 t_0 = now()
-#             end
-
-#             if mod1(i, 8) == 8
-#                 current_time = now()
-#                 label_frequency.text = "Frequency : $(string(round(1/((current_time - previous_time)/Millisecond(1))*1000*8, sigdigits=2))) Hz"
-#                 previous_time = current_time
-
-#                 # label_number.text = "Files : $(round(UInt64, i))"
-#             end
-
-#             if mod1(i, ceil(frequency/16)) == ceil(frequency/16)
-#                 notify(hist_time)
-#                 notify(time)
-
-#                 autolimits!(axis_hist)
-#                 # autolimits!(axis_life)
-#                 autolimits!(axis_counts)
-#                 autolimits!(axis_conc)
-                
-#                 # xlims!(axis_life, max(0, time[][end] - slider_time.value[]+0.1), max(slider_time.value[], time[][end]+0.1))
-#                 xlims!(axis_counts, max(0, time[][end] - slider_time.value[]+0.1), max(slider_time.value[], time[][end]+0.1))
-#                 xlims!(axis_conc, max(0, time[][end] - slider_time.value[]+0.1), max(slider_time.value[], time[][end]+0.1))
-#             end
-
-#             previous_files = current_files
-
-#             i += 1
-#         end
-
-#         while pause[]
-#             sleep(0.1)
-#         end
-#     end
-# end
-
-# function start_playback()
-#     println(folderpath)
-#     all_files = readdir(folderpath)
-#     files = filter(f -> occursin(".sdt", f), all_files)
-
-#     hist = Observable(zeros(256))
-#     fit = Observable(zeros(256))
-#     hist_time = Observable(zeros(256))
-
-#     lifetime = Observable(Float64[])
-#     counts = Observable(Float64[])
-#     global signal = Observable(Float64[])
-#     time = Observable(Float64[])
-
-#     vectors = zeros(100, 256)
-
-#     barplot!(axis_hist, hist_time, hist, gap = 0, color=Makie.wong_colors()[1])
-#     lines!(axis_hist, hist_time, fit, color=Makie.wong_colors()[6])
-#     lines!(axis_counts, time, counts, color=Makie.wong_colors()[1])
-#     lines!(axis_life, time, lifetime, color=Makie.wong_colors()[1])
-#     lines!(axis_signal, time, signal, color=Makie.wong_colors()[1])
-
-#     previous_time = now()
-#     current_time = now()
-#     params = ones(3)
-#     frequency = 1
-#     erreur_I = 0
-
-#     i = 1
-#     t_0 = now()
-
-#     println("Starting")
-#     add_to_monitor("Starting")
-
-#     while running[]
-#         sleep(0.00001)
-#         for file in files
-#             if running[]
-#                 vector, histogram_resolution = open_SDT_file(joinpath(folderpath, file))
-
-#                 if i == 1
-#                     vectors[:, 1:histogram_resolution] .= reshape(vector, (1, :))
-#                 else
-#                     vectors[1:end-1, 1:histogram_resolution] .= vectors[2:end, 1:histogram_resolution]
-#                     vectors[end, 1:histogram_resolution] .= vector
-#                 end
-
-#                 averaging = params_sliders.sliders[2].value[]
-                
-#                 final_vector = sum(vectors[end-averaging+1:end,begin:histogram_resolution], dims=1)[1,:]/averaging
-
-#                 params_raw, data = vec_to_lifetime(final_vector, histogram_resolution=histogram_resolution, guess=params[1:2], tcspc_window_size=12.5, bin_size=irf_bin_size)
-
-#                 if !isnan(params_raw[1])
-#                     params = params_raw
-#                 end
-
-#                 hist[][1:length(data[2])] = data[2]
-#                 hist_time[][1:length(data[2])] = data[1]
-#                 fit[][1:length(data[2])] = conv_irf_data(data[1], params, irf, data[2], histogram_resolution=histogram_resolution)
-
-#                 if i == 1
-#                     t_0 = now()
-#                 end
-
-#                 erreur = params_sliders.sliders[5].value[] - params[1]
-#                 dt = 0
-
-#                 try
-#                     dt = (now() - t_0)/Millisecond(1)/1000 - time[][end]
-#                 catch e
-#                     println(e)
-#                 end
-
-#                 if reset_I[]
-#                     erreur_I = 0
-#                     reset_I[] = false
-#                 end
-
-#                 erreur_I += erreur*dt
-
-#                 if i == 1
-#                     erreur_I = 0
-#                 end
-
-#                 if checkbox_inverted.active[]
-#                     signal_value = clamp(-(params_sliders.sliders[3].value[]*erreur + params_sliders.sliders[4].value[]*erreur_I), 0, 100)
-#                 else
-#                     signal_value = clamp(params_sliders.sliders[3].value[]*erreur + params_sliders.sliders[4].value[]*erreur_I, 0, 100)
-#                 end
-
-#                 push!(lifetime[], params[1])
-#                 push!(counts[], sum(vectors[end-averaging+1:end,:])/averaging)
-#                 push!(signal[], signal_value)
-#                 push!(time[], (now() - t_0)/Millisecond(1)/1000)
-
-#                 if mod1(i, 32) == 32
-#                     current_time = now()
-#                     frequency = round(1/((current_time - previous_time)/Millisecond(1))*1000*32, sigdigits=2)
-#                     label_frequency.text = "Frequency : $frequency Hz"
-#                     previous_time = current_time
-        
-#                     label_number.text = "Files : $(round(UInt64, i))"
-#                 end
-
-#                 if mod1(i, ceil(frequency/8)) == ceil(frequency/8)
-#                     x_min = max(0, time[][end] - params_sliders.sliders[1].value[] + 0.1)
-#                     x_max = max(params_sliders.sliders[1].value[], time[][end] + 0.1)
-
-#                     notify(hist_time)
-#                     notify(time)
-
-#                     autolimits!(axis_hist)
-#                     autolimits!(axis_counts)
-#                     autolimits!(axis_life)
-                    
-#                     xlims!(axis_counts, x_min, x_max)
-#                     xlims!(axis_life, x_min, x_max)
-#                     xlims!(axis_signal, x_min, x_max)
-#                 end
-
-#                 i += 1
-#                 sleep(0.00001)
-
-#                 while pause[]
-#                     sleep(0.1)
-#                 end
-#             end
-#         end
-#     end
-# end
-
 function analyse_time(times)
     try
         println("Analysing")
 
-        deltas = zeros(length(times)-1)
+        # deltas = zeros(length(times)-1)
 
-        for (i, time) in enumerate(times[2:end])
-            deltas[i] = (time - times[i])*1000
-        end
+        # for (i, time) in enumerate(times[2:end])
+        #     deltas[i] = (time - times[i])*1000
+        # end
 
-        # deltas = times
+        deltas = times
 
         stdev = std(deltas)
         meann = mean(deltas)
@@ -833,123 +434,131 @@ function analyse_time(times)
     end
 end
 
-function start_playback()
-    GC.gc()
+function start_real_time()
     println(folderpath)
-    all_files = readdir(folderpath)
-    files = filter(f -> occursin(".sdt", f), all_files)
+    println("Initializing")
 
     hist = Observable(zeros(256))
     fit = Observable(zeros(256))
     hist_time = Observable(zeros(256))
-
+    
     lifetime = Observable(Float64[])
     counts = Observable(Float64[])
     global signal = Observable(Float64[])
     times = Observable(Float64[])
-
+    averaging_list = []
+    prop_list = []
+    integ_list = []
+    setpoint_list = []
+    
     vectors = zeros(100, 256)
-
-    barplot!(axis_hist, hist_time, hist, gap = 0, color=Makie.wong_colors()[1])
+    n_vectors = size(vectors, 1)
+    
+    barplot!(axis_hist, hist_time, hist, gap=0, color=Makie.wong_colors()[1])
     lines!(axis_hist, hist_time, fit, color=Makie.wong_colors()[6])
     lines!(axis_counts, times, counts, color=Makie.wong_colors()[1])
     lines!(axis_life, times, lifetime, color=Makie.wong_colors()[1])
     lines!(axis_signal, times, signal, color=Makie.wong_colors()[1])
 
-    params = ones(3)
+    params = [4.0, 2.0, 1.0e-4]
     erreur_I = 0
-    display_period = 1/3
 
     i = 1
-    n = 1
+    n = 0
     t_0 = now()
-    cum_time = 0
+    previous_files = readdir(folderpath)
     dt = 0
+    display_period = 1/10
 
-    println("Starting playback")
-    add_to_monitor("Starting")
+    println("Starting real time")
+    add_to_monitor("Starting real time")
 
     while running[]
-        n_vectors = size(vectors, 1)
-        histogram_resolution = 256
-
-        sleep(0.0001)
-
-        for file in files
-            averaging = params_sliders.sliders[2].value[]
-            setpoint_val = params_sliders.sliders[5].value[]
-            prop_val = params_sliders.sliders[3].value[]
-            integ_val = params_sliders.sliders[4].value[]
-            time_range = params_sliders.sliders[1].value[]
-            inverted = checkbox_inverted.active[]
+        try
+            current_files = readdir(folderpath)
+            new_files = setdiff(current_files, previous_files)
+            sleep(0.001)
             
-            if !running[]
-                break
-            end
+            if !isempty(new_files)
+                if i == 1
+                    t_0 = now()
+                end
 
-            vector, histogram_resolution, time = open_SDT_file(joinpath(folderpath, file))
-            cum_time += time
-            # println(time)
-            
-            if i == 1
-                vectors[:, 1:histogram_resolution] .= reshape(vector, (1, :))
-            else
-                vectors[1:end-1, 1:histogram_resolution] .= vectors[2:end, 1:histogram_resolution]
-                vectors[end, 1:histogram_resolution] .= vector
-            end
+                time_range = params_sliders.sliders[1].value[]
+                averaging = params_sliders.sliders[2].value[]
+                prop_val = params_sliders.sliders[3].value[]
+                integ_val = params_sliders.sliders[4].value[]
+                setpoint_val = params_sliders.sliders[5].value[]
+                inverted = checkbox_inverted.active[]
 
-            idx_start = max(1, n_vectors - averaging + 1)
-            final_vector = @views sum(vectors[idx_start:end, 1:histogram_resolution]; dims=1)[1, :] / averaging
+                push!(averaging_list, averaging)
+                push!(prop_list, prop_val)
+                push!(integ_list, integ_val)
+                push!(setpoint_list, setpoint_val)
 
-            params_raw, data = vec_to_lifetime(final_vector, bin_size=irf_bin_size, guess=params[1:2], histogram_resolution=histogram_resolution)
+                vector, histogram_resolution, time = open_SDT_file(joinpath(folderpath, new_files[end]))
 
-            if !isnan(params_raw[1])
-                params = params_raw
-            end
+                if i == 1
+                    for n in 1:100
+                        vectors[n, 1:histogram_resolution] = vector
+                    end
+                else
+                    for n in 1:99
+                        vectors[n, 1:histogram_resolution] = vectors[n+1, 1:histogram_resolution]
+                    end
+                    vectors[end, 1:histogram_resolution] = vector
+                end
 
-            @inbounds hist[][1:length(data[2])] = data[2]
-            @inbounds hist_time[][1:length(data[2])] = data[1]
-            @inbounds fit[][1:length(data[2])] = conv_irf_data(data[1], params, irf, data[2], histogram_resolution=histogram_resolution)
+                idx_start = max(1, n_vectors - averaging + 1)
+                final_vector = @views sum(vectors[idx_start:end, 1:histogram_resolution]; dims=1)[1, :] / averaging
 
-            if i == 1
-                t_0 = now()
-            end
+                params_raw, data = vec_to_lifetime(final_vector, guess=params, histogram_resolution=histogram_resolution)
 
-            erreur = setpoint_val - params[1]
-            
-            t_now = now()
-            delta_t = (t_now - t_0) / Microsecond(1) / 1e6
+                if !isnan(params_raw[1])
+                    params = params_raw
+                end
 
-            if reset_I[]
-                erreur_I = 0
-                reset_I[] = false
-            end
+                @inbounds hist[][1:length(data[2])] = data[2]
+                @inbounds hist_time[][1:length(data[2])] = data[1]
+                @inbounds fit[][1:length(data[2])] = conv_irf_data(data[1], Tuple(params), irf, histogram_resolution=histogram_resolution)
 
-            erreur_I += erreur * time
+                erreur = setpoint_val - params[1]
 
-            if i == 1
-                erreur_I = 0
-            end
+                t_now = (now() - t_0)/Millisecond(1)/1000
 
-            if inverted
-                signal_value = clamp(-(prop_val * erreur + integ_val * erreur_I), 0, 100)
-            else
-                signal_value = clamp(prop_val * erreur + integ_val * erreur_I, 0, 100)
-            end
+                try
+                    dt = t_now - times[][end]
+                catch e
+                    dt = t_now
+                    # println(e)
+                end
 
-            push!(lifetime[], params[1])
-            push!(counts[], sum(@view vectors[idx_start:end, :]) / averaging)
-            push!(signal[], signal_value)
-            push!(times[], cum_time)
+                if reset_I[]
+                    erreur_I = 0
+                    reset_I[] = false
+                end
 
-            if counts[][end] > 2e5
-                println(i)
-            end
+                erreur_I += erreur * dt
 
-            instant_freq =  i / (delta_t + 1e-6)
-            nb_i = ceil(instant_freq*display_period)
+                if i == 1
+                    erreur_I = 0
+                end
 
-            if mod1(i, nb_i) == nb_i
+                if inverted
+                    signal_value = clamp(-(prop_val * erreur + integ_val * erreur_I), 0, 100)
+                else
+                    signal_value = clamp(prop_val * erreur + integ_val * erreur_I, 0, 100)
+                end
+
+                push!(lifetime[], params[1])
+                push!(counts[], sum(@view vectors[idx_start:end, :]) / averaging)
+                push!(signal[], signal_value)
+                push!(times[], t_now)
+
+                instant_freq =  i / (t_now + 1e-6)
+                # nb_i = ceil(instant_freq*display_period)
+
+                # if mod1(i, nb_i) == nb_i
                 if mod1(n, 3) == 3
                     label_frequency.text = "Frequency : $(round(instant_freq, sigdigits=2)) Hz"
                     label_number.text = "Files : $i"
@@ -968,55 +577,227 @@ function start_playback()
                 xlims!(axis_counts, x_min, x_max)
                 xlims!(axis_life, x_min, x_max)
                 xlims!(axis_signal, x_min, x_max)
+                # end
 
-                n += 1
+                previous_files = current_files
+                i += 1
             end
-
-            i += 1
-            sleep(0.0001)
 
             while pause[]
-                sleep(0.05)
+                sleep(0.1)
             end
+        catch e
+            println(e)
         end
+                
+        if !running[]
+            add_to_monitor("Aborted")
+            break
+        end
+    end
+
+    filename = string(now())*".csv"
+
+    open(filename, "w") do io
+        writedlm(io, [string(now())])
+        writedlm(io, [""])
+        writedlm(io, ["Time [s]" "Number of photons" "Lifetime [ns]" "Signal sent [%]" "Averaging" "Proportionnal" "Integral" "Setpoint"], ",")
+        writedlm(io, [times[] counts[] lifetime[] signal[] averaging_list prop_list integ_list setpoint_list], ",")
     end
 end
 
-function start_analysis()
+function start_playback()
+    GC.gc()
+    println(folderpath)
+    all_files = readdir(folderpath)
+    files = filter(f -> occursin(".sdt", f), all_files)
+
+    hist = Observable(zeros(256))
+    fit = Observable(zeros(256))
+    hist_time = Observable(zeros(256))
+
+    lifetime = Observable(Float64[])
+    counts = Observable(Float64[])
+    global signal = Observable(Float64[])
+    times = Observable(Float64[])
+    test_times = []
+
+    vectors = zeros(100, 256)
+    n_vectors = size(vectors, 1)
+    histogram_resolution = 256
+
+    barplot!(axis_hist, hist_time, hist, gap = 0, color=Makie.wong_colors()[1])
+    lines!(axis_hist, hist_time, fit, color=Makie.wong_colors()[6])
+    lines!(axis_counts, times, counts, color=Makie.wong_colors()[1])
+    lines!(axis_life, times, lifetime, color=Makie.wong_colors()[1])
+    lines!(axis_signal, times, signal, color=Makie.wong_colors()[1])
+
+    params = [5.0, 2.0, 1.0e-4]
+    erreur_I = 0
+    display_period = 1/10
+
+    i = 1
+    n = 1
+    t_0 = now()
+    cum_time = 0
+
+    println("Starting playback")
+    add_to_monitor("Starting playback")
+
+    while running[]
+        for file in files
+            try 
+                averaging = params_sliders.sliders[2].value[]
+                setpoint_val = params_sliders.sliders[5].value[]
+                prop_val = params_sliders.sliders[3].value[]
+                integ_val = params_sliders.sliders[4].value[]
+                time_range = params_sliders.sliders[1].value[]
+                inverted = checkbox_inverted.active[]
+                
+                if !running[]
+                    add_to_monitor("Aborted")
+                    break
+                end
+                
+                vector, histogram_resolution, duration = open_SDT_file(joinpath(folderpath, file))
+                cum_time += duration
+                
+                if i == 1
+                    vectors[:, 1:histogram_resolution] .= reshape(vector, (1, :))
+                else
+                    vectors[1:end-1, 1:histogram_resolution] .= vectors[2:end, 1:histogram_resolution]
+                    vectors[end, 1:histogram_resolution] .= vector
+                end
+
+                idx_start = max(1, n_vectors - averaging + 1)
+                final_vector = @views sum(vectors[idx_start:end, 1:histogram_resolution]; dims=1)[1, :] / averaging
+
+                t_test = time()
+                params_raw, data = vec_to_lifetime(final_vector, guess=params, histogram_resolution=histogram_resolution)
+                push!(test_times, (time() - t_test)*1000)
+
+                nb_photons = sum(final_vector)
+
+                # println(params_raw)
+                # println(data)
+
+                if !isnan(params_raw[1])
+                    params = params_raw
+                end
+
+                @inbounds hist[][1:length(data[2])] = data[2]
+                @inbounds hist_time[][1:length(data[2])] = data[1]
+                @inbounds fit[][1:length(data[2])] = conv_irf_data(data[1], Tuple(params), irf, histogram_resolution=histogram_resolution)*nb_photons
+
+                if i == 1
+                    t_0 = now()
+                end
+
+                erreur = setpoint_val - params[1]
+
+                delta_t = (now() - t_0) / Microsecond(1) / 1e6
+
+                if reset_I[]
+                    erreur_I = 0
+                    reset_I[] = false
+                end
+
+                erreur_I += erreur * duration
+
+                if i == 1
+                    erreur_I = 0
+                end
+
+                if inverted
+                    signal_value = clamp(-(prop_val * erreur + integ_val * erreur_I), 0, 100)
+                else
+                    signal_value = clamp(prop_val * erreur + integ_val * erreur_I, 0, 100)
+                end
+
+                push!(lifetime[], params[1])
+                push!(counts[], nb_photons)
+                push!(signal[], signal_value)
+                push!(times[], cum_time)
+
+                instant_freq =  i / (delta_t + 1e-6)
+                nb_i = ceil(instant_freq*display_period)
+
+                if mod1(i, nb_i) == nb_i
+                    if mod1(n, 3) == 3
+                        label_frequency.text = "Frequency : $(round(instant_freq, sigdigits=2)) Hz"
+                        label_number.text = "Files : $i"
+                    end
+
+                    x_min = max(0, times[][end] - time_range + 0.1)
+                    x_max = max(time_range, times[][end] + 0.1)
+
+                    notify(hist_time)
+                    notify(times)
+
+                    autolimits!(axis_hist)
+                    autolimits!(axis_counts)
+                    autolimits!(axis_life)
+
+                    xlims!(axis_counts, x_min, x_max)
+                    xlims!(axis_life, x_min, x_max)
+                    xlims!(axis_signal, x_min, x_max)
+
+                    n += 1
+                end
+
+                i += 1
+                sleep(0.0001)
+
+                while pause[]
+                    sleep(0.05)
+                end
+            catch e
+                println(e)
+            end
+        end
+
+        sleep(0.0001)
+    end
+    analyse_time(test_times)
+end
+
+function start_save()
     GC.gc()
     println(folderpath)
     all_files = readdir(folderpath)
     files = filter(f -> occursin(".sdt", f), all_files)
     nb_files = length(files)
-    checkpoints = round.(Int, nb_files .* (0:0.5:100) ./ 100)
+    checkpoints = round.(Int, nb_files .* (0:1:100) ./ 100)
 
     lifetime = Float64[]
     counts = Float64[]
     times = Float64[]
 
-    params = ones(3)
+    params = [4.0, 2.0, 1.0e-4]
 
     i = 1
-    previous_time = 0
+    cum_time = 0
 
     println("Starting analysis")
     add_to_monitor("Starting analysis")
 
     histogram_resolution = 256
 
-    box_progress.width = 16
+    box_progress.width = 8
+
+    beginning = time()
 
     for file in files
         try
             if !running[]
+                add_to_monitor("Aborted")
                 break
             end
 
-            vector, histogram_resolution, time = open_SDT_file(joinpath(folderpath, file))
-            vector = convert(Vector{Float64}, vector)
-            previous_time += time
+            vector, histogram_resolution, delta_time = open_SDT_file(joinpath(folderpath, file))
+            cum_time += delta_time
 
-            params_raw, data = vec_to_lifetime(vector, bin_size=irf_bin_size, guess=params[1:2], histogram_resolution=histogram_resolution)
+            params_raw, data = vec_to_lifetime(convert(Vector{Float64}, vector), guess=params, histogram_resolution=histogram_resolution)
 
             if !isnan(params_raw[1])
                 params = params_raw
@@ -1024,7 +805,7 @@ function start_analysis()
 
             push!(lifetime, params[1])
             push!(counts, sum(vector))
-            push!(times, previous_time)
+            push!(times, cum_time)
 
             i += 1
 
@@ -1042,95 +823,72 @@ function start_analysis()
             println(e)
         end
     end
-end
 
-function start_save()
-    running[] = true
+    total_time = time() - beginning
+    println("Time : $(round(total_time, sigdigits=3)) s")
 
-    # rowsize!(fig.layout, 3, Auto())
+    label_frequency.text = "Frequency : $(round(i/total_time, sigdigits=3)) Hz"
+    label_number.text = "Files : $i"
 
-    axis_progress = progressgrid[1, 2] = Axis(fig, height = 32, xticksvisible = false, yticksvisible = false, backgroundcolor=:transparent)
-    xlims!(axis_progress, -0.01, 1.01)
-    hidespines!(axis_progress)
-    hidedecorations!(axis_progress)
+    lines!(axis_counts, times, counts, color=Makie.wong_colors()[1])
+    lines!(axis_life, times, lifetime, color=Makie.wong_colors()[1])
 
-    progress = Observable(0.0)
-    line = @lift([Point2f(0, 0), Point2f($progress, 0)])
+    autolimits!(axis_counts)
+    autolimits!(axis_life)
 
-    lines!(axis_progress, [Point2f(0, 0), Point2f(1, 0)], linecap=:round, linewidth=14, color=RGBf(0.8, 0.8, 0.8))
-    lines!(axis_progress, line, linecap=:round, linewidth=14, color=RGBf(0.6, 0.6, 0.6))
+    filename = string(now())*".csv"
 
-    files_label = progressgrid[1, 1] = Label(fig, text="Files : 0/0", width = 120, justification=:left, halign=:left)
-    percentage_label = progressgrid[1, 3] = Label(fig, @lift("$(Int(round(100 * $progress)))%"), width = 120, justification=:right, halign=:right)
-
-    function saving(lifetimes)
-        println(folderpath)
-        all_files = readdir(folderpath)
-        files = filter(f -> occursin(".sdt", f), all_files)
+    df = DataFrame(
+        Time_s = times,
+        Number_of_photons = counts,
+        Lifetime_ns = lifetime
+    )
     
-        lifetime_1 = Any[]
-        lifetime_2 = Any[]
-        lifetime_3 = Any[]
-        counts = Any[]
-        time = Any[]
-        
-        params = ones(2*lifetimes+1)
-    
-        i = 1
-    
-        println("Starting")
-        add_to_monitor("Starting")
-        
-        for file in files
-            if running[]
-                vector, histogram_resolution = open_SDT_file(joinpath(folderpath, file))
-
-                params, data = vec_to_lifetime(vector, histogram_resolution=histogram_resolution, guess=params[1:2*lifetimes], tcspc_window_size=12.5, bin_size=irf_bin_size)
-
-                push!(lifetime_1, params[1])
-                push!(counts, sum(vector))
-                push!(time, i)
-
-                if lifetimes == 2
-                    push!(lifetime_2, params[3])
-                    # push!(lifetime_i, (params[2]*params[1]^2 + (1 - params[2])*params[3]^2)/(params[2]*params[1] + (1 - params[2])*params[3]))
-                    # push!(lifetime_m, (params[2]*params[1] + (1 - params[2])*params[3]))
-                elseif lifetimes == 3
-                    push!(lifetime_2, params[3])
-                    push!(lifetime_3, params[5])
-                    # push!(lifetime_i, (params[2]*params[1]^2 + params[4]*params[3]^2 + (1 - params[2] - params[4])*params[5]^2)/(params[2]*params[1] + params[4]*params[3] + (1 - params[2] - params[4])*params[5]))
-                    # push!(lifetime_m, (params[2]*params[1] + params[4]*params[3] + (1 - params[2] - params[4])*params[5]))
-                end
-
-                progress[] = i/length(files)
-
-                files_label.text[] = "Files : $i/$(length(files))"
-
-                i += 1
-                sleep(0.001)
-            end
-        end
-
-        rowsize!(fig.layout, 3, Fixed(0))
-
-        delete!(axis_progress)
-        delete!(files_label)
-        delete!(percentage_label)
-
-        filepath = save_file()
-
-        if !isempty(filepath)
-            open(filepath, "w") do io
-                writedlm(io, [string(now())])
-                writedlm(io, [""])
-                writedlm(io, [time counts lifetime_1 concentration], ",")
-            end
-        end
+    open(filename, "w") do io
+        println(io, "Timestamp: ", now())
+        CSV.write(io, df)
     end
 
-    # if running[]
-    #     Threads.@spawn saving(menu_lifetimes.i_selected[])
-    # end
+    add_to_monitor("Done")
+    
+    running[] = false
+    pause[] = false
+
+    button_start.label = "START"
+    button_stop.label = "CLEAR"
+end
+
+function start_analysis()
+    println("Starting analysis")
+
+    filepath = pick_file()
+
+    if isempty(filepath)
+        println("No file selected")
+        return
+    end
+
+    println("Opening file : ", filepath)
+
+    df = CSV.read(filepath, DataFrame)
+
+    times    = df.Time_s
+    counts   = df.Number_of_photons
+    lifetime = df.Lifetime_ns
+
+    lines!(axis_counts, times, counts, color=Makie.wong_colors()[1])
+    lines!(axis_life, times, lifetime, color=Makie.wong_colors()[1])
+
+    autolimits!(axis_counts)
+    autolimits!(axis_life)
+
+    add_to_monitor("Done")
+    
+    running[] = false
+    pause[] = false
+
+    button_start.label = "START"
+    button_stop.label = "CLEAR"
 end
 
 function start_signal(frequency=100, refresh=1, min=3)
@@ -1177,28 +935,36 @@ end
 
 set_theme!(backgroundcolor = :gray95)
 
-fig = Figure(size = (1440, 847))
+fig = Figure(size = (1440, 847), msaa = 1)
 
-fig[1, 1] = plotgrid = GridLayout()
-fig[2, 1] = buttongrid = GridLayout(tellwidth=true)
-fig[3, 1] = progressgrid = GridLayout(tellwidth=false)
+fig[1, 1]          = plotgrid     = GridLayout()
+fig[2, 1]          = buttongrid   = GridLayout(tellwidth=true)
+fig[3, 1]          = progressgrid = GridLayout(tellwidth=true)
+buttongrid[1:3, 8] = paramsgrid   = GridLayout(tellwidth=true)
 
-global axis_hist    = plotgrid[1, 1] = Axis(fig, alignmode = Outside(), title="Histogram", xlabel = "Time [ns]", ylabel = "Photon counts", titlesize=16)
-global axis_counts  = plotgrid[2, 1] = Axis(fig, alignmode = Outside(), title="Photon counts", xlabel = "Time [s]", ylabel = "Photon counts", titlesize=16)
-# global axis_conc    = plotgrid[1, 3] = Axis(fig, alignmode = Outside(), title="Ion concentration", xlabel = "Time [s]", ylabel = "Ion concentration [mM]", titlesize=16)
-global axis_life    = plotgrid[1, 3] = Axis(fig, alignmode = Outside(), title="Lifetime", xlabel = "Time [s]", ylabel = "Lifetime [ns]", titlesize=16)
-global axis_signal  = plotgrid[2, 3] = Axis(fig, alignmode = Outside(), title="Light intensity", xlabel = "Time [s]", ylabel = "[%]", titlesize=16)
+# Box(buttongrid[1:3, 1])
+# Box(buttongrid[1, 1])
+# Box(buttongrid[2, 1])
+# Box(buttongrid[3, 1])
+# Box(buttongrid[3, 1][1, 1])
+# Box(buttongrid[3, 1][1, 1])
+
+global axis_hist   = Axis(plotgrid[1, 1], alignmode = Outside(), title="Histogram",       xlabel = "Time [ns]", ylabel = "Photon counts", titlesize=16, width = 600)
+global axis_counts = Axis(plotgrid[2, 1], alignmode = Outside(), title="Photon counts",   xlabel = "Time [s]",  ylabel = "Photon counts", titlesize=16, width = 600)
+global axis_life   = Axis(plotgrid[1, 3], alignmode = Outside(), title="Lifetime",        xlabel = "Time [s]",  ylabel = "Lifetime [ns]", titlesize=16, width = 600)
+global axis_signal = Axis(plotgrid[2, 3], alignmode = Outside(), title="Light intensity", xlabel = "Time [s]",  ylabel = "[%]",           titlesize=16, width = 600)
 
 ylims!(axis_signal, -5, 105)
 
-label_frequency     = Label(buttongrid[1, 1], justification=:left, text="Frequency : 0 Hz", width = 120)
-label_number        = Label(buttongrid[2, 1], justification=:left, text="Files : 0", width = 120)
-label_inverted      = Label(buttongrid[3, 1][1, 1], justification=:left, text="Inverted", width = 70)
-checkbox_inverted   = Toggle(buttongrid[3, 1][1, 2], active = true, rimfraction=0.24, buttoncolor=dark_gray, framecolor_active=mid_gray, framecolor_inactive=light_gray)
+label_frequency    = Label(buttongrid[1, 1],       justification=:left, text="Frequency : 0 Hz", width = Auto())
+label_number       = Label(buttongrid[2, 1],       justification=:left, text="Files : 0",        width = nothing)
+label_inverted     = Label(buttongrid[3, 1][1, 1], justification=:left, text="Inverted",         width = nothing)
+
+checkbox_inverted  = Toggle(buttongrid[3, 1][1, 2], active = true, rimfraction=0.24, buttoncolor=dark_gray, framecolor_active=mid_gray, framecolor_inactive=light_gray)
 
 box_attributes = Dict(
     :color          => :black,
-    :cornerradius   => 6,
+    :cornerradius   => 4,
     :height         => 40,
     :strokewidth    => 0.5,
     :width          => 120,
@@ -1208,7 +974,7 @@ button_attributes = Dict(
     :buttoncolor         => light_gray,
     :buttoncolor_active  => dark_gray,
     :buttoncolor_hover   => mid_gray,
-    :cornerradius        => 6,
+    :cornerradius        => 4,
     :font                => :bold,
     :fontsize            => 16,
     :height              => 40,
@@ -1233,12 +999,66 @@ textbox_attributes = Dict(
     :boxcolor_focused          => :white,
     :boxcolor_focused_invalid  => RGBf(1, 0.9, 0.9),
     :boxcolor_hover            => off_white,
-    :cornerradius              => 4,
-    :halign              => :right,
+    :cornerradius              => 3,
+    :halign                    => :right,
     :height                    => 26,
     :placeholder               => " ",
     :textpadding               => (10, 8, 8, 4.5),
     :width                     => 60,
+)
+
+spinnerbox_attributes = Dict(
+    :bordercolor                 => :black,
+    :bordercolor_focused         => :black,
+    :bordercolor_focused_invalid => :black,
+    :bordercolor_hover           => :black,
+    :borderwidth                 => 0,
+    :boxcolor                    => :white,
+    :boxcolor_focused            => :white,
+    :boxcolor_focused_invalid    => RGBf(1, 0.9, 0.9),
+    :boxcolor_hover              => off_white,
+    :cornerradius                => 0,
+    :halign                      => :left,
+    :height                      => 24,
+    :placeholder                 => " ",
+    :reset_on_defocus            => true,
+    :textcolor_placeholder       => :black,
+    :textpadding                 => (8, 0, 0, 4),
+    :width                       => 64
+)
+
+spinnerup_attributes = Dict(
+    :buttoncolor        => :gray95,
+    :buttoncolor_active => dark_gray,
+    :buttoncolor_hover  => light_gray,
+    :cornerradius       => 0,
+    :font               => :bold,
+    :fontsize           => 6,
+    :halign             => :right,
+    :height             => 12,
+    :label              => "▲",
+    :labelcolor_active  => :black,
+    :strokecolor        => :black,
+    :strokewidth        => 1,
+    :valign             => :top,
+    :width              => 32
+)
+
+spinnerdown_attributes = Dict(
+    :buttoncolor        => :gray95,
+    :buttoncolor_active => dark_gray,
+    :buttoncolor_hover  => light_gray,
+    :cornerradius       => 0,
+    :font               => :bold,
+    :fontsize           => 6,
+    :halign             => :right,
+    :height             => 12,
+    :label              => "▼",
+    :labelcolor_active  => :black,
+    :strokecolor        => :black,
+    :strokewidth        => 1,
+    :valign             => :bottom,
+    :width              => 32
 )
 
 Box(buttongrid[1, 2]; box_attributes...)
@@ -1249,60 +1069,49 @@ Box(buttongrid[2, 3]; box_attributes...)
 Box(buttongrid[3, 3]; merge(box_attributes, Dict(:cornerradius => -0.1))...)
 Box(buttongrid[1, 6]; box_attributes...)
 Box(buttongrid[2, 6]; box_attributes...)
-# Box(buttongrid[3, 6]; box_attributes...)
 Box(buttongrid[3, 6]; merge(box_attributes, Dict(:cornerradius => -0.1))...)
 
 button_start    = Button(buttongrid[1, 2]; merge(button_attributes, Dict(:label => "START"))...)
 button_stop     = Button(buttongrid[1, 3]; merge(button_attributes, Dict(:label => "CLEAR"))...)
 button_load     = Button(buttongrid[2, 2]; merge(button_attributes, Dict(:label => "LOAD"))...)
 button_load_IRF = Button(buttongrid[2, 3]; merge(button_attributes, Dict(:label => "LOAD IRF"))...)
-# button_save     = Button(buttongrid[3, 2]; merge(button_attributes, Dict(:label => "SAVE"))...)
-button_reset     = Button(buttongrid[3, 2]; merge(button_attributes, Dict(:label => "RESET"))...)
+button_reset    = Button(buttongrid[3, 2]; merge(button_attributes, Dict(:label => "RESET"))...)
 
 menu_mode = Menu(buttongrid[3, 3],
     cell_color_active=RGBf(0.8, 0.8, 0.8),
     cell_color_inactive_even=RGBf(0.9, 0.9, 0.9),
     cell_color_inactive_odd=RGBf(0.9, 0.9, 0.9),
     cell_color_hover=RGBf(0.6, 0.6, 0.6),
-    default = "Playback",
+    default = "Real-time",
     fontsize=20,
     height = 40,
-    options=["Real-time", "Playback", "Analysis"],
+    options=["Analysis", "Playback", "Real-time", "Save"],
     selection_cell_color_inactive=RGBf(0.8, 0.8, 0.8),
     textcolor=:black,
     width = 120
 )
 
-# label_K = Label(buttongrid[1:3, 4:5][1, 1], text=L"$K_q$ [$\text{M}^{-1}$] :", halign=:right)
-# textbox_K = Textbox(buttongrid[1:3, 4:5][1, 2]; textbox_attributes...)
-# textbox_K.displayed_string[] = "204"
-# textbox_K.stored_string[] = "204"
-
-portname_textbox = Textbox(buttongrid[1:3, 4:5][1,1:2]; merge(textbox_attributes, Dict(:cornerradius => 6, :height => 26, :width => 180))...)
+portname_textbox = Textbox(buttongrid[1:3, 4:5][1,1:2]; merge(textbox_attributes, Dict(:cornerradius => 3, :height => 26, :tellwidth => false, :width => nothing))...)
 portname_textbox.displayed_string[] = "usbmodem2302"
-portname_textbox.stored_string[] = "usbmodem2302"
+portname_textbox.stored_string[]    = "usbmodem2302"
 
-label_tau_0 = Label(buttongrid[1:3, 4:5][2, 1], text=L"$\tau_0$ [ns] :", halign=:right)
-textbox_tau_0 = Textbox(buttongrid[1:3, 4:5][2, 2]; textbox_attributes...)
-textbox_tau_0.displayed_string[] = "18"
-textbox_tau_0.stored_string[] = "18"
-
-label_fps = Label(buttongrid[1:3, 4:5][3, 1], text=L"\text{fps [Hz] :}", halign=:right)
-textbox_fps = Textbox(buttongrid[1:3, 4:5][3, 2]; textbox_attributes...)
+label_fps   = Label(buttongrid[1:3, 4:5][2, 1], text=L"\text{fps [Hz] :}", halign=:right, width => nothing)
+textbox_fps = Textbox(buttongrid[1:3, 4:5][2, 2]; textbox_attributes...)
 textbox_fps.displayed_string[] = "50"
-textbox_fps.stored_string[] = "50"
+textbox_fps.stored_string[]    = "50"
 
-label_min = Label(buttongrid[1:3, 4:5][4, 1], text=L"\text{Minimum [ms] :}", halign=:right)
-textbox_min = Textbox(buttongrid[1:3, 4:5][4, 2]; textbox_attributes...)
+label_min   = Label(buttongrid[1:3, 4:5][3, 1], text=L"\text{Minimum [ms] :}", halign=:right, width => nothing)
+textbox_min = Textbox(buttongrid[1:3, 4:5][3, 2]; textbox_attributes...)
 textbox_min.displayed_string[] = "3"
-textbox_min.stored_string[] = "3"
+textbox_min.stored_string[]    = "3"
 
-button_active = Button(buttongrid[1, 6],; merge(button_attributes, Dict(:label => "Activate"), Dict(:buttoncolor => mid_gray), Dict(:buttoncolor_hover => dark_gray))...)
-button_connect = Button(buttongrid[2, 6]; merge(button_attributes, Dict(:label => "Connect"), Dict(:buttoncolor => mid_gray), Dict(:buttoncolor_hover => dark_gray))...)
+label_max   = Label(buttongrid[1:3, 4:5][4, 1], text=L"\text{Maximum [ms] :}", halign=:right, width => nothing)
+textbox_max = Textbox(buttongrid[1:3, 4:5][4, 2]; textbox_attributes...)
+textbox_max.displayed_string[] = "14"
+textbox_max.stored_string[]    = "14"
 
-# portname_textbox = Textbox(buttongrid[3, 6]; merge(textbox_attributes, Dict(:borderwidth => 0, :cornerradius => 6, :height => 40, :textpadding => (12, 8, 8, 12), :width => 120))...)
-# portname_textbox.displayed_string[] = "usbmodem2302"
-# portname_textbox.stored_string[] = "usbmodem2302"
+button_active  = Button(buttongrid[1, 6]; merge(button_attributes, Dict(:label => "Activate", :buttoncolor => mid_gray, :buttoncolor_hover => dark_gray))...)
+button_connect = Button(buttongrid[2, 6]; merge(button_attributes, Dict(:label => "Connect",  :buttoncolor => mid_gray, :buttoncolor_hover => dark_gray))...)
 
 menu_output = Menu(buttongrid[3, 6],
     cell_color_active = RGBf(0.8, 0.8, 0.8),
@@ -1322,7 +1131,7 @@ monitor_box = Box(buttongrid[1:3, 7],
     color = :white,
     cornerradius = 0,
     height = 160,
-    width = 260
+    width = 320
 )
 
 global monitor = Label(buttongrid[1:3, 7],
@@ -1333,18 +1142,102 @@ global monitor = Label(buttongrid[1:3, 7],
     tellheight = false,
     tellwidth = false,
     valign = :bottom,
-    width = 260
+    width = 320
 )
 
-params_sliders = SliderGrid(
-    buttongrid[1:3, 8],
-    NamedTuple(merge(slider_attributes, Dict(:format => "{:d}",   :label => "Time range",   :range => 10:10:6000,   :startvalue => 30))),
-    NamedTuple(merge(slider_attributes, Dict(:format => "{:d}",   :label => "Averaging",    :range => 1:1:100,   :startvalue => 1))),
-    NamedTuple(merge(slider_attributes, Dict(:format => "{:d}",   :label => "Proportional", :range => 0:1:100,   :startvalue => 0))),
-    NamedTuple(merge(slider_attributes, Dict(:format => "{:.1f}", :label => "Integral",     :range => 0:1:100,   :startvalue => 0))),
-    NamedTuple(merge(slider_attributes, Dict(:format => "{:.2f}", :label => "Setpoint",     :range => 0:0.01:10, :startvalue => 2.50))),
-    width = 360
-)
+# println(monitor_box.width[])
+
+# params_sliders = SliderGrid(
+#     buttongrid[1:3, 8],
+#     NamedTuple(merge(slider_attributes, Dict(:format => "{:d}",   :label => "Time range",   :range => 10:10:3600, :startvalue => 30))),
+#     NamedTuple(merge(slider_attributes, Dict(:format => "{:d}",   :label => "Averaging",    :range => 1:1:100,    :startvalue => 1))),
+#     NamedTuple(merge(slider_attributes, Dict(:format => "{:d}",   :label => "Proportional", :range => 0:1:100,    :startvalue => 0))),
+#     NamedTuple(merge(slider_attributes, Dict(:format => "{:d}",   :label => "Integral",     :range => 0:1:100,    :startvalue => 0))),
+#     NamedTuple(merge(slider_attributes, Dict(:format => "{:.2f}", :label => "Setpoint",     :range => 3:0.01:7,   :startvalue => 5))),
+#     width = 360
+# )
+
+# fps_label = Label(paramsgrid[1, 1],
+#     fontsize = 16,
+#     justification = :right,
+#     text = "Max fps:")
+
+Box(paramsgrid[3, 1], strokewidth = 1, width = 96)
+Box(paramsgrid[3, 2], strokewidth = 1, width = 96)
+Box(paramsgrid[3, 3], strokewidth = 1, width = 96)
+Box(paramsgrid[6, 1], strokewidth = 1, width = 96)
+Box(paramsgrid[6, 2], strokewidth = 1, width = 96)
+Box(paramsgrid[6, 3], strokewidth = 1, width = 96)
+
+
+function range_validator(a::Integer, b::Integer)
+    @assert a ≤ b "Lower bound must not exceed upper bound"
+    return function(s::String)
+        s_trim = strip(s)
+        x = tryparse(Int, s_trim)
+        return x !== nothing && a ≤ x ≤ b
+    end
+end
+
+Label(paramsgrid[1, 1:3], text="General settings", halign=:center, height = nothing, tellwidth = true, width = Auto())
+
+Label(paramsgrid[2, 1], text="Time range", halign=:center, height = nothing, tellwidth = true, width = Auto())
+range_textbox = Textbox(paramsgrid[3, 1]; merge(spinnerbox_attributes, Dict(:displayed_string => "60", :stored_string => "60", :validator => UInt32))...)
+range_up      = Button(paramsgrid[3, 1];  spinnerup_attributes...)
+range_down    = Button(paramsgrid[3, 1];  spinnerdown_attributes...)
+
+Label(paramsgrid[2, 2], text="Averaging", halign=:center, height = nothing, tellwidth = true, width = Auto())
+averaging_textbox = Textbox(paramsgrid[3, 2]; merge(spinnerbox_attributes, Dict(:displayed_string => "1", :stored_string => "1", :validator => range_validator(1, 100)))...)
+averaging_up      = Button(paramsgrid[3, 2];  spinnerup_attributes...)
+averaging_down    = Button(paramsgrid[3, 2];  spinnerdown_attributes...)
+
+Label(paramsgrid[2, 3], text="Lifetimes", halign=:center, height = nothing, tellwidth = true, width = Auto())
+lifetimes_textbox = Textbox(paramsgrid[3, 3]; merge(spinnerbox_attributes, Dict(:displayed_string => "1", :stored_string => "1", :validator => range_validator(1, 3)))...)
+lifetimes_up      = Button(paramsgrid[3, 3];  spinnerup_attributes...)
+lifetimes_down    = Button(paramsgrid[3, 3];  spinnerdown_attributes...)
+
+Label(paramsgrid[4, 1:3], text="Controller settings", halign=:center, height = nothing, tellwidth = true, width = Auto())
+
+Label(paramsgrid[5, 1], text="Proportionnal", halign=:center, height = nothing, tellwidth = true, width = Auto())
+proportionnal_textbox = Textbox(paramsgrid[6, 1]; merge(spinnerbox_attributes, Dict(:displayed_string => "0", :stored_string => "0", :validator => UInt32))...)
+proportionnal_up      = Button(paramsgrid[6, 1];  spinnerup_attributes...)
+proportionnal_down    = Button(paramsgrid[6, 1];  spinnerdown_attributes...)
+
+Label(paramsgrid[5, 2], text="Integral", halign=:center, height = nothing, tellwidth = true, width = Auto())
+integral_textbox = Textbox(paramsgrid[6, 2]; merge(spinnerbox_attributes, Dict(:displayed_string => "0", :stored_string => "0", :validator => UInt32))...)
+integral_up      = Button(paramsgrid[6, 2];  spinnerup_attributes...)
+integral_down    = Button(paramsgrid[6, 2];  spinnerdown_attributes...)
+
+Label(paramsgrid[5, 3], text="Setpoint", halign=:center, height = nothing, tellwidth = true, width = Auto())
+setpoint_textbox = Textbox(paramsgrid[6, 3]; merge(spinnerbox_attributes, Dict(:displayed_string => "5.0", :stored_string => "5.0", :validator => Float64))...)
+setpoint_up      = Button(paramsgrid[6, 3];  spinnerup_attributes...)
+setpoint_down    = Button(paramsgrid[6, 3];  spinnerdown_attributes...)
+
+rowgap!(paramsgrid, 4)
+rowgap!(paramsgrid, 3, 24)
+
+# Box(paramsgrid[1:6, 1:2])
+# Box(paramsgrid[1, 2])
+
+# rowgap!(paramsgrid, 1, 4)
+# rowgap!(paramsgrid, 3, 4)
+# rowgap!(paramsgrid, 5, 4)
+
+# Label(paramsgrid[1, 2], text="Time range", halign=:center, height = nothing, tellwidth = true, width = Auto())
+# Box(paramsgrid[2, 2]; spinnerbox_attributes...)
+# Box(paramsgrid[2, 2]; spinnerup_attributes...)
+# Box(paramsgrid[2, 2]; spinnerdown_attributes...)
+
+# Label(paramsgrid[3, 2], text="Time range", halign=:center, height = nothing, tellwidth = true, width = Auto())
+# Box(paramsgrid[4, 2]; spinnerbox_attributes...)
+# Box(paramsgrid[4, 2]; spinnerup_attributes...)
+# Box(paramsgrid[4, 2]; spinnerdown_attributes...)
+
+# Label(paramsgrid[5, 2], text="Time range", halign=:center, height = nothing, tellwidth = true, width = Auto())
+# Box(paramsgrid[6, 2]; spinnerbox_attributes...)
+# Box(paramsgrid[6, 2]; spinnerup_attributes...)
+# Box(paramsgrid[6, 2]; spinnerdown_attributes...)
+
 
 Box(progressgrid[1, 1],
     color = light_gray,
@@ -1352,7 +1245,7 @@ Box(progressgrid[1, 1],
     halign = :left,
     height = 8,
     strokevisible=false,
-    width = 1353
+    width = nothing,
 )
 
 box_progress = Box(progressgrid[1, 1],
@@ -1361,19 +1254,25 @@ box_progress = Box(progressgrid[1, 1],
     halign = :left,
     height = 8,
     strokevisible=false,
+    tellwidth = false,
     width = 0
 )
 
-label_progress = Label(progressgrid[1, 2], text="0 %", halign=:right, tellwidth = false)
+label_progress = Label(progressgrid[1, 2], text="100 %", halign=:right, tellwidth = true, width = Auto())
 
-colgap!(buttongrid, 3, 50)
-colgap!(buttongrid, 5, 50)
-colsize!(plotgrid, 2, 10)
+colsize!(plotgrid, 2, 20)
+colsize!(buttongrid, 4, 120)
+colsize!(buttongrid, 5, 60)
+# colsize!(buttongrid, 8, 0)
+colgap!(buttongrid, 4, 0)
 rowgap!(buttongrid, 1, 20)
 rowgap!(buttongrid, 2, 20)
 
 global irf = get_irf()
-global irf_bin_size = get_irf_bin_size(irf)
+global irf_bin_size = get_irf_bin_size()
+global tcspc_window_size = round(irf[end, 1]+irf[2, 1], sigdigits=4)
+global fft_plan = plan_fft(zeros(Float64, 256))
+global ifft_plan = plan_ifft(zeros(Float64, 256))
 global folderpath = get_folder_path("FLIM")
 global serial = nothing
 global running = Observable(false)
@@ -1381,9 +1280,9 @@ global pause = Observable(false)
 global active = Observable(false)
 global connected = Observable(false)
 global reset_I = Observable(false)
-global signal_intensity = 0
 
-setpoint = hlines!(axis_life, params_sliders.sliders[5].value[], color=Makie.wong_colors()[2])
+setpoint = hlines!(axis_life, parse(Float64, setpoint_textbox.stored_string[]), color=Makie.wong_colors()[2])
+# setpoint = hlines!(axis_life, params_sliders.sliders[5].value[], color=Makie.wong_colors()[2])
 
 on(button_start.clicks) do _
     if !running[]
@@ -1392,11 +1291,25 @@ on(button_start.clicks) do _
         button_start.label = "PAUSE"
         button_stop.label = "STOP"
 
+        box_progress.width = 0
+        label_progress.text = "0 %"
+        label_frequency.text = "Frequency : 0 Hz"
+        label_number.text = "Files : 0"
+
+        empty!(axis_hist)
+        empty!(axis_counts)
+        empty!(axis_life)
+        empty!(axis_signal)
+
+        global setpoint = hlines!(axis_life, params_sliders.sliders[5].value[], color=Makie.wong_colors()[2])
+
         if menu_mode.selection[] == "Playback"
             @async start_playback()
         elseif menu_mode.selection[] == "Analysis"
-            @async start_analysis()
-        else
+            start_analysis()
+        elseif menu_mode.selection[] == "Save"
+            @async start_save()
+        elseif menu_mode.selection[] == "Real-time"
             @async start_real_time()
         end
     elseif pause[]
@@ -1423,6 +1336,11 @@ on(button_stop.clicks) do _
     button_start.label = "START"
     button_stop.label = "CLEAR"
 
+    box_progress.width = 0
+    label_progress.text = "0 %"
+    label_frequency.text = "Frequency : 0 Hz"
+    label_number.text = "Files : 0"
+
     empty!(axis_hist)
     empty!(axis_counts)
     empty!(axis_life)
@@ -1437,12 +1355,8 @@ end
 
 on(button_load_IRF.clicks) do _
     global irf = get_new_irf()
-    global irf_bin_size = get_irf_bin_size(irf)
+    global irf_bin_size = get_irf_bin_size()
 end
-
-# on(button_save.clicks) do _
-#     start_save()
-# end
 
 on(button_reset.clicks) do _
     reset_I[] = true
@@ -1509,8 +1423,283 @@ on(button_active.clicks) do _
     end
 end
 
-on(params_sliders.sliders[5].value) do value
-    setpoint.args[1][] = value
+on(range_up.clicks) do _
+    if !isnothing(tryparse(UInt32, range_textbox.displayed_string[]))
+        value = parse(UInt32, range_textbox.displayed_string[])
+        multiplier = floor(Int, round(log(10, value), digits = 4))
+        res = floor(Int, value*0.1^multiplier)*10^multiplier + 1*10^multiplier
+
+        range_textbox.stored_string[] = string(res)
+        range_textbox.displayed_string[] = string(res)
+    else
+        range_textbox.stored_string[] = "60"
+        range_textbox.displayed_string[] = "60"
+    end
 end
+
+on(range_down.clicks) do _
+    if !isnothing(tryparse(UInt32, range_textbox.displayed_string[]))
+        value = parse(UInt32, range_textbox.displayed_string[])
+
+        if value != 1
+            multiplier = floor(Int, round(log(10, value - 1), digits = 8))
+            res = ceil(Int, round(value*0.1^multiplier, digits = 8))*10^multiplier - 1*10^multiplier
+
+            range_textbox.stored_string[] = string(res)
+            range_textbox.displayed_string[] = string(res)
+        end
+    else
+        range_textbox.stored_string[] = "60"
+        range_textbox.displayed_string[] = "60"
+    end
+end
+
+on(averaging_up.clicks) do _
+    if !isnothing(tryparse(UInt32, averaging_textbox.displayed_string[]))
+        value = parse(UInt32, averaging_textbox.displayed_string[])
+
+        if value < 1 | value > 100
+            averaging_textbox.stored_string[] = "1"
+            averaging_textbox.displayed_string[] = "1"
+        end
+        
+        if value != 100
+            averaging_textbox.stored_string[] = string(value + 1)
+            averaging_textbox.displayed_string[] = string(value + 1)
+        end
+    else
+        averaging_textbox.stored_string[] = "1"
+        averaging_textbox.displayed_string[] = "1"
+    end
+end
+
+on(averaging_down.clicks) do _
+    if !isnothing(tryparse(UInt32, averaging_textbox.displayed_string[]))
+        value = parse(UInt32, averaging_textbox.displayed_string[])
+
+        if value < 1 | value > 100
+            averaging_textbox.stored_string[] = "1"
+            averaging_textbox.displayed_string[] = "1"
+        end
+
+        if value != 1
+            averaging_textbox.stored_string[] = string(value - 1)
+            averaging_textbox.displayed_string[] = string(value - 1)
+        end
+    else
+        averaging_textbox.stored_string[] = "1"
+        averaging_textbox.displayed_string[] = "1"
+    end
+end
+
+on(lifetimes_up.clicks) do _
+    if !isnothing(tryparse(UInt32, lifetimes_textbox.displayed_string[]))
+        value = parse(UInt32, lifetimes_textbox.displayed_string[])
+
+        if value == 1
+            lifetimes_textbox.stored_string[] = "2"
+            lifetimes_textbox.displayed_string[] = "2"
+        elseif value == 2
+            lifetimes_textbox.stored_string[] = "3"
+            lifetimes_textbox.displayed_string[] = "3"
+        elseif value == 3
+        else 
+            lifetimes_textbox.stored_string[] = "1"
+            lifetimes_textbox.displayed_string[] = "1"
+        end
+    else
+        lifetimes_textbox.stored_string[] = "1"
+        lifetimes_textbox.displayed_string[] = "1"
+    end
+end
+
+on(lifetimes_down.clicks) do _
+    if !isnothing(tryparse(UInt32, lifetimes_textbox.displayed_string[]))
+        value = parse(UInt32, lifetimes_textbox.displayed_string[])
+
+        if value == 1
+        elseif value == 2
+            lifetimes_textbox.stored_string[] = "1"
+            lifetimes_textbox.displayed_string[] = "1"
+        elseif value == 3
+            lifetimes_textbox.stored_string[] = "2"
+            lifetimes_textbox.displayed_string[] = "2"
+        else 
+            lifetimes_textbox.stored_string[] = "1"
+            lifetimes_textbox.displayed_string[] = "1"
+        end
+    else
+        lifetimes_textbox.stored_string[] = "1"
+        lifetimes_textbox.displayed_string[] = "1"
+    end
+end
+
+# on(proportionnal_up.clicks) do _
+#     if !isnothing(tryparse(Float64, proportionnal_textbox.displayed_string[]))
+#         value = parse(Float64, proportionnal_textbox.displayed_string[])
+#         if value < 0
+#             proportionnal_textbox.stored_string[] = "0"
+#             proportionnal_textbox.displayed_string[] = "0"
+#         elseif value == 0
+#             proportionnal_textbox.stored_string[] = "0.1"
+#             proportionnal_textbox.displayed_string[] = "0.1"
+#         else
+#             multiplier = max(floor(Int, round(log(10, value) - 1, digits = 4)), -1)
+
+#             proportionnal_textbox.stored_string[] = string(round(floor(Int, value*0.1^multiplier)*10.0^multiplier + 1*10.0^multiplier, digits=1))
+#             proportionnal_textbox.displayed_string[] = string(round(floor(Int, value*0.1^multiplier)*10.0^multiplier + 1*10.0^multiplier, digits=1))
+#         end
+#     else
+#         proportionnal_textbox.stored_string[] = "0"
+#         proportionnal_textbox.displayed_string[] = "0"
+#     end
+# end
+
+# on(proportionnal_down.clicks) do _
+#     if !isnothing(tryparse(Float64, proportionnal_textbox.displayed_string[]))
+#         value = parse(Float64, proportionnal_textbox.displayed_string[])
+#         if value <= 0
+#             proportionnal_textbox.stored_string[] = "0"
+#             proportionnal_textbox.displayed_string[] = "0"
+#         # elseif value != 1
+#         else
+#             multiplier = max(floor(Int, round(log(10, value - .1) - 1, digits = 8)), -1)
+
+#             proportionnal_textbox.stored_string[] = string(round(ceil(Int, round(value*0.1^multiplier, digits = 8))*10.0^multiplier - 1*10.0^multiplier, digits=1))
+#             proportionnal_textbox.displayed_string[] = string(round(ceil(Int, round(value*0.1^multiplier, digits = 8))*10.0^multiplier - 1*10.0^multiplier, digits=1))
+#         end
+#     else
+#         proportionnal_textbox.stored_string[] = "0"
+#         proportionnal_textbox.displayed_string[] = "0"
+#     end
+# end
+
+on(proportionnal_up.clicks) do _
+    if !isnothing(tryparse(UInt32, proportionnal_textbox.displayed_string[]))
+        value = parse(UInt32, proportionnal_textbox.displayed_string[])
+        if value != 0
+            multiplier = floor(Int, round(log(10, value), digits = 4))
+            res = floor(Int, value*0.1^multiplier)*10^multiplier + 1*10^multiplier
+
+            proportionnal_textbox.stored_string[] = string(res)
+            proportionnal_textbox.displayed_string[] = string(res)
+        else
+            proportionnal_textbox.stored_string[] = "1"
+            proportionnal_textbox.displayed_string[] = "1"
+        end
+    else
+        proportionnal_textbox.stored_string[] = "0"
+        proportionnal_textbox.displayed_string[] = "0"
+    end
+end
+
+on(proportionnal_down.clicks) do _
+    if !isnothing(tryparse(UInt32, proportionnal_textbox.displayed_string[]))
+        value = parse(UInt32, proportionnal_textbox.displayed_string[])
+
+        if value == 0
+        elseif value != 1
+            multiplier = floor(Int, round(log(10, value - 1), digits = 8))
+            res = ceil(Int, round(value*0.1^multiplier, digits = 8))*10^multiplier - 1*10^multiplier
+
+            proportionnal_textbox.stored_string[] = string(res)
+            proportionnal_textbox.displayed_string[] = string(res)
+        else
+            proportionnal_textbox.stored_string[] = "0"
+            proportionnal_textbox.displayed_string[] = "0"
+        end
+    else
+        proportionnal_textbox.stored_string[] = "0"
+        proportionnal_textbox.displayed_string[] = "0"
+    end
+end
+
+on(integral_up.clicks) do _
+    if !isnothing(tryparse(UInt32, integral_textbox.displayed_string[]))
+        value = parse(UInt32, integral_textbox.displayed_string[])
+        if value != 0
+            multiplier = floor(Int, round(log(10, value), digits = 4))
+            res = floor(Int, value*0.1^multiplier)*10^multiplier + 1*10^multiplier
+
+            integral_textbox.stored_string[] = string(res)
+            integral_textbox.displayed_string[] = string(res)
+        else
+            integral_textbox.stored_string[] = "1"
+            integral_textbox.displayed_string[] = "1"
+        end
+    else
+        integral_textbox.stored_string[] = "0"
+        integral_textbox.displayed_string[] = "0"
+    end
+end
+
+on(integral_down.clicks) do _
+    if !isnothing(tryparse(UInt32, integral_textbox.displayed_string[]))
+        value = parse(UInt32, integral_textbox.displayed_string[])
+
+        if value == 0
+        elseif value != 1
+            multiplier = floor(Int, round(log(10, value - 1), digits = 8))
+            res = ceil(Int, round(value*0.1^multiplier, digits = 8))*10^multiplier - 1*10^multiplier
+
+            integral_textbox.stored_string[] = string(res)
+            integral_textbox.displayed_string[] = string(res)
+        else
+            integral_textbox.stored_string[] = "0"
+            integral_textbox.displayed_string[] = "0"
+        end
+    else
+        integral_textbox.stored_string[] = "0"
+        integral_textbox.displayed_string[] = "0"
+    end
+end
+
+on(setpoint_up.clicks) do _
+    if !isnothing(tryparse(Float64, setpoint_textbox.displayed_string[]))
+        value = parse(Float64, setpoint_textbox.displayed_string[])
+        if value < 0
+            setpoint_textbox.stored_string[] = "0"
+            setpoint_textbox.displayed_string[] = "0"
+        elseif value == 0
+            setpoint_textbox.stored_string[] = "0.1"
+            setpoint_textbox.displayed_string[] = "0.1"
+        else
+            multiplier = max(floor(Int, round(log(10, value) - 1, digits = 4)), -1)
+
+            setpoint_textbox.stored_string[] = string(round(floor(Int, value*0.1^multiplier)*10.0^multiplier + 1*10.0^multiplier, digits=1))
+            setpoint_textbox.displayed_string[] = string(round(floor(Int, value*0.1^multiplier)*10.0^multiplier + 1*10.0^multiplier, digits=1))
+        end
+    else
+        setpoint_textbox.stored_string[] = "5"
+        setpoint_textbox.displayed_string[] = "5"
+    end
+end
+
+on(setpoint_down.clicks) do _
+    if !isnothing(tryparse(Float64, setpoint_textbox.displayed_string[]))
+        value = parse(Float64, setpoint_textbox.displayed_string[])
+        if value <= 0
+            setpoint_textbox.stored_string[] = "0"
+            setpoint_textbox.displayed_string[] = "0"
+        # elseif value != 1
+        else
+            multiplier = max(floor(Int, round(log(10, value - .1) - 1, digits = 8)), -1)
+
+            setpoint_textbox.stored_string[] = string(round(ceil(Int, round(value*0.1^multiplier, digits = 8))*10.0^multiplier - 1*10.0^multiplier, digits=1))
+            setpoint_textbox.displayed_string[] = string(round(ceil(Int, round(value*0.1^multiplier, digits = 8))*10.0^multiplier - 1*10.0^multiplier, digits=1))
+        end
+    else
+        setpoint_textbox.stored_string[] = "5"
+        setpoint_textbox.displayed_string[] = "5"
+    end
+end
+
+on(setpoint_textbox.stored_string) do value
+    setpoint.args[1][] = parse(Float64, value)
+end
+
+# on(params_sliders.sliders[5].value) do value
+#     setpoint.args[1][] = value
+# end
 
 fig

@@ -394,6 +394,7 @@ folderpath = "/Users/eliasouellet-oviedo/Documents/Stage2/Partie 2/Puffs (5ms et
 dir = os.fsencode(folderpath)
 
 file_1 = SdtFile(filepath_1)
+print(file_1.__dict__)
 rec_1 = file_1.__dict__['measure_info'][0]
 df_1 = extract_fields(rec_1, 'test_c00030.sdt')
 df_1.to_csv("1 : test_c00030")
