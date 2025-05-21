@@ -21,6 +21,7 @@ try
 catch
 end
 
+# Common plot and widget style attributes
 function range_validator(a::Integer, b::Integer)
     """
     Returns a validator function ensuring parsed integer s is in [a, b].
@@ -212,20 +213,20 @@ menu_mode       = Menu(buttongrid[3, 3];   merge(MENU_ATTRS,   Dict(
 ))...)
 
 # Textboxes & Labels for serial & timing parameters
-portname_textbox = Textbox(textboxgrid[1,1:2]; merge(TEXTBOX_ATTRS, Dict(
+portname_textbox = Textbox(textboxgrid[1, 1:2]; merge(TEXTBOX_ATTRS, Dict(
     :displayed_string => portname,
     :stored_string    => portname,
     :width            => nothing
 ))...)
-textbox_fps      = Textbox(textboxgrid[2, 2]; merge(TEXTBOX_ATTRS, Dict(
+textbox_fps      = Textbox(textboxgrid[2, 2];   merge(TEXTBOX_ATTRS, Dict(
     :displayed_string => "50",
     :stored_string    => "50"
 ))...)
-textbox_min      = Textbox(textboxgrid[3, 2]; merge(TEXTBOX_ATTRS, Dict(
+textbox_min      = Textbox(textboxgrid[3, 2];   merge(TEXTBOX_ATTRS, Dict(
     :displayed_string => "3",
     :stored_string    => "3"
 ))...)
-textbox_max      = Textbox(textboxgrid[4, 2]; merge(TEXTBOX_ATTRS, Dict(
+textbox_max      = Textbox(textboxgrid[4, 2];   merge(TEXTBOX_ATTRS, Dict(
     :displayed_string => "14",
     :stored_string    => "14"
 ))...)
@@ -274,7 +275,7 @@ global monitor = Label(buttongrid[1:3, 6],
 Label(paramsgrid[1, 1:4]; text="General settings", halign=:center, height=nothing, tellwidth=true)
 
 Label(paramsgrid[2, 1]; text="Time range", halign=:center, height=nothing, tellwidth=true)
-Box(paramsgrid[3, 1]; SPINNER_BOX_ATTRS...)
+Box(paramsgrid[3, 1];   SPINNER_BOX_ATTRS...)
 range_up      = Button(paramsgrid[3, 1];  SPINNER_UP_ATTRS...)
 range_down    = Button(paramsgrid[3, 1];  SPINNER_DOWN_ATTRS...)
 range_textbox = Textbox(paramsgrid[3, 1]; merge(SPINNER_TEXT_ATTRS, Dict(
@@ -284,7 +285,7 @@ range_textbox = Textbox(paramsgrid[3, 1]; merge(SPINNER_TEXT_ATTRS, Dict(
 ))...)
 
 Label(paramsgrid[2, 2]; text="Averaging", halign=:center, height=nothing, tellwidth=true)
-Box(paramsgrid[3, 2]; SPINNER_BOX_ATTRS...)
+Box(paramsgrid[3, 2];   SPINNER_BOX_ATTRS...)
 averaging_up      = Button(paramsgrid[3, 2];  SPINNER_UP_ATTRS...)
 averaging_down    = Button(paramsgrid[3, 2];  SPINNER_DOWN_ATTRS...)
 averaging_textbox = Textbox(paramsgrid[3, 2]; merge(SPINNER_TEXT_ATTRS, Dict(
@@ -294,7 +295,7 @@ averaging_textbox = Textbox(paramsgrid[3, 2]; merge(SPINNER_TEXT_ATTRS, Dict(
 ))...)
 
 Label(paramsgrid[2, 3]; text="Lifetimes", halign=:center, height=nothing, tellwidth=true)
-Box(paramsgrid[3, 3]; SPINNER_BOX_ATTRS...)
+Box(paramsgrid[3, 3];   SPINNER_BOX_ATTRS...)
 lifetimes_up      = Button(paramsgrid[3, 3];  SPINNER_UP_ATTRS...)
 lifetimes_down    = Button(paramsgrid[3, 3];  SPINNER_DOWN_ATTRS...)
 lifetimes_textbox = Textbox(paramsgrid[3, 3]; merge(SPINNER_TEXT_ATTRS,Dict(
@@ -304,7 +305,7 @@ lifetimes_textbox = Textbox(paramsgrid[3, 3]; merge(SPINNER_TEXT_ATTRS,Dict(
 ))...)
 
 Label(paramsgrid[2, 4]; text="Smoothing", halign=:center, height=nothing, tellwidth=true)
-Box(paramsgrid[3, 4]; SPINNER_BOX_ATTRS...)
+Box(paramsgrid[3, 4];   SPINNER_BOX_ATTRS...)
 smoothing_up      = Button(paramsgrid[3, 4];  SPINNER_UP_ATTRS...)
 smoothing_down    = Button(paramsgrid[3, 4];  SPINNER_DOWN_ATTRS...)
 smoothing_textbox = Textbox(paramsgrid[3, 4]; merge(SPINNER_TEXT_ATTRS,Dict(
@@ -317,7 +318,7 @@ smoothing_textbox = Textbox(paramsgrid[3, 4]; merge(SPINNER_TEXT_ATTRS,Dict(
 Label(paramsgrid[5, 1:4]; text="Controller settings", halign=:center, height=nothing, tellwidth=true)
 
 Label(paramsgrid[6, 1]; text="Proportionnal", halign=:center, height=nothing, tellwidth=true)
-Box(paramsgrid[7, 1]; SPINNER_BOX_ATTRS...)
+Box(paramsgrid[7, 1];   SPINNER_BOX_ATTRS...)
 proportionnal_up      = Button(paramsgrid[7, 1];  SPINNER_UP_ATTRS...)
 proportionnal_down    = Button(paramsgrid[7, 1];  SPINNER_DOWN_ATTRS...)
 proportionnal_textbox = Textbox(paramsgrid[7, 1]; merge(SPINNER_TEXT_ATTRS,Dict(
@@ -327,7 +328,7 @@ proportionnal_textbox = Textbox(paramsgrid[7, 1]; merge(SPINNER_TEXT_ATTRS,Dict(
 ))...)
 
 Label(paramsgrid[6, 2]; text="Integral", halign=:center, height=nothing, tellwidth=true)
-Box(paramsgrid[7, 2]; SPINNER_BOX_ATTRS...)
+Box(paramsgrid[7, 2];   SPINNER_BOX_ATTRS...)
 integral_up      = Button(paramsgrid[7, 2];  SPINNER_UP_ATTRS...)
 integral_down    = Button(paramsgrid[7, 2];  SPINNER_DOWN_ATTRS...)
 integral_textbox = Textbox(paramsgrid[7, 2]; merge(SPINNER_TEXT_ATTRS,Dict(
@@ -337,7 +338,7 @@ integral_textbox = Textbox(paramsgrid[7, 2]; merge(SPINNER_TEXT_ATTRS,Dict(
 ))...)
 
 Label(paramsgrid[6, 3]; text="Derivative", halign=:center, height=nothing, tellwidth=true)
-Box(paramsgrid[7, 3]; SPINNER_BOX_ATTRS...)
+Box(paramsgrid[7, 3];   SPINNER_BOX_ATTRS...)
 derivative_up      = Button(paramsgrid[7, 3];  SPINNER_UP_ATTRS...)
 derivative_down    = Button(paramsgrid[7,  3];  SPINNER_DOWN_ATTRS...)
 derivative_textbox = Textbox(paramsgrid[7  ,3]; merge(SPINNER_TEXT_ATTRS,Dict(
@@ -347,7 +348,7 @@ derivative_textbox = Textbox(paramsgrid[7  ,3]; merge(SPINNER_TEXT_ATTRS,Dict(
 ))...) 
 
 Label(paramsgrid[6, 4]; text="Setpoint", halign=:center, height=nothing, tellwidth=true)
-Box(paramsgrid[7, 4]; SPINNER_BOX_ATTRS...)
+Box(paramsgrid[7, 4];   SPINNER_BOX_ATTRS...)
 setpoint_up      = Button(paramsgrid[7, 4];  SPINNER_UP_ATTRS...)
 setpoint_down    = Button(paramsgrid[7, 4];  SPINNER_DOWN_ATTRS...)
 setpoint_textbox = Textbox(paramsgrid[7, 4]; merge(SPINNER_TEXT_ATTRS,Dict(
@@ -366,12 +367,13 @@ Box(progressgrid[1, 1],
     strokewidth  = 1,
     width        = 1300
 )
-global box_progress = Box(progressgrid[1, 1],
+global box_progress   = Box(progressgrid[1, 1],
     color         = dark_gray,
     cornerradius  = 5,
     halign        = :left,
     height        = 10,
     strokevisible = false,
+    tellheight    = false,
     tellwidth     = false,
     width         = 0
 )
@@ -387,14 +389,15 @@ colsize!(paramsgrid,   3, 88)
 colsize!(paramsgrid,   4, 88)
 colsize!(progressgrid, 2, 10)
 colsize!(progressgrid, 3, 40)
-rowgap!(textboxgrid,   12)
 colgap!(buttongrid,    3, 30)
+# rowsize!(paramsgrid,   1, 10)
 colgap!(fig.layout,    0)
 colgap!(buttongrid,    20)
 colgap!(textboxgrid,   10)
 colgap!(progressgrid,  0)
 rowgap!(buttongrid,    20)
 rowgap!(fig.layout,    1, 40)
+rowgap!(textboxgrid,   12)
 rowgap!(paramsgrid,    2, 4)
 rowgap!(paramsgrid,    6, 4)
 

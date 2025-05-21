@@ -355,6 +355,33 @@ function start_real_time()
         end
     end
 
+    filepath = save_file()
+
+    if !isempty(filepath)
+        if filepath[end-4:end] != ".csv"
+            filepath *= ".csv"
+        end
+
+        println("Saving as $(split(filepath, "/")[end])")
+        add_to_monitor("Saving as $(split(filepath, "/")[end])")
+
+        df = DataFrame(
+            Time_s = times[],
+            Number_of_photons = counts[],
+            Lifetime_ns = lifetime[],
+            Signal_sent = signal[],
+            Averaging = averaging_list,
+            Proportionnal = prop_list,
+            Integral = integ_list,
+            Setpoint = setpoint_list
+        )
+        
+        open(filepath, "w") do io
+            println(io, "Timestamp: ", now())
+            CSV.write(io, df)
+        end
+    end
+
     filename = string(now())*".csv"
 
     open(filename, "w") do io
@@ -619,18 +646,40 @@ function start_save()
     autolimits!(axis_counts)
     autolimits!(axis_life)
 
-    filename = string(now())*".csv"
+    filepath = save_file()
 
-    df = DataFrame(
-        Time_s = times,
-        Number_of_photons = counts,
-        Lifetime_ns = lifetime
-    )
-    
-    open(filename, "w") do io
-        println(io, "Timestamp: ", now())
-        CSV.write(io, df)
+    if !isempty(filepath)
+        if filepath[end-4:end] != ".csv"
+            filepath *= ".csv"
+        end
+
+        println("Saving as $(split(filepath, "/")[end])")
+        add_to_monitor("Saving as $(split(filepath, "/")[end])")
+
+        df = DataFrame(
+            Time_s = times,
+            Number_of_photons = counts,
+            Lifetime_ns = lifetime
+        )
+        
+        open(filepath, "w") do io
+            println(io, "Timestamp: ", now())
+            CSV.write(io, df)
+        end
     end
+
+    # filename = string(now())*".csv"
+
+    # df = DataFrame(
+    #     Time_s = times,
+    #     Number_of_photons = counts,
+    #     Lifetime_ns = lifetime
+    # )
+    
+    # open(filename, "w") do io
+    #     println(io, "Timestamp: ", now())
+    #     CSV.write(io, df)
+    # end
 
     add_to_monitor("Done")
     
