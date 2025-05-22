@@ -13,7 +13,8 @@ def plot_graphique(df, x_col, y_col, title, xlabel, ylabel):
 
     return plt
 
-fichier_csv = "2025-05-14T14:21:50.335.csv"
+# fichier_csv = "2025-05-14T14:21:50.335.csv"
+fichier_csv = "Untitled.csv"
 
 # Listes pour stocker les colonnes
 time = []

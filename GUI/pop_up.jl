@@ -31,11 +31,12 @@ table_textbox_attributes = Dict(
 
 # set_theme!(backgroundcolor = :gray95)
 
-set_theme!(backgroundcolor = :gray12, textcolor = :gray85, fonts = (; 
+set_theme!(backgroundcolor = :gray12, textcolor = :gray80, fonts = (; 
     regular = "Times New Roman", 
     bold    = "Times New Roman Bold", 
     italic  = "Times New Roman Italic")
-    )
+)
+
 # set_theme!(backgroundcolor = :gray12, textcolor = :gray85, theme_latexfonts())
 
 println(Makie.theme(:fonts))

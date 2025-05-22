@@ -66,5 +66,5 @@ sort!(source_files, by=get_file_number)
 
 for source_file in source_files
     cp(joinpath(source_folderpath, source_file), joinpath(destination_folderpath, source_file), force=true)
-    sleep(0.1)
+    sleep(0.001)
 end

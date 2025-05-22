@@ -184,14 +184,15 @@ global axis_life   = Axis(plotgrid[1, 2]; merge(AXIS_ATTRS, Dict(
 global axis_signal = Axis(plotgrid[2, 2]; merge(AXIS_ATTRS, Dict(
     :title  => "Light intensity",
     :xlabel => "Time [s]",
-    :ylabel => "Intensity [%]"
+    :ylabel => "Duty cycle [%]"
 ))...)
+
 ylims!(axis_signal, -5, 105)
 
 # Labels and Controls
-label_frequency = Label(buttongrid[1, 1],       text="Frequency : 0 Hz", width = 120)
-label_number    = Label(buttongrid[2, 1],       text="Files : 0",        width = nothing)
-label_inverted  = Label(buttongrid[3, 1][1, 1], text="Inverted",         width = nothing)
+label_frequency   = Label(buttongrid[1, 1],       text="Frequency : 0 Hz", width = 120)
+label_number      = Label(buttongrid[2, 1],       text="Files : 0",        width = nothing)
+label_inverted    = Label(buttongrid[3, 1][1, 1], text="Inverted",         width = nothing)
 checkbox_inverted = Toggle(
     buttongrid[3, 1][1, 2],
     active              = true,
@@ -205,7 +206,7 @@ checkbox_inverted = Toggle(
 button_start    = Button(buttongrid[1, 2]; merge(BUTTON_ATTRS, Dict(:label => "START"))...)
 button_stop     = Button(buttongrid[1, 3]; merge(BUTTON_ATTRS, Dict(:label => "CLEAR"))...)
 button_load     = Button(buttongrid[2, 2]; merge(BUTTON_ATTRS, Dict(:label => "LOAD"))...)
-button_load_irf = Button(buttongrid[2, 3]; merge(BUTTON_ATTRS, Dict(:label => "LOAD IRF"))...)
+button_load_IRF = Button(buttongrid[2, 3]; merge(BUTTON_ATTRS, Dict(:label => "LOAD IRF"))...)
 button_pop_up   = Button(buttongrid[3, 2]; merge(BUTTON_ATTRS, Dict(:label => "PROTOCOL"))...)
 menu_mode       = Menu(buttongrid[3, 3];   merge(MENU_ATTRS,   Dict(
     :default => "Playback",
@@ -284,7 +285,7 @@ range_textbox = Textbox(paramsgrid[3, 1]; merge(SPINNER_TEXT_ATTRS, Dict(
     :validator        => UInt32
 ))...)
 
-Label(paramsgrid[2, 2]; text="Averaging", halign=:center, height=nothing, tellwidth=true)
+Label(paramsgrid[2, 2]; text="Binning", halign=:center, height=nothing, tellwidth=true)
 Box(paramsgrid[3, 2];   SPINNER_BOX_ATTRS...)
 averaging_up      = Button(paramsgrid[3, 2];  SPINNER_UP_ATTRS...)
 averaging_down    = Button(paramsgrid[3, 2];  SPINNER_DOWN_ATTRS...)
@@ -309,9 +310,9 @@ Box(paramsgrid[3, 4];   SPINNER_BOX_ATTRS...)
 smoothing_up      = Button(paramsgrid[3, 4];  SPINNER_UP_ATTRS...)
 smoothing_down    = Button(paramsgrid[3, 4];  SPINNER_DOWN_ATTRS...)
 smoothing_textbox = Textbox(paramsgrid[3, 4]; merge(SPINNER_TEXT_ATTRS,Dict(
-    :displayed_string => "3",
-    :stored_string    => "3",
-    :validator        => range_validator(1,3)
+    :displayed_string => "5",
+    :stored_string    => "5",
+    :validator        => range_validator(0,10)
 ))...)
 
 # Lower parameters grid
@@ -690,7 +691,7 @@ on(smoothing_up.clicks) do _
             smoothing_textbox.displayed_string[] = "0"
         end
         # println(value)
-        if value != 5
+        if value != 10
             smoothing_textbox.stored_string[] = string(value + 1)
             smoothing_textbox.displayed_string[] = string(value + 1)
         end
@@ -704,7 +705,7 @@ on(smoothing_down.clicks) do _
     if !isnothing(tryparse(UInt32, smoothing_textbox.displayed_string[]))
         value = parse(UInt32, smoothing_textbox.displayed_string[])
 
-        if value < 0 | value > 5
+        if value < 0 | value > 10
             smoothing_textbox.stored_string[] = "0"
             smoothing_textbox.displayed_string[] = "0"
         end
@@ -718,6 +719,37 @@ on(smoothing_down.clicks) do _
         smoothing_textbox.displayed_string[] = "0"
     end
 end
+
+# on(smoothing_up.clicks) do _
+#     if !isnothing(tryparse(UInt32, smoothing_textbox.displayed_string[]))
+#         value = parse(UInt32, smoothing_textbox.displayed_string[])
+#         multiplier = floor(Int, round(log(10, value), digits = 4))
+#         res = floor(Int, value*0.1^multiplier)*10^multiplier + 1*10^multiplier
+
+#         smoothing_textbox.stored_string[] = string(res)
+#         smoothing_textbox.displayed_string[] = string(res)
+#     else
+#         smoothing_textbox.stored_string[] = "60"
+#         smoothing_textbox.displayed_string[] = "60"
+#     end
+# end
+
+# on(smoothing_down.clicks) do _
+#     if !isnothing(tryparse(UInt32, smoothing_textbox.displayed_string[]))
+#         value = parse(UInt32, smoothing_textbox.displayed_string[])
+
+#         if value != 1
+#             multiplier = floor(Int, round(log(10, value - 1), digits = 8))
+#             res = ceil(Int, round(value*0.1^multiplier, digits = 8))*10^multiplier - 1*10^multiplier
+
+#             smoothing_textbox.stored_string[] = string(res)
+#             smoothing_textbox.displayed_string[] = string(res)
+#         end
+#     else
+#         smoothing_textbox.stored_string[] = "60"
+#         smoothing_textbox.displayed_string[] = "60"
+#     end
+# end
 
 on(proportionnal_up.clicks) do _
     if !isnothing(tryparse(UInt32, proportionnal_textbox.displayed_string[]))

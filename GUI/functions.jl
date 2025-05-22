@@ -8,6 +8,8 @@ using DelimitedFiles
 using LibSerialPort
 using CSV
 using DataFrames
+using SavitzkyGolay
+using Lowess
 
 include("vec_to_lifetime.jl")
 
@@ -143,9 +145,44 @@ end
 
 function ewma!(smoothed, raw, a)
     smoothed[1] = raw[1]
-    for i in 2:length(raw)
+
+    for i in eachindex(raw)[2:end]
         smoothed[i] = a*raw[i] + (1-a)*smoothed[i-1]
     end
+end
+
+function loess_smooth(x,
+                      y;
+                      f::Real = 0.3)
+    @assert length(x) == length(y) "x and y must have the same length"
+    @assert issorted(x)        "x must be sorted in ascending order"
+
+    model = lowess_model(x, y, f)
+
+    return model(x)
+end
+
+function update_smooth!(smooth, times, lifetime, smoothing)
+    N = length(times)
+    
+    if N > 100
+        w = (N-100):N
+
+        tview = @view times[w]
+        lview = @view lifetime[w]
+        sview = @view smooth[w]
+
+        fit = lowess(tview, lview, smoothing)
+
+        blend = range(0.0, 1.0, length=length(fit))
+
+        @. sview = blend * fit + (1 - blend) * sview
+    else
+        result = lowess(times, lifetime, smoothing)
+        @. smooth = result
+    end
+
+    return smooth
 end
 
 function analyse_time(times)
@@ -158,7 +195,7 @@ function analyse_time(times)
         #     deltas[i] = (time - times[i])*1000
         # end
 
-        deltas = times
+        deltas = 1000*times
 
         stdev = std(deltas)
         meann = mean(deltas)
@@ -191,8 +228,8 @@ function analyse_time(times)
 end
 
 function start_real_time()
+    GC.gc()
     println(folderpath)
-    println("Initializing")
 
     hist = Observable(zeros(256))
     fit = Observable(zeros(256))
@@ -203,13 +240,16 @@ function start_real_time()
     counts = Observable(Float64[])
     global signal = Observable(Float64[])
     times = Observable(Float64[])
-    averaging_list = []
+    binning_list = []
+    smooth_list = []
     prop_list = []
     integ_list = []
+    deriv_list = []
     setpoint_list = []
     
     vectors = zeros(100, 256)
     n_vectors = size(vectors, 1)
+    histogram_resolution = 256
     
     barplot!(axis_hist, hist_time, hist, gap=0, color=Makie.wong_colors()[1])
     lines!(axis_hist, hist_time, fit, color=Makie.wong_colors()[6])
@@ -218,15 +258,26 @@ function start_real_time()
     lines!(axis_life, times, smooth, color=Makie.wong_colors()[3])
     lines!(axis_signal, times, signal, color=Makie.wong_colors()[1])
 
-    params = [4.0, 2.0, 1.0e-4]
+    lifetimes = parse(Int, lifetimes_textbox.stored_string[])
+
+    if lifetimes == 1
+        params = [5.0, -0.25, 1.0e-5]
+    elseif lifetimes == 2
+        params = [6.0, 0.75, 1.0, 0.0, 1.0e-5]
+    else
+        params = [6.0, 0.75, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
+    end
+
     error_I = 0
+    error_P = 0
+    old_error = 0
+    display_period = 1/10
 
     i = 1
     n = 0
     t_0 = now()
     previous_files = readdir(folderpath)
     dt = 0
-    display_period = 1/10
 
     println("Starting real time")
     add_to_monitor("Starting real time")
@@ -234,38 +285,54 @@ function start_real_time()
     while running[]
         try
             current_files = readdir(folderpath)
+            nb_files = length(current_files)
             new_files = setdiff(current_files, previous_files)
-            sleep(0.001)
+            sleep(0.0001)
             
             if !isempty(new_files)
                 if i == 1
+                    println("Files detected")
+                    add_to_monitor("Files detected")
                     t_0 = now()
                 end
 
+                t_now = (now() - t_0)/Millisecond(1)/1000
+
                 time_range = parse(Int, range_textbox.stored_string[])
                 averaging = parse(Int, averaging_textbox.stored_string[])
-                smoothing = parse(Int, smoothing_textbox.stored_string[])/10
-                prop_val = parse(Int, proportionnal_textbox.stored_string[])
+                # smoothing = exp(-parse(Int, smoothing_textbox.stored_string[])/1.5)
+                smoothing = (parse(Int, smoothing_textbox.stored_string[])/10)^2
+                prop_val = parse(Int, proportionnal_textbox.stored_string[])*10
                 integ_val = parse(Int, integral_textbox.stored_string[])/100
+                deriv_val = parse(Int, derivative_textbox.stored_string[])*1000
                 setpoint_val = parse(Float64, setpoint_textbox.stored_string[])
                 inverted = checkbox_inverted.active[]
 
-                push!(averaging_list, averaging)
+                push!(binning_list, averaging)
+                push!(smooth_list, smoothing)
                 push!(prop_list, prop_val)
                 push!(integ_list, integ_val)
+                push!(deriv_list, deriv_val)
                 push!(setpoint_list, setpoint_val)
 
-                vector, histogram_resolution, time = open_SDT_file(joinpath(folderpath, new_files[end]))
+                vector, histogram_resolution, duration = open_SDT_file(joinpath(folderpath, new_files[end]))
 
+                # if i == 1
+                #     for n in 1:100
+                #         vectors[n, 1:histogram_resolution] = vector
+                #     end
+                # else
+                #     for n in 1:99
+                #         vectors[n, 1:histogram_resolution] = vectors[n+1, 1:histogram_resolution]
+                #     end
+                #     vectors[end, 1:histogram_resolution] = vector
+                # end
+                
                 if i == 1
-                    for n in 1:100
-                        vectors[n, 1:histogram_resolution] = vector
-                    end
+                    vectors[:, 1:histogram_resolution] .= reshape(vector, (1, :))
                 else
-                    for n in 1:99
-                        vectors[n, 1:histogram_resolution] = vectors[n+1, 1:histogram_resolution]
-                    end
-                    vectors[end, 1:histogram_resolution] = vector
+                    vectors[1:end-1, 1:histogram_resolution] .= vectors[2:end, 1:histogram_resolution]
+                    vectors[end, 1:histogram_resolution] .= vector
                 end
 
                 idx_start = max(1, n_vectors - averaging + 1)
@@ -273,70 +340,138 @@ function start_real_time()
 
                 params_raw, data = vec_to_lifetime(final_vector, guess=params, histogram_resolution=histogram_resolution)
 
+                nb_photons = sum(final_vector)
+
                 if !isnan(params_raw[1])
                     params = params_raw
                 end
 
                 @inbounds hist[][1:length(data[2])] = data[2]
                 @inbounds hist_time[][1:length(data[2])] = data[1]
-                @inbounds fit[][1:length(data[2])] = conv_irf_data(data[1], Tuple(params), irf, histogram_resolution=histogram_resolution)
+                @inbounds fit[][1:length(data[2])] = conv_irf_data(data[1], Tuple(params), irf, histogram_resolution=histogram_resolution)*nb_photons
 
-                error = setpoint_val - params[1]
-
-                t_now = (now() - t_0)/Millisecond(1)/1000
-
-                try
-                    dt = t_now - times[][end]
-                catch e
-                    dt = t_now
-                    # println(e)
-                end
-
-                if reset_I[]
-                    error_I = 0
-                    reset_I[] = false
-                end
-
-                error_I += error * dt
-
-                if i == 1
-                    error_I = 0
-                end
-
-                if inverted
-                    signal_value = clamp(-(prop_val * error + integ_val * error_I), 0, 100)
-                else
-                    signal_value = clamp(prop_val * error + integ_val * error_I, 0, 100)
-                end
-
-                push!(lifetime[], params[1])
-                push!(counts[], sum(@view vectors[idx_start:end, :]) / averaging)
-                push!(signal[], signal_value)
                 push!(times[], t_now)
+                push!(counts[], nb_photons)
+                push!(lifetime[], params[1])
+                push!(smooth[], params[1])
+
+                if i > 3 && active[]
+                    if i > 100
+                        smooth_fit = lowess(times[][end-100:end], lifetime[][end-100:end], smoothing)
+                        smooth[][end-100:end] = collect(0:0.01:1) .* smooth_fit .+ collect(1:-0.01:0) .* smooth[][end-100:end]
+                    else
+                        smooth[] = lowess(times[], lifetime[], smoothing)
+                    end
+                end
+
+                # error = setpoint_val - params[1]
+
+                dt = duration
+
+                if active[] 
+                    error_P = smooth[][end] - setpoint_val
+
+                    if i > 100
+                        error_I += error_P * duration
+                        error_D = (smooth[][end] - smooth[][end-1])/(1*duration)
+                    else
+                        error_I = 0
+                        error_D = 0
+                    end
+
+                    old_error = error_P
+
+                    if inverted
+                        signal_value = clamp((prop_val * error_P + integ_val * error_I + deriv_val * error_D) + 50, 0, 100)
+                    else
+                        signal_value = clamp(-(prop_val * error_P + integ_val * error_I + deriv_val * error_D) + 50, 0, 100)
+                    end
+                else
+                    signal_value = 0
+                    error_I = 0
+                end
+
+                # try
+                #     dt = t_now - times[][end]
+                # catch e
+                #     dt = t_now
+                #     # println(e)
+                # end
+
+                # if reset_I[]
+                #     error_I = 0
+                #     reset_I[] = false
+                # end
+
+                # error_I += error * dt
+
+                # if i == 1
+                #     error_I = 0
+                # end
+
+                # if inverted
+                #     signal_value = clamp(-(prop_val * error + integ_val * error_I), 0, 100)
+                # else
+                #     signal_value = clamp(prop_val * error + integ_val * error_I, 0, 100)
+                # end
+
+                push!(signal[], signal_value)
 
                 instant_freq =  i / (t_now + 1e-6)
-                # nb_i = ceil(instant_freq*display_period)
+                nb_i = ceil(instant_freq*display_period)
 
                 # if mod1(i, nb_i) == nb_i
-                if mod1(n, 3) == 3
-                    label_frequency.text = "Frequency : $(round(instant_freq, sigdigits=2)) Hz"
-                    label_number.text = "Files : $i"
-                end
-
-                x_min = max(0, times[][end] - time_range + 0.1)
-                x_max = max(time_range, times[][end] + 0.1)
-
-                notify(hist_time)
-                notify(times)
-
-                autolimits!(axis_hist)
-                autolimits!(axis_counts)
-                autolimits!(axis_life)
-
-                xlims!(axis_counts, x_min, x_max)
-                xlims!(axis_life, x_min, x_max)
-                xlims!(axis_signal, x_min, x_max)
+                # if mod1(n, 3) == 3
+                #     label_frequency.text = "Frequency : $(round(instant_freq, sigdigits=2)) Hz"
+                #     label_number.text = "Files : $i"
                 # end
+
+                # x_min = max(0, times[][end] - time_range + 0.1)
+                # x_max = max(time_range, times[][end] + 0.1)
+
+                # notify(hist_time)
+                # notify(times)
+
+                # autolimits!(axis_hist)
+                # autolimits!(axis_counts)
+                # autolimits!(axis_life)
+
+                # xlims!(axis_counts, x_min, x_max)
+                # xlims!(axis_life, x_min, x_max)
+                # xlims!(axis_signal, x_min, x_max)
+                # # end
+
+                if mod1(i, nb_i) == nb_i
+                    if mod1(n, 3) == 3
+                        label_frequency.text = "Frequency : $(round(instant_freq, sigdigits=2)) Hz"
+                        label_number.text = "Files : $i/$nb_files"
+                    end
+
+                    if i > 3 && !active[]
+                        if i > 100
+                            smooth_fit = lowess(times[][end-100:end], lifetime[][end-100:end], smoothing)
+                            smooth[][end-100:end] = collect(0:0.01:1) .* smooth_fit .+ collect(1:-0.01:0) .* smooth[][end-100:end]
+                        else
+                            smooth[] = lowess(times[], lifetime[], smoothing)
+                        end
+                    end
+
+                    x_min = max(0, times[][end] - time_range + 0.1)
+                    x_max = max(time_range, times[][end] + 0.1)
+
+                    notify(hist_time)
+                    notify(times)
+
+                    autolimits!(axis_hist)
+                    autolimits!(axis_counts)
+                    autolimits!(axis_life)
+
+                    xlims!(axis_counts, x_min, x_max)
+                    xlims!(axis_life, x_min, x_max)
+                    xlims!(axis_signal, x_min, x_max)
+
+                    n += 1
+                end
 
                 previous_files = current_files
                 i += 1
@@ -355,41 +490,43 @@ function start_real_time()
         end
     end
 
-    filepath = save_file()
+    # filepath = save_file()
 
-    if !isempty(filepath)
-        if filepath[end-4:end] != ".csv"
-            filepath *= ".csv"
-        end
+    # if !isempty(filepath)
+    #     if filepath[end-4:end] != ".csv"
+    #         filepath *= ".csv"
+    #     end
 
-        println("Saving as $(split(filepath, "/")[end])")
-        add_to_monitor("Saving as $(split(filepath, "/")[end])")
+    #     println("Saving as $(split(filepath, "/")[end])")
+    #     add_to_monitor("Saving as $(split(filepath, "/")[end])")
 
-        df = DataFrame(
-            Time_s = times[],
-            Number_of_photons = counts[],
-            Lifetime_ns = lifetime[],
-            Signal_sent = signal[],
-            Averaging = averaging_list,
-            Proportionnal = prop_list,
-            Integral = integ_list,
-            Setpoint = setpoint_list
-        )
+    #     df = DataFrame(
+    #         Time_s = times[],
+    #         Number_of_photons = counts[],
+    #         Lifetime_ns = lifetime[],
+    #         Signal = signal[],
+    #         Binning = binning_list,
+    #         Smoothing = smooth_list,
+    #         Proportionnal = prop_list,
+    #         Integral = integ_list,
+    #         Derivative = deriv_list,
+    #         Setpoint = setpoint_list
+    #     )
         
-        open(filepath, "w") do io
-            println(io, "Timestamp: ", now())
-            CSV.write(io, df)
-        end
-    end
+    #     open(filepath, "w") do io
+    #         println(io, "Timestamp: ", now())
+    #         CSV.write(io, df)
+    #     end
+    # end
 
-    filename = string(now())*".csv"
+    # filename = string(now())*"2.csv"
 
-    open(filename, "w") do io
-        writedlm(io, [string(now())])
-        writedlm(io, [""])
-        writedlm(io, ["Time [s]" "Number of photons" "Lifetime [ns]" "Signal sent [%]" "Averaging" "Proportionnal" "Integral" "Setpoint"], ",")
-        writedlm(io, [times[] counts[] lifetime[] signal[] averaging_list prop_list integ_list setpoint_list], ",")
-    end
+    # open(filename, "w") do io
+    #     writedlm(io, [string(now())])
+    #     writedlm(io, [""])
+    #     writedlm(io, ["Time [s]" "Number of photons" "Lifetime [ns]" "Signal [%]" "Binning" "Smoothing" "Proportionnal" "Integral" "Derivative" "Setpoint"], ",")
+    #     writedlm(io, [times[] counts[] lifetime[] signal[] binning_list smooth_list prop_list integ_list deriv_list setpoint_list], ",")
+    # end
 end
 
 function start_playback()
@@ -397,6 +534,7 @@ function start_playback()
     println(folderpath)
     all_files = readdir(folderpath)
     files = filter(f -> occursin(".sdt", f), all_files)
+    nb_files = length(files)
 
     hist = Observable(zeros(256))
     fit = Observable(zeros(256))
@@ -448,9 +586,12 @@ function start_playback()
     while running[]
         for file in files
             try 
+                t = time()
+
                 time_range = parse(Int, range_textbox.stored_string[])
                 averaging = parse(Int, averaging_textbox.stored_string[])
-                smoothing = exp(-parse(Int, smoothing_textbox.stored_string[])/1.5)
+                # smoothing = exp(-parse(Int, smoothing_textbox.stored_string[])/1.5)
+                smoothing = (parse(Int, smoothing_textbox.stored_string[])/10)^2
                 prop_val = parse(Int, proportionnal_textbox.stored_string[])*10
                 integ_val = parse(Int, integral_textbox.stored_string[])/100
                 deriv_val = parse(Int, derivative_textbox.stored_string[])*1000
@@ -489,10 +630,23 @@ function start_playback()
                 @inbounds hist_time[][1:length(data[2])] = data[1]
                 @inbounds fit[][1:length(data[2])] = conv_irf_data(data[1], Tuple(params), irf, histogram_resolution=histogram_resolution)*nb_photons
 
+                push!(times[], cum_time)
+                push!(counts[], nb_photons)
                 push!(lifetime[], params[1])
                 push!(smooth[], params[1])
-                ewma!(smooth[], lifetime[], smoothing)
-                ewma!(smooth[], smooth[], smoothing)
+                # ewma!(smooth[], lifetime[], smoothing)
+                # ewma!(smooth[], smooth[], smoothing)
+
+                if i > 3 && active[]
+                    # if i > 100
+                    #     smooth_fit = lowess(times[][end-100:end], lifetime[][end-100:end], smoothing)
+                    #     smooth[][end-100:end] = collect(0:0.01:1) .* smooth_fit .+ collect(1:-0.01:0) .* smooth[][end-100:end]
+                    # else
+                    #     smooth[] = lowess(times[], lifetime[], smoothing)
+                    # end
+
+                    update_smooth!(smooth[], times[], lifetime[], smoothing)
+                end
 
                 if i == 1
                     t_0 = now()
@@ -503,37 +657,41 @@ function start_playback()
                 if active[] 
                     error_P = smooth[][end] - setpoint_val
 
-                    if i < 4
+                    if i > 100
+                        error_I += error_P * duration
+                        error_D = (smooth[][end] - smooth[][end-50])/(50*duration)
+                    else
                         error_I = 0
                         error_D = 0
-                    else
-                        error_I += error_P * duration
-                        error_D = ((smooth[][end] - smooth[][end-1])/duration + (smooth[][end-1] - smooth[][end-2])/duration + (smooth[][end-2] - smooth[][end-3])/duration)/3
                     end
 
                     old_error = error_P
 
                     if inverted
-                        signal_value = clamp((prop_val * error_P + integ_val * error_I + deriv_val * error_D), 0, 100)
+                        signal_value = clamp((prop_val * error_P + integ_val * error_I + deriv_val * error_D) + 0, 0, 100)
                     else
-                        signal_value = clamp(-(prop_val * error_P + integ_val * error_I + deriv_val * error_D), 0, 100)
+                        signal_value = clamp(-(prop_val * error_P + integ_val * error_I + deriv_val * error_D) + 0, 0, 100)
                     end
                 else
                     signal_value = 0
                     error_I = 0
                 end
 
-                push!(counts[], nb_photons)
                 push!(signal[], signal_value)
-                push!(times[], cum_time)
 
                 instant_freq =  i / (delta_t + 1e-6)
                 nb_i = ceil(instant_freq*display_period)
 
                 if mod1(i, nb_i) == nb_i
-                    if mod1(n, 3) == 3
-                        label_frequency.text = "Frequency : $(round(instant_freq, sigdigits=2)) Hz"
-                        label_number.text = "Files : $i"
+                    if i > 3 && !active[]
+                        # if i > 100
+                        #     smooth_fit = lowess(times[][end-100:end], lifetime[][end-100:end], smoothing)
+                        #     smooth[][end-100:end] = collect(0:0.01:1) .* smooth_fit .+ collect(1:-0.01:0) .* smooth[][end-100:end]
+                        # else
+                        #     smooth[] = lowess(times[], lifetime[], smoothing)
+                        # end
+
+                        update_smooth!(smooth[], times[], lifetime[], smoothing)
                     end
 
                     x_min = max(0, times[][end] - time_range + 0.1)
@@ -549,6 +707,13 @@ function start_playback()
                     xlims!(axis_counts, x_min, x_max)
                     xlims!(axis_life, x_min, x_max)
                     xlims!(axis_signal, x_min, x_max)
+
+                    if mod1(n, 3) == 3
+                        label_frequency.text = "Frequency : $(round(instant_freq, sigdigits=2)) Hz"
+                        label_number.text = "Files : $i/$nb_files"
+
+                        push!(test_times, time() - t)
+                    end
 
                     n += 1
                 end
@@ -567,6 +732,8 @@ function start_playback()
         sleep(0.0001)
     end
     # analyse_time(test_times)
+    # lines!(axis_signal, test_times[2:end], color=Makie.wong_colors()[1])
+    # autolimits!(axis_signal)
 end
 
 function start_save()
