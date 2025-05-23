@@ -14,20 +14,20 @@ using Lowess
 include("vec_to_lifetime.jl")
 
 function get_folder_path(str)
-    if isfile(str*"_folder_path.txt")
-        folderpath = open(f->read(f, String), str*"_folder_path.txt")
+    if isfile("GUI/"*str*"_folder_path.txt")
+        folderpath = open(f->read(f, String), "GUI/"*str*"_folder_path.txt")
 
         if isempty(folderpath)
             folderpath = pick_folder()
 
-            open(str*"_folder_path.txt", "w") do io
+            open("GUI/"*str*"_folder_path.txt", "w") do io
                 write(io, folderpath)
             end
         end
     else
         folderpath = pick_folder()
 
-        open(str*"_folder_path.txt", "w") do io
+        open("GUI/"*str*"_folder_path.txt", "w") do io
             write(io, folderpath)
         end
     end
@@ -35,7 +35,7 @@ function get_folder_path(str)
     if isempty(folderpath)
         println("Folder does not exist")
 
-        folderpath = get_folder_path(str)
+        folderpath = get_folder_path("GUI/"*str)
     end
 
     return folderpath
@@ -45,11 +45,11 @@ function get_new_folder_path(str)
     folderpath = pick_folder()
 
     if !isempty(folderpath)
-        open(str*"_folder_path.txt", "w") do io
+        open("GUI/"*str*"_folder_path.txt", "w") do io
             write(io, folderpath)
         end
     else
-        folderpath = open(f->read(f, String), str*"_folder_path.txt")
+        folderpath = open(f->read(f, String), "GUI/"*str*"_folder_path.txt")
     end
 
     return folderpath
