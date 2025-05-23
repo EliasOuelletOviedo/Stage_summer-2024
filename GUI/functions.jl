@@ -490,43 +490,43 @@ function start_real_time()
         end
     end
 
-    # filepath = save_file()
+    filepath = save_file()
 
-    # if !isempty(filepath)
-    #     if filepath[end-4:end] != ".csv"
-    #         filepath *= ".csv"
-    #     end
+    if !isempty(filepath)
+        if filepath[end-4:end] != ".csv"
+            filepath *= ".csv"
+        end
 
-    #     println("Saving as $(split(filepath, "/")[end])")
-    #     add_to_monitor("Saving as $(split(filepath, "/")[end])")
+        println("Saving as $(split(filepath, "/")[end])")
+        add_to_monitor("Saving as $(split(filepath, "/")[end])")
 
-    #     df = DataFrame(
-    #         Time_s = times[],
-    #         Number_of_photons = counts[],
-    #         Lifetime_ns = lifetime[],
-    #         Signal = signal[],
-    #         Binning = binning_list,
-    #         Smoothing = smooth_list,
-    #         Proportionnal = prop_list,
-    #         Integral = integ_list,
-    #         Derivative = deriv_list,
-    #         Setpoint = setpoint_list
-    #     )
+        df = DataFrame(
+            Time_s = times[],
+            Number_of_photons = counts[],
+            Lifetime_ns = lifetime[],
+            Signal = signal[],
+            Binning = binning_list,
+            Smoothing = smooth_list,
+            Proportionnal = prop_list,
+            Integral = integ_list,
+            Derivative = deriv_list,
+            Setpoint = setpoint_list
+        )
         
-    #     open(filepath, "w") do io
-    #         println(io, "Timestamp: ", now())
-    #         CSV.write(io, df)
-    #     end
-    # end
+        open(filepath, "w") do io
+            println(io, "Timestamp: ", now())
+            CSV.write(io, df)
+        end
+    end
 
-    # filename = string(now())*"2.csv"
+    filename = string(now())*"2.csv"
 
-    # open(filename, "w") do io
-    #     writedlm(io, [string(now())])
-    #     writedlm(io, [""])
-    #     writedlm(io, ["Time [s]" "Number of photons" "Lifetime [ns]" "Signal [%]" "Binning" "Smoothing" "Proportionnal" "Integral" "Derivative" "Setpoint"], ",")
-    #     writedlm(io, [times[] counts[] lifetime[] signal[] binning_list smooth_list prop_list integ_list deriv_list setpoint_list], ",")
-    # end
+    open(filename, "w") do io
+        writedlm(io, [string(now())])
+        writedlm(io, [""])
+        writedlm(io, ["Time [s]" "Number of photons" "Lifetime [ns]" "Signal [%]" "Binning" "Smoothing" "Proportionnal" "Integral" "Derivative" "Setpoint"], ",")
+        writedlm(io, [times[] counts[] lifetime[] signal[] binning_list smooth_list prop_list integ_list deriv_list setpoint_list], ",")
+    end
 end
 
 function start_playback()
