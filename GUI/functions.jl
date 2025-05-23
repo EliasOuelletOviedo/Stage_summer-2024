@@ -382,9 +382,9 @@ function start_real_time()
                     old_error = error_P
 
                     if inverted
-                        signal_value = clamp((prop_val * error_P + integ_val * error_I + deriv_val * error_D) + 50, 0, 100)
+                        signal_value = clamp((prop_val * error_P + integ_val * error_I + deriv_val * error_D), 0, 100)
                     else
-                        signal_value = clamp(-(prop_val * error_P + integ_val * error_I + deriv_val * error_D) + 50, 0, 100)
+                        signal_value = clamp(-(prop_val * error_P + integ_val * error_I + deriv_val * error_D), 0, 100)
                     end
                 else
                     signal_value = 0
