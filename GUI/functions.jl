@@ -752,7 +752,9 @@ function start_protocol_real_time()
                 sleep(0.1)
             end
         catch e
-            println(e)
+            println(typeof(e))
+            add_to_monitor("Protocol finished")
+            running[] = false
         end
                 
         if !running[]
