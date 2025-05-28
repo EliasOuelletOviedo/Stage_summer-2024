@@ -14,7 +14,7 @@ using GLMakie: to_native
 include("functions.jl")
 include("pop_up.jl")
 
-portname = "usbmodem102"
+portname = "COM4"
 
 try
     LibSerialPort.close(serial)

@@ -12,20 +12,20 @@ function get_irf(; channel=1)
     """
     Loads an .sdt IRF file. If irf_filepath.txt exists, load the IRF from this filepath, otherwise, open a file dialog create irf_filepath.txt
     """
-    if isfile("GUI/irf_filepath.txt")
-        filepath = open(f->read(f, String), "GUI/irf_filepath.txt")
+    if isfile("irf_filepath.txt")
+        filepath = open(f->read(f, String), "irf_filepath.txt")
         if !ispath(filepath)
             println("IRF filepath does not exist. Please select valid .sdt file.")
             # filepath = open_dialog("IRF: Choose .sdt file to open.")
             filepath = pick_file()
-            open("GUI/irf_filepath.txt", "w") do io
+            open("irf_filepath.txt", "w") do io
                 write(io, filepath)
             end
         end
     else
         # filepath = open_dialog("IRF: Choose .sdt file to open.")
         filepath = pick_file()
-        open("GUI/irf_filepath.txt", "w") do io
+        open("irf_filepath.txt", "w") do io
             write(io, filepath)
         end
     end
@@ -48,7 +48,7 @@ function get_new_irf(; channel=1)
 
     filepath = pick_file()
 
-    open("GUI/irf_filepath.txt", "w") do io
+    open("irf_filepath.txt", "w") do io
         write(io, filepath)
     end
 
