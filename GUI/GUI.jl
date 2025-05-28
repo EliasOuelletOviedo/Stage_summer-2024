@@ -35,26 +35,6 @@ function range_validator(a::Integer, b::Integer)
     end
 end
 
-const AXIS_ATTRS         = Dict(
-    :alignmode        => Outside(10),
-    :backgroundcolor  => dark_gray,
-    :bottomspinecolor => light_gray,
-    :halign           => :right,
-    :height           => nothing,
-    :leftspinecolor   => light_gray,
-    :rightspinecolor  => light_gray,
-    :spinewidth       => 0.5,
-    :topspinecolor    => light_gray,
-    :xgridcolor       => off_white,
-    :xgridwidth       => 0.75,
-    :xtickcolor       => off_white,
-    :ygridcolor       => off_white,
-    :ygridwidth       => 0.75,
-    :ytickcolor       => off_white,
-    :titlesize        => 16,
-    :width            => nothing
-)
-
 const BUTTON_ATTRS       = Dict(
     :buttoncolor         => light_gray,
     :buttoncolor_active  => dark_gray,
@@ -76,23 +56,6 @@ const MENU_ATTRS         = Dict(
     :selection_cell_color_inactive => light_gray,
     :textcolor                     => :gray90,
     :width                         => 112
-)
-
-const TEXTBOX_ATTRS      = Dict(
-    :bordercolor               => light_gray,
-    :bordercolor_focused       => light_gray,
-    :bordercolor_hover         => light_gray,
-    :borderwidth               => 0.5,
-    :boxcolor                  => dark_gray,
-    :boxcolor_focused          => mid_gray,
-    :boxcolor_focused_invalid  => RGBf(0.22, 0.11, 0.11),
-    :boxcolor_hover            => light_gray,
-    :cornerradius              => 2,
-    :halign                    => :right,
-    :height                    => 24,
-    :placeholder               => " ",
-    :textpadding               => (10, 8, 8, 4),
-    :width                     => 48,
 )
 
 const SPINNER_BOX_ATTRS  = Dict(
@@ -223,17 +186,17 @@ textbox_fps      = Textbox(textboxgrid[2, 2];   merge(TEXTBOX_ATTRS, Dict(
     :displayed_string => "50",
     :stored_string    => "50"
 ))...)
-textbox_min      = Textbox(textboxgrid[3, 2];   merge(TEXTBOX_ATTRS, Dict(
-    :displayed_string => "3",
-    :stored_string    => "3"
+textbox_refresh  = Textbox(textboxgrid[3, 2];   merge(TEXTBOX_ATTRS, Dict(
+    :displayed_string => "5",
+    :stored_string    => "5"
 ))...)
-textbox_max      = Textbox(textboxgrid[4, 2];   merge(TEXTBOX_ATTRS, Dict(
-    :displayed_string => "14",
-    :stored_string    => "14"
+textbox_min      = Textbox(textboxgrid[4, 2];   merge(TEXTBOX_ATTRS, Dict(
+    :displayed_string => "1",
+    :stored_string    => "1"
 ))...)
 label_fps        = Label(textboxgrid[2, 1], text = "Frequency [Hz] :", halign = :right, width = nothing)
-label_min        = Label(textboxgrid[3, 1], text = "Minimum [ms] :",   halign = :right, width = nothing)
-label_max        = Label(textboxgrid[4, 1], text = "Maximum [ms] :",   halign = :right, width = nothing)
+label_min        = Label(textboxgrid[3, 1], text = "Refresh [Hz] :",   halign = :right, width = nothing)
+label_max        = Label(textboxgrid[4, 1], text = "Minimum [ms] :",   halign = :right, width = nothing)
 
 # Activate/connect controls
 button_active  = Button(buttongrid[1, 5]; merge(BUTTON_ATTRS, Dict(
@@ -415,6 +378,7 @@ global pause             = Observable(false)
 global active            = Observable(false)
 global connected         = Observable(false)
 global reset_I           = Observable(false)
+global protocol_active   = Observable(false)
 
 setpoint = hlines!(axis_life, parse(Float64, setpoint_textbox.stored_string[]), color=Makie.wong_colors()[6])
 
@@ -439,13 +403,22 @@ on(button_start.clicks) do _
         global setpoint = hlines!(axis_life, parse(Float64, setpoint_textbox.stored_string[]), color=Makie.wong_colors()[6])
 
         if menu_mode.selection[] == "Playback"
-            @async start_playback()
+            if protocol_active[]
+                @async start_protocol_playback()
+            else
+                @async start_playback()
+            end
+            # @async start_protocol_playback()
         elseif menu_mode.selection[] == "Analysis"
             start_analysis()
         elseif menu_mode.selection[] == "Save"
             @async start_save()
         elseif menu_mode.selection[] == "Real-time"
-            @async start_real_time()
+            if protocol_active[]
+                @async start_protocol_real_time()
+            else
+                @async start_real_time()
+            end
         end
     elseif pause[]
         pause[] = false
@@ -564,7 +537,7 @@ on(button_active.clicks) do _
             
             @async start_signal(
                 parse(Float64, textbox_fps.stored_string[]),
-                parse(Float64, textbox_fps.stored_string[])/10,
+                parse(Float64, textbox_refresh.stored_string[]),
                 parse(Float64, textbox_min.stored_string[])
             )
         end
