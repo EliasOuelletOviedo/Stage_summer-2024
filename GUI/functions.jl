@@ -585,6 +585,7 @@ function start_protocol_real_time()
     display_period = 1/10
     old_setpoint = 5
     protocol_copy = deepcopy(protocol)
+    local_active = false
 
     i = 1
     n = 0
@@ -623,9 +624,9 @@ function start_protocol_real_time()
 
                 setpoint_val = protocol_copy[round(Int, t_now + 1)]
                 if isnan(setpoint_val)
-                    active[] = false
+                    local_active = false
                 else
-                    active[] = true
+                    local_active = true
                 end
 
                 if (isnan(setpoint_val) && !isnan(old_setpoint)) || (!isnan(setpoint_val) && isnan(old_setpoint))
@@ -684,7 +685,7 @@ function start_protocol_real_time()
 
                 dt = duration
 
-                if active[] 
+                if active[] && local_active
                     error_P = smooth[][end] - setpoint_val
 
                     if i > 100
@@ -1054,6 +1055,7 @@ function start_protocol_playback()
     old_error = 0
     display_period = 1/10
     old_setpoint = NaN
+    local_active = false
 
     i = 1
     n = 1
@@ -1098,9 +1100,9 @@ function start_protocol_playback()
 
                 setpoint_val = protocol_copy[round(Int, cum_time + 1)]
                 if isnan(setpoint_val)
-                    active[] = false
+                    local_active = false
                 else
-                    active[] = true
+                    local_active = true
                 end
 
                 if (isnan(setpoint_val) && !isnan(old_setpoint)) || (!isnan(setpoint_val) && isnan(old_setpoint))
@@ -1158,7 +1160,7 @@ function start_protocol_playback()
 
                 delta_t = (now() - t_0) / Microsecond(1) / 1e6
 
-                if active[] 
+                if active[] && local_active
                     error_P = smooth[][end] - setpoint_val
 
                     if i > 100
