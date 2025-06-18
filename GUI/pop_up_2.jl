@@ -125,6 +125,7 @@ freq = Textbox(label_grid[3, 2]; merge(TEXTBOX_ATTRS, Dict(:displayed_string => 
 
 start_blue_button = Button(buttons_grid[1, 1]; merge(POP_UP_BUTTON_ATTRS, Dict(:label => "Start"))...)
 clear_blue_button = Button(buttons_grid[1, 2]; merge(POP_UP_BUTTON_ATTRS, Dict(:label => "Clear"))...)
+open_blue_button  = Button(buttons_grid[2, 1]; merge(POP_UP_BUTTON_ATTRS, Dict(:label => "Open"))...)
 
 # global pop_up_screen = display(GLMakie.Screen(), fig_3)
 # global pop_up_window = to_native(pop_up_screen)
@@ -162,6 +163,17 @@ end
 on(clear_blue_button.clicks) do _
     if connected[]
         command = "C 1\nA 0 AS 1 0\nA 0 AS 2 0\n"
+
+        println(command)
+        send_command(serial, command)
+    else
+        println("Not connected")
+    end
+end
+
+on(open_blue_button.clicks) do _
+    if connected[]
+        command = "C 1\nA 0 AS 1 5000\nA 0 AS 2 0\n"
 
         println(command)
         send_command(serial, command)
