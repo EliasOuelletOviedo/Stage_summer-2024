@@ -7,7 +7,6 @@ mid_gray   = RGBf(0.16, 0.16, 0.16)
 light_gray = RGBf(0.24, 0.24, 0.24)
 off_white  = RGBf(0.5, 0.5, 0.5)
 
-
 function int_range_validator(a::Integer, b::Integer)
     """
     Returns a validator function ensuring parsed integer s is in [a, b].
@@ -81,10 +80,10 @@ function update_graph()
         end
     end
 
-    println(protocol)
+    # println(protocol)
 end
 
-const TABLE_ATTRS = Dict(
+TABLE_ATTRS = Dict(
     :bordercolor               => light_gray,
     :bordercolor_focused       => light_gray,
     :bordercolor_focused_invalid => light_gray,
@@ -103,7 +102,7 @@ const TABLE_ATTRS = Dict(
     :width                     => nothing,
 )
 
-const AXIS_ATTRS = Dict(
+AXIS_ATTRS = Dict(
     :alignmode        => Outside(10),
     :backgroundcolor  => dark_gray,
     :bottomspinecolor => light_gray,
@@ -123,7 +122,7 @@ const AXIS_ATTRS = Dict(
     :width            => nothing
 )
 
-const TEXTBOX_ATTRS      = Dict(
+TEXTBOX_ATTRS      = Dict(
     :bordercolor               => light_gray,
     :bordercolor_focused       => light_gray,
     :bordercolor_hover         => light_gray,
@@ -140,7 +139,7 @@ const TEXTBOX_ATTRS      = Dict(
     :width                     => 48,
 )
 
-const POP_UP_BUTTON_ATTRS = Dict(
+POP_UP_BUTTON_ATTRS = Dict(
     :buttoncolor         => light_gray,
     :buttoncolor_active  => dark_gray,
     :buttoncolor_hover   => mid_gray,
@@ -178,10 +177,15 @@ Label(buttonaxis[1, 1], "Repeats")
 repeats = Textbox(buttonaxis[1, 2]; merge(TEXTBOX_ATTRS, Dict(:displayed_string => "1", :stored_string => "1", :validator => range_validator(0, 1000)))...)
 Label(buttonaxis[2, 1], "Delay")
 delay = Textbox(buttonaxis[2, 2]; merge(TEXTBOX_ATTRS, Dict(:displayed_string => "0", :stored_string => "0", :validator => range_validator(0, 3600)))...)
+
+# Label(buttonaxis[1, 3], "Duty-cycle")
+# duty_cycle = Textbox(buttonaxis[1, 4]; merge(TEXTBOX_ATTRS, Dict(:displayed_string => "0", :stored_string => "0", :validator => range_validator(0, 3600)))...)
+# Label(buttonaxis[2, 3], "Dead-time")
+# dead_time = Textbox(buttonaxis[2, 4]; merge(TEXTBOX_ATTRS, Dict(:displayed_string => "1", :stored_string => "1", :validator => range_validator(0, 1000)))...)
 import_button   = Button(buttonaxis[1, 3]; merge(POP_UP_BUTTON_ATTRS, Dict(:label => "Import"))...)
 export_button   = Button(buttonaxis[2, 3]; merge(POP_UP_BUTTON_ATTRS, Dict(:label => "Export"))...)
-# clear_button    = Button(fig_2[2, 4]; merge(POP_UP_BUTTON_ATTRS, Dict(:label => "Clear"))...)
-close_button    = Button(buttonaxis[1, 4]; merge(POP_UP_BUTTON_ATTRS, Dict(:label => "Close"))...)
+# clear_protocol_button    = Button(fig_2[2, 4]; merge(POP_UP_BUTTON_ATTRS, Dict(:label => "Clear"))...)
+clear_protocol_button    = Button(buttonaxis[1, 4]; merge(POP_UP_BUTTON_ATTRS, Dict(:label => "Clear"))...)
 active_button   = Button(buttonaxis[2, 4]; merge(POP_UP_BUTTON_ATTRS, Dict(
     :label             => "Activate",
     :buttoncolor       => mid_gray,
@@ -190,7 +194,7 @@ active_button   = Button(buttonaxis[2, 4]; merge(POP_UP_BUTTON_ATTRS, Dict(
 
 # fig_2[4, 1:3] = table = GridLayout()
 
-table_cell = []
+global table_cell = []
 global cell_values = []
 global protocol = []
 
@@ -203,7 +207,7 @@ end
 colgap!(table, 0)
 rowgap!(table, 0)
 
-println(cell_values)
+# println(cell_values)
 
 on(repeats.stored_string) do _
     update_graph()
@@ -225,14 +229,45 @@ for (i, textbox) in enumerate(table_cell)
     end
 end
 
-# on(clear_button.clicks) do _
+# on(clear_protocol_button.clicks) do _
 #     for textbox in table_cell
 #         textbox.stored_string[] = " "
 #     end
 # end
 
-on(close_button.clicks) do _
-    GLFW.SetWindowShouldClose(pop_up_window, true)
+on(clear_protocol_button.clicks) do _
+    # GLFW.SetWindowShouldClose(pop_up_window, true)
+    
+    while !isempty(table_cell)
+        delete!(table_cell[end])
+        pop!(table_cell)
+    end
+
+    while !isempty(cell_values)
+        pop!(cell_values)
+    end
+
+    global cell_values = []
+
+    for i in 1:10
+        push!(table_cell, Textbox(table[1, i]; merge(TABLE_ATTRS, Dict(:validator => int_range_validator(0, 3600)))...))
+        push!(table_cell, Textbox(table[2, i]; merge(TABLE_ATTRS, Dict(:validator => range_validator(0, 10)))...))
+        push!(cell_values, [NaN, NaN])
+    end
+
+    for (i, textbox) in enumerate(table_cell)
+        on(textbox.stored_string) do val
+            if val == " "
+                cell_values[cld(i, 2)][mod1(i, 2)] = NaN
+            else
+                cell_values[cld(i, 2)][mod1(i, 2)] = parse(Float64, val)
+            end
+
+            update_graph()
+        end
+    end
+
+    update_graph()
 end
 
 on(active_button.clicks) do _

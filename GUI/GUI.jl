@@ -13,8 +13,9 @@ using GLMakie: to_native
 
 include("functions.jl")
 include("pop_up.jl")
+include("pop_up_2.jl")
 
-portname = "COM4"
+portname = "usbmodem102"
 
 try
     LibSerialPort.close(serial)
@@ -35,7 +36,7 @@ function range_validator(a::Integer, b::Integer)
     end
 end
 
-const BUTTON_ATTRS       = Dict(
+BUTTON_ATTRS       = Dict(
     :buttoncolor         => light_gray,
     :buttoncolor_active  => dark_gray,
     :buttoncolor_hover   => mid_gray,
@@ -46,7 +47,7 @@ const BUTTON_ATTRS       = Dict(
     :width               => 112
 )
 
-const MENU_ATTRS         = Dict(
+MENU_ATTRS         = Dict(
     :cell_color_active             => mid_gray,
     :cell_color_inactive_even      => light_gray,
     :cell_color_inactive_odd       => light_gray,
@@ -58,7 +59,7 @@ const MENU_ATTRS         = Dict(
     :width                         => 112
 )
 
-const SPINNER_BOX_ATTRS  = Dict(
+SPINNER_BOX_ATTRS  = Dict(
     :color        => mid_gray,
     :cornerradius => 2,
     :height       => 24,
@@ -67,7 +68,7 @@ const SPINNER_BOX_ATTRS  = Dict(
     :strokewidth  => 0.5,
 )
 
-const SPINNER_TEXT_ATTRS  = Dict(
+SPINNER_TEXT_ATTRS = Dict(
     :borderwidth                 => 0,
     :boxcolor                    => dark_gray,
     :boxcolor_focused            => mid_gray,
@@ -83,7 +84,7 @@ const SPINNER_TEXT_ATTRS  = Dict(
     :width                       => 64
 )
 
-const SPINNER_UP_ATTRS   = Dict(
+SPINNER_UP_ATTRS   = Dict(
     :buttoncolor        => mid_gray,
     :buttoncolor_active => dark_gray,
     :buttoncolor_hover  => light_gray,
@@ -100,7 +101,7 @@ const SPINNER_UP_ATTRS   = Dict(
     :width              => 24
 )
 
-const SPINNER_DOWN_ATTRS = Dict(
+SPINNER_DOWN_ATTRS = Dict(
     :buttoncolor        => mid_gray,
     :buttoncolor_active => dark_gray,
     :buttoncolor_hover  => light_gray,
@@ -468,14 +469,26 @@ end
 
 on(button_pop_up.clicks) do _
     try
-        if !pop_up_screen.window_open[]
-            global pop_up_screen = display(GLMakie.Screen(), fig_2)
-            global pop_up_window = to_native(pop_up_screen)
+        if pop_up_screen.window_open[]
+            GLFW.SetWindowShouldClose(pop_up_window, true)
         end
+        global pop_up_screen = display(GLMakie.Screen(), fig_2)
+        global pop_up_window = to_native(pop_up_screen)
     catch e
         global pop_up_screen = display(GLMakie.Screen(), fig_2)
         global pop_up_window = to_native(pop_up_screen)
     end
+    try
+        if pop_up_2_screen.window_open[]
+            GLFW.SetWindowShouldClose(pop_up_2_window, true)
+        end
+        global pop_up_2_screen = display(GLMakie.Screen(), fig_3)
+        global pop_up_2_window = to_native(pop_up_2_screen)
+    catch e
+        global pop_up_2_screen = display(GLMakie.Screen(), fig_3)
+        global pop_up_2_window = to_native(pop_up_2_screen)
+    end
+    sleep(1)
 end
 
 on(button_connect.clicks) do _

@@ -3,6 +3,7 @@ using CSV
 using DataFrames
 using LsqFit
 using Statistics
+using StatsBase
 # using CurveFit
 
 function exponential_model(x, p)
@@ -12,17 +13,25 @@ function exponential_model(x, p)
 end
 
 function normal_model(x, p)
-    y = p[1]/(p[3]*sqrt(2*pi)) .* exp.(-0.5 .* ((x .- p[2]) ./ p[3]).^2)
+    y = 1/(p[2]*sqrt(2*pi)) .* exp.(-0.5 .* ((x .- p[1]) ./ p[2]).^2)
     return y
 end
 
 println("Starting analysis")
 
 filepath = "/Users/eliasouellet-oviedo/Desktop/test3.csv.csv"
+# filepath = "/Users/eliasouellet-oviedo/Desktop/analyse1.csv.csv"
+# filepath = "/Users/eliasouellet-oviedo/Desktop/test2/analyse2.csv"
 
 println("Opening file : ", filepath)
 
 df = CSV.read(filepath, DataFrame)
+
+# times    = df.Time_s[begin:3492]
+# counts   = df.Number_of_photons[begin:3492]
+# lifetime = df.Lifetime_ns[begin:3492]
+# signal   = df.Signal[begin:3492]
+# setpoint = df.Setpoint[begin:3492]
 
 times    = df.Time_s
 counts   = df.Number_of_photons
@@ -52,6 +61,8 @@ end
 
 times_i = times[starts]
 times_f = times[ends]
+
+println(starts)
 
 fits = []
 delay = []
@@ -137,7 +148,8 @@ plot(0, 0, background_color=:gray8, background_color_outside=:gray12, xlabel = "
 span_list = collect(Iterators.flatten(zip(times_i, times_f)))
 vspan!(span_list, color = :gold, alpha = 0.2)
 
-plot!(times, lifetime, background_color=:gray8, background_color_outside=:gray12, xlabel = "Time [s]", ylabel = "Lifetime [ns]", title = "Lifetime", legend = false, linewidth = 1, color = :transparent)
+plot!(times, lifetime, background_color=:gray8, background_color_outside=:gray12, xlabel = "Time [s]", ylabel = "Lifetime [ns]", title = "Lifetime", legend = false, linewidth = 1, color = :royalblue)
+# plot!(times, lifetime, background_color=:gray8, background_color_outside=:gray12, xlabel = "Time [s]", ylabel = "Lifetime [ns]", title = "Lifetime", legend = false, linewidth = 1, color = :transparent)
 
 region = []
 # normal_fit = []
@@ -148,13 +160,14 @@ for i in eachindex(starts)
     i0 = starts[i]
     i2 = ends[i]
 
-    if i == 1
-        t1 = times[i0] + 3.5*delay[i]
-    elseif i == 4
-        t1 = times[i0] + 5*delay[i]
-    else
-        t1 = times[i0] + 4*delay[i]
-    end
+    # if i == 1
+    #     t1 = times[i0] + 3.5*delay[i]
+    # elseif i == 4
+    #     t1 = times[i0] + 5*delay[i]
+    # else
+    #     t1 = times[i0] + 4*delay[i]
+    # end
+    t1 = times[i0] + 3*delay[i]
     i1 = findfirst(x -> x >= t1, times)
 
     if i1 === nothing
@@ -187,24 +200,30 @@ end
 # y = sin.(x)
 plot!(0, 0, legend = false, title = "Lifetime")
 
-# setpoints = [4.8, 4.9, 5.1, 4.7]
+# println(starts)
 
-# # println(starts)
+setpoints = [4.8, 4.9, 5.1, 4.7]
+# setpoints = [4.9, 4.9, 4.9, 4.9]
 
-# i = 4
+i = 2
 
-# region[i] .= (region[i] .- setpoints[i]) ./ region[i] .* 100
+mean_value = mean(region[i])
+std_value = std(region[i])
+RMS = rmsd(region[i], setpoints[i].*ones(1, length(region[i])))
+SEM = sem(region[i])
+# SEM = std_value/sqrt(length(region[i]))
 
-# mean_value = mean(region[i])
-# std_value = std(region[i])
-# sum_value = 1
-# println("Mean: $mean_value, Std: $std_value, Sum: $sum_value")
+println("RMS error : $(round(RMS, digits = 3))")
 
-# x = range(mean_value - 5*std_value, mean_value + 5*std_value, length=length(region[i]))
-# bins = range(mean_value - 5*std_value, mean_value + 5*std_value, length=16)
+println("SEM : $(round(SEM, digits = 4))")
+
+println("Setpoint: $(setpoints[i]), Mean: $(round(mean_value, digits = 2)), Std: $(round(std_value, digits = 3))")
+
+x = range(mean_value - 5*std_value, mean_value + 5*std_value, length=length(region[i]))
+bins = range(mean_value - 5*std_value, mean_value + 5*std_value, length=16)
 # println(bins)
 
-# histogram(region[i], bins = bins, normalize=:pdf, background_color=:gray8, background_color_outside=:gray12, xlabel = "Lifetime error [%]", ylabel = "Probability Density", label = "Region $i", title = "Lifetime Distribution", legend = :topright, linewidth = 1, color = :royalblue)
-# vline!([mean(region[i])], linewidth = 4, label = "Mean", color = :darkgreen)
-# vline!([0], linewidth = 4, label = "Setpoint", color = :brown)
-# plot!(x, normal_model(x, [sum_value, mean_value, std_value]), label = "Normal fit", linewidth = 4, color = :chocolate)
+histogram(region[i], bins = bins, normalize=:pdf, background_color=:gray8, background_color_outside=:gray12, xlabel = "Lifetime", ylabel = "Probability Density", label = "Region $i", title = "Lifetime Distribution", legend = :topright, linewidth = 1, color = :royalblue)
+vline!([mean(region[i])], linewidth = 4, label = "Mean", color = :darkgreen)
+vline!([setpoints[i]], linewidth = 4, label = "Setpoint", color = :brown)
+plot!(x, normal_model(x, [mean_value, std_value]), label = "Normal fit", linewidth = 4, color = :chocolate)

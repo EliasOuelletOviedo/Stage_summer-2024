@@ -897,6 +897,10 @@ function start_playback()
 
                 nb_photons = sum(final_vector)
 
+                if nb_photons > 4e4
+                    println(i)
+                end
+
                 if !isnan(params_raw[1])
                     params = params_raw
                 end
@@ -1385,7 +1389,7 @@ function start_analysis()
     signal   = df.Signal
     setpoint = df.Setpoint
 
-    setpoint[signal .== 0] .= NaN
+    # setpoint[signal .== 0] .= NaN
 
     starts = Int[]
     ends   = Int[]
@@ -1524,7 +1528,18 @@ function start_signal(frequency=100, refresh=1, min=3)
         if running[] && Dates.value(now()) - Dates.value(t_0) > i*delta_t
             try
                 signal_val = signal[][end]
+                # signal_val = 50
                 # println(signal_val)
+
+                # command = "C 1\n"
+                # command *= "S 1 S 1\n"
+                # command *= "A 1 DP 2 $frequency $(signal_val + 0.4*delay*frequency)\n"
+                # command *= "A 1 WT $(delay*1000)\n"
+                # command *= "A 1 DP 1 $frequency $signal_val\n"
+                # command *= "A 0 TG 1\n"
+                # println(command)
+
+                # send_command(serial, command)
 
                 if menu_output.selection[] == "Digital"
                     if signal_val < min_val/2
