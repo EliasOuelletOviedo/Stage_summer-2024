@@ -132,12 +132,24 @@ clear_blue_button = Button(buttons_grid[1, 2]; merge(POP_UP_BUTTON_ATTRS, Dict(:
 on(start_blue_button.clicks) do _
     if connected[]
         command = "C 1\n"
-        command *= "S 1 S 1\n"
-        command *= "A 1 DP 2 $(parse(Float64, freq.stored_string[])) $(parse(Float64, duration.stored_string[])*parse(Float64, freq.stored_string[])/10)\n"
+        # command *= "S 1 S 1\n"
+        # command *= "A 1 DP 1 $(parse(Float64, freq.stored_string[])) $(parse(Float64, duration.stored_string[])*parse(Float64, freq.stored_string[])/10)\n"
         # command *= "A 1 WT $(1000/parse(Float64, freq.stored_string[]) - parse(Float64, dead_time.stored_string[]))\n"
         # command *= "A 1 DP 3 $(parse(Float64, freq.stored_string[])) $((parse(Float64, duration.stored_string[]) + 2*parse(Float64, dead_time.stored_string[]))/parse(Float64, freq.stored_string[]))\n"
-        command *= "A 1 WT $(parse(Float64, duration.stored_string[]) + parse(Float64, dead_time.stored_string[]))\n"
-        command *= "A 1 AP 1 $(parse(Float64, freq.stored_string[])) $(100 - (parse(Float64, duration.stored_string[]) + 2*parse(Float64, dead_time.stored_string[]))*parse(Float64, freq.stored_string[])/10) 0 5000\n"
+        # command *= "A 1 WT $(parse(Float64, duration.stored_string[]) + parse(Float64, dead_time.stored_string[]))\n"
+        # command *= "A 1 DP 2 $(parse(Float64, freq.stored_string[])) $(100 - (parse(Float64, duration.stored_string[]) + 2*parse(Float64, dead_time.stored_string[]))*parse(Float64, freq.stored_string[])/10)\n"
+        
+        command *= "S 1 S 0\n"
+        command *= "A 1 AO 1 0\n"
+        command *= "A 1 WT $(parse(Float64, dead_time.stored_string[])*1000)\n"
+        command *= "A 1 AO 2 5000\n"
+        command *= "A 1 WT $(parse(Float64, duration.stored_string[])*1000)\n"
+        command *= "A 1 AO 2 0\n"
+        command *= "A 1 WT $(parse(Float64, dead_time.stored_string[])*1000)\n"
+        command *= "A 1 AO 1 5000\n"
+        command *= "A 1 WT $((1000/parse(Float64, freq.stored_string[]) - parse(Float64, duration.stored_string[]) - 2*parse(Float64, dead_time.stored_string[]))*1000)\n"
+
+        
         command *= "A 0 TG 1\n"
 
         println(command)
@@ -149,7 +161,7 @@ end
 
 on(clear_blue_button.clicks) do _
     if connected[]
-        command = "C 1\n"
+        command = "C 1\nA 0 AS 1 0\nA 0 AS 2 0\n"
 
         println(command)
         send_command(serial, command)

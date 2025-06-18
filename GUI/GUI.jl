@@ -472,16 +472,19 @@ on(button_pop_up.clicks) do _
         if pop_up_screen.window_open[]
             GLFW.SetWindowShouldClose(pop_up_window, true)
         end
+        sleep(0.1)
         global pop_up_screen = display(GLMakie.Screen(), fig_2)
         global pop_up_window = to_native(pop_up_screen)
     catch e
         global pop_up_screen = display(GLMakie.Screen(), fig_2)
         global pop_up_window = to_native(pop_up_screen)
     end
+    sleep(0.1)
     try
         if pop_up_2_screen.window_open[]
             GLFW.SetWindowShouldClose(pop_up_2_window, true)
         end
+        sleep(0.1)
         global pop_up_2_screen = display(GLMakie.Screen(), fig_3)
         global pop_up_2_window = to_native(pop_up_2_screen)
     catch e
