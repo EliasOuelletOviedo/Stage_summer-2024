@@ -16,20 +16,20 @@ using LsqFit
 include("vec_to_lifetime.jl")
 
 function get_folder_path(str)
-    if isfile(str*"_folder_path.txt")
-        folderpath = open(f->read(f, String), str*"_folder_path.txt")
+    if isfile("GUI/"*str*"_folder_path.txt")
+        folderpath = open(f->read(f, String), "GUI/"*str*"_folder_path.txt")
 
         if isempty(folderpath)
             folderpath = pick_folder()
 
-            open(str*"_folder_path.txt", "w") do io
+            open("GUI/"*str*"_folder_path.txt", "w") do io
                 write(io, folderpath)
             end
         end
     else
         folderpath = pick_folder()
 
-        open(str*"_folder_path.txt", "w") do io
+        open("GUI/"*str*"_folder_path.txt", "w") do io
             write(io, folderpath)
         end
     end
@@ -37,7 +37,7 @@ function get_folder_path(str)
     if isempty(folderpath)
         println("Folder does not exist")
 
-        folderpath = get_folder_path(str)
+        folderpath = get_folder_path("GUI/"*str)
     end
 
     return folderpath
@@ -47,11 +47,11 @@ function get_new_folder_path(str)
     folderpath = pick_folder()
 
     if !isempty(folderpath)
-        open(str*"_folder_path.txt", "w") do io
+        open("GUI/"*str*"_folder_path.txt", "w") do io
             write(io, folderpath)
         end
     else
-        folderpath = open(f->read(f, String), str*"_folder_path.txt")
+        folderpath = open(f->read(f, String), "GUI/"*str*"_folder_path.txt")
     end
 
     return folderpath
@@ -115,8 +115,8 @@ end
 
 function connect_to_port(portName)
     try
-        # ser = LibSerialPort.open("/dev/tty." * portName, 115200)
-        ser = LibSerialPort.open(portName, 115200)
+        ser = LibSerialPort.open("/dev/tty." * portName, 115200)
+        # ser = LibSerialPort.open(portName, 115200)
         LibSerialPort.set_read_timeout(ser, 3)
         sleep(0.1)
         add_to_monitor("Connection successful")
@@ -311,7 +311,7 @@ function start_real_time()
                 # smoothing = exp(-parse(Int, smoothing_textbox.stored_string[])/1.5)
                 smoothing = (parse(Int, smoothing_textbox.stored_string[])/10)^2
                 prop_val = parse(Int, proportionnal_textbox.stored_string[])*10
-                integ_val = parse(Int, integral_textbox.stored_string[])/100
+                integ_val = parse(Int, integral_textbox.stored_string[])/10
                 deriv_val = parse(Int, derivative_textbox.stored_string[])*1000
                 setpoint_val = parse(Float64, setpoint_textbox.stored_string[])
                 inverted = checkbox_inverted.active[]
@@ -617,7 +617,7 @@ function start_protocol_real_time()
                 # smoothing = exp(-parse(Int, smoothing_textbox.stored_string[])/1.5)
                 smoothing = (parse(Int, smoothing_textbox.stored_string[])/10)^2
                 prop_val = parse(Int, proportionnal_textbox.stored_string[])*10
-                integ_val = parse(Int, integral_textbox.stored_string[])/100
+                integ_val = parse(Int, integral_textbox.stored_string[])/10
                 deriv_val = parse(Int, derivative_textbox.stored_string[])*1000
                 # setpoint_val = parse(Float64, setpoint_textbox.stored_string[])
                 inverted = checkbox_inverted.active[]
@@ -836,7 +836,7 @@ function start_playback()
     lifetimes = parse(Int, lifetimes_textbox.stored_string[])
 
     if lifetimes == 1
-        params = [5.0, -0.25, 1.0e-5]
+        params = [5.0, 0, 5.0e-5]
     elseif lifetimes == 2
         params = [6.0, 0.75, 1.0, 0.0, 1.0e-5]
     else
@@ -868,7 +868,7 @@ function start_playback()
                 # smoothing = exp(-parse(Int, smoothing_textbox.stored_string[])/1.5)
                 smoothing = (parse(Int, smoothing_textbox.stored_string[])/10)^2
                 prop_val = parse(Int, proportionnal_textbox.stored_string[])*10
-                integ_val = parse(Int, integral_textbox.stored_string[])/100
+                integ_val = parse(Int, integral_textbox.stored_string[])/10
                 deriv_val = parse(Int, derivative_textbox.stored_string[])*1000
                 setpoint_val = parse(Float64, setpoint_textbox.stored_string[])
                 inverted = checkbox_inverted.active[]
@@ -1087,7 +1087,7 @@ function start_protocol_playback()
                 # smoothing = exp(-parse(Int, smoothing_textbox.stored_string[])/1.5)
                 smoothing = (parse(Int, smoothing_textbox.stored_string[])/10)^2
                 prop_val = parse(Int, proportionnal_textbox.stored_string[])*10
-                integ_val = parse(Int, integral_textbox.stored_string[])/100
+                integ_val = parse(Int, integral_textbox.stored_string[])/10
                 deriv_val = parse(Int, derivative_textbox.stored_string[])*1000
                 # setpoint_val = parse(Float64, setpoint_textbox.stored_string[])
                 inverted = checkbox_inverted.active[]

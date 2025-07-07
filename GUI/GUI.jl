@@ -369,7 +369,7 @@ rowgap!(paramsgrid,    6, 4)
 # Global data & state
 global irf               = get_irf()
 global irf_bin_size      = get_irf_bin_size()
-global tcspc_window_size = round(irf[end, 1]+irf[2, 1], sigdigits=4)
+global tcspc_window_size = round(irf[end, 1] + irf[2, 1], sigdigits=4)
 global fft_plan          = plan_fft(zeros(Float64, 256))
 global ifft_plan         = plan_ifft(zeros(Float64, 256))
 global folderpath        = get_folder_path("FLIM")
@@ -439,7 +439,9 @@ on(button_stop.clicks) do _
     pause[] = false
 
     if connected[]
-        clear(serial)
+        # clear(serial)
+        send_command(serial, "C 1\nA 0 DS 1 0\n"
+)
     end
 
     button_start.label = "START"
