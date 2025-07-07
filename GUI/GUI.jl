@@ -440,7 +440,7 @@ on(button_stop.clicks) do _
 
     if connected[]
         # clear(serial)
-        send_command(serial, "C 1\nA 0 DS 1 0\n"
+        send_command(serial, "A 0 DS 1 0\n"
 )
     end
 
