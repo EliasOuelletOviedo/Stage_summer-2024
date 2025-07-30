@@ -1578,8 +1578,8 @@ function start_signal(frequency=100, refresh=1, min=3)
                     else
                         signal_val = round(Int, clamp(signal_val, min_val, max_val))
 
-                        send_command(serial, "A 0 ΑP 2 $frequency $signal_val 0 5000\n")
-                        println("A 0 ΑP 2 $frequency $signal_val 0 5000\n")
+                        send_command(serial, "A 0 AP 2 $(Int(frequency)) $signal_val 0 5000\n")
+                        println("A 0 AP 2 $frequency $signal_val 0 5000\n")
                     end
                 else
                     send_command(serial, "A 0 AO 1 $(0.5*signal_val*parse(Float64, textbox_min.stored_string[]))\n")
