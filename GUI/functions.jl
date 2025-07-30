@@ -1552,7 +1552,7 @@ function start_signal(frequency=100, refresh=1, min=3)
     i = 0
 
     while active[]
-        if running[] && Dates.value(now()) - Dates.value(t_0) > 1000*i/refresh
+        if running[] && Dates.value(now()) - Dates.value(t_0) > 1000*i/parse(Float64, textbox_refresh.stored_string[])
             try
                 signal_val = signal[][end]
                 # signal_val = 50
@@ -1581,8 +1581,8 @@ function start_signal(frequency=100, refresh=1, min=3)
                         send_command(serial, "A 0 DP 1 $frequency $signal_val\n")
                     end
                 else
-                    send_command(serial, "A 0 AO 1 $(minimum([signal_val, min])*50)\n")
-                    send_command(serial, "A 0 AO 2 $(minimum([signal_val, frequency])*50)\n")
+                    send_command(serial, "A 0 AO 1 $(minimum([signal_val, parse(Float64, textbox_min.stored_string[])])*50)\n")
+                    send_command(serial, "A 0 AO 2 $(minimum([signal_val, parse(Float64, textbox_fps.stored_string[])])*50)\n")
                 end
 
                 i += 1

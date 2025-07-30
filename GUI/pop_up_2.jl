@@ -172,7 +172,7 @@ end
 
 on(open_blue_button.clicks) do _
     if connected[]
-        command = "C 1\nA 0 DO 1\nA 0 DO 2 0\n"
+        command = "C 1\nA 0 DO 1 0\nA 0 DO 2 1\n"
 
         println(command)
         send_command(serial, command)
