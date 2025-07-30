@@ -184,16 +184,16 @@ portname_textbox = Textbox(textboxgrid[1, 1:2]; merge(TEXTBOX_ATTRS, Dict(
     :width            => nothing
 ))...)
 textbox_fps      = Textbox(textboxgrid[2, 2];   merge(TEXTBOX_ATTRS, Dict(
-    :displayed_string => "10",
-    :stored_string    => "10"
+    :displayed_string => "50",
+    :stored_string    => "50"
 ))...)
 textbox_refresh  = Textbox(textboxgrid[3, 2];   merge(TEXTBOX_ATTRS, Dict(
     :displayed_string => "5",
     :stored_string    => "5"
 ))...)
 textbox_min      = Textbox(textboxgrid[4, 2];   merge(TEXTBOX_ATTRS, Dict(
-    :displayed_string => "10",
-    :stored_string    => "10"
+    :displayed_string => "1",
+    :stored_string    => "1"
 ))...)
 label_fps        = Label(textboxgrid[2, 1], text = "Blue light [%] :", halign = :right, width = nothing)
 label_min        = Label(textboxgrid[3, 1], text = "Refresh [Hz] :",   halign = :right, width = nothing)
@@ -211,7 +211,7 @@ button_connect = Button(buttongrid[2, 5]; merge(BUTTON_ATTRS, Dict(
     :buttoncolor_hover => dark_gray
 ))...)
 menu_output    = Menu(buttongrid[3, 5];   merge(MENU_ATTRS,   Dict(
-    :default => "Analog",
+    :default => "Digital",
     :options => ["Analog","Digital"]
 ))...)
 
