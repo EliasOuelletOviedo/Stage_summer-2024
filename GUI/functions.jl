@@ -1581,8 +1581,8 @@ function start_signal(frequency=100, refresh=1, min=3)
                         send_command(serial, "A 0 DP 1 $frequency $signal_val\n")
                     end
                 else
-                    send_command(serial, "A 0 AO 1 $(minimum([signal_val, parse(Float64, textbox_min.stored_string[])])*50)\n")
-                    send_command(serial, "A 0 AO 2 $(minimum([signal_val, parse(Float64, textbox_fps.stored_string[])])*50)\n")
+                    send_command(serial, "A 0 AO 1 $(0.5*signal_val*parse(Float64, textbox_min.stored_string[]))\n")
+                    send_command(serial, "A 0 AO 2 $(0.5*signal_val*parse(Float64, textbox_fps.stored_string[]))\n")
                 end
 
                 i += 1
