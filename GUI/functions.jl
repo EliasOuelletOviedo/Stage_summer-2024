@@ -1570,15 +1570,15 @@ function start_signal(frequency=100, refresh=1, min=3)
 
                 if menu_output.selection[] == "Digital"
                     if signal_val < min_val/2
-                        send_command(serial, "A 0 DO 1 0\n")
+                        send_command(serial, "A 0 AO 1 0\n")
 
                     elseif signal_val > 100 - min_val/2
-                        send_command(serial, "A 0 DO 1 1\n")
+                        send_command(serial, "A 0 AO 1 5000\n")
 
                     else
                         signal_val = round(Int, clamp(signal_val, min_val, max_val))
 
-                        send_command(serial, "A 0 DP 1 $frequency $signal_val\n")
+                        send_command(serial, "A 0 ΑP 1 $frequency $signal_val 0 5000\n")
                     end
                 else
                     send_command(serial, "A 0 AO 1 $(0.5*signal_val*parse(Float64, textbox_min.stored_string[]))\n")
