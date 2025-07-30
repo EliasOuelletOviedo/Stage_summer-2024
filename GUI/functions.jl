@@ -16,20 +16,20 @@ using LsqFit
 include("vec_to_lifetime.jl")
 
 function get_folder_path(str)
-    if isfile("GUI/"*str*"_folder_path.txt")
-        folderpath = open(f->read(f, String), "GUI/"*str*"_folder_path.txt")
+    if isfile(str*"_folder_path.txt")
+        folderpath = open(f->read(f, String), str*"_folder_path.txt")
 
         if isempty(folderpath)
             folderpath = pick_folder()
 
-            open("GUI/"*str*"_folder_path.txt", "w") do io
+            open(str*"_folder_path.txt", "w") do io
                 write(io, folderpath)
             end
         end
     else
         folderpath = pick_folder()
 
-        open("GUI/"*str*"_folder_path.txt", "w") do io
+        open(str*"_folder_path.txt", "w") do io
             write(io, folderpath)
         end
     end
@@ -37,7 +37,7 @@ function get_folder_path(str)
     if isempty(folderpath)
         println("Folder does not exist")
 
-        folderpath = get_folder_path("GUI/"*str)
+        folderpath = get_folder_path(str)
     end
 
     return folderpath
@@ -47,11 +47,11 @@ function get_new_folder_path(str)
     folderpath = pick_folder()
 
     if !isempty(folderpath)
-        open("GUI/"*str*"_folder_path.txt", "w") do io
+        open(str*"_folder_path.txt", "w") do io
             write(io, folderpath)
         end
     else
-        folderpath = open(f->read(f, String), "GUI/"*str*"_folder_path.txt")
+        folderpath = open(f->read(f, String), str*"_folder_path.txt")
     end
 
     return folderpath
@@ -115,8 +115,8 @@ end
 
 function connect_to_port(portName)
     try
-        ser = LibSerialPort.open("/dev/tty." * portName, 115200)
-        # ser = LibSerialPort.open(portName, 115200)
+        # ser = LibSerialPort.open("/dev/tty." * portName, 115200)
+        ser = LibSerialPort.open(portName, 115200)
         LibSerialPort.set_read_timeout(ser, 3)
         sleep(0.1)
         add_to_monitor("Connection successful")
@@ -897,9 +897,9 @@ function start_playback()
 
                 nb_photons = sum(final_vector)
 
-                if nb_photons > 4e4
-                    println(i)
-                end
+                # if nb_photons > 4e4
+                #     println(i)
+                # end
 
                 if !isnan(params_raw[1])
                     params = params_raw
@@ -1257,10 +1257,21 @@ function start_save()
     checkpoints = round.(Int, nb_files .* (0:1:100) ./ 100)
 
     lifetime = Float64[]
+    lifetime_i = Float64[]
+    lifetime_m = Float64[]
+    lifetime_2 = Float64[]
     counts = Float64[]
     times = Float64[]
 
-    params = [4.0, 2.0, 1.0e-4]
+    lifetimes = parse(Int, lifetimes_textbox.stored_string[])
+
+    if lifetimes == 1
+        params = [5.0, 0, 5.0e-5]
+    elseif lifetimes == 2
+        params = [6.0, 0.75, 1.0, 0.0, 1.0e-5]
+    # else
+    #     params = [6.0, 0.75, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
+    end
 
     i = 1
     cum_time = 0
@@ -1277,6 +1288,7 @@ function start_save()
     sleep(0.1)
 
     for file in files
+        println(file)
         try
             if !running[]
                 add_to_monitor("Aborted")
@@ -1295,6 +1307,12 @@ function start_save()
             push!(lifetime, params[1])
             push!(counts, sum(vector))
             push!(times, cum_time)
+
+            if lifetimes == 2
+                push!(lifetime_i, params[1] * params[2] + params[3] * (1 - params[2]))
+                push!(lifetime_m, (params[1]^2 * params[2] + params[3]^2 * (1 - params[2]))/(params[1] * params[2] + params[3] * (1 - params[2])))
+                push!(lifetime_2, params[3])
+            end
 
             i += 1
 
@@ -1322,6 +1340,12 @@ function start_save()
     lines!(axis_counts, times, counts, color=Makie.wong_colors()[1])
     lines!(axis_life, times, lifetime, color=Makie.wong_colors()[1])
 
+    if lifetimes == 2
+        lines!(axis_life, times, lifetime_i, color=Makie.wong_colors()[2])
+        lines!(axis_life, times, lifetime_m, color=Makie.wong_colors()[3])
+        lines!(axis_life, times, lifetime_2, color=Makie.wong_colors()[4])
+    end
+
     autolimits!(axis_counts)
     autolimits!(axis_life)
 
@@ -1338,7 +1362,10 @@ function start_save()
         df = DataFrame(
             Time_s = times,
             Number_of_photons = counts,
-            Lifetime_ns = lifetime
+            Lifetime_ns = lifetime,
+            Lifetime_i_ns = lifetime_i,
+            Lifetime_m_ns = lifetime_m,
+            Lifetime_2_ns = lifetime_2
         )
         
         open(filepath, "w") do io
@@ -1525,7 +1552,7 @@ function start_signal(frequency=100, refresh=1, min=3)
     i = 0
 
     while active[]
-        if running[] && Dates.value(now()) - Dates.value(t_0) > i*delta_t
+        if running[] && Dates.value(now()) - Dates.value(t_0) > 1000*i/refresh
             try
                 signal_val = signal[][end]
                 # signal_val = 50
@@ -1554,7 +1581,8 @@ function start_signal(frequency=100, refresh=1, min=3)
                         send_command(serial, "A 0 DP 1 $frequency $signal_val\n")
                     end
                 else
-                    send_command(serial, "A 0 AO 1 $(signal_val*10)\n")
+                    send_command(serial, "A 0 AO 1 $(minimum([signal_val, min])*50)\n")
+                    send_command(serial, "A 0 AO 2 $(minimum([signal_val, frequency])*50)\n")
                 end
 
                 i += 1
