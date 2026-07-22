@@ -271,7 +271,7 @@ function MLE_iterative_reconvolution_jl(irf::Matrix{Float64}, data_xy::Vector{Ve
                 end
             end
         end
-        fit = optimize(x->MLE_model_func(x, x_data, y_data, irf, gating_function, histogram_resolution), lower_bounds, upper_bounds, params_copy, Fminbox(BFGS(linesearch = LineSearches.BackTracking())), Optim.Options(outer_iterations=5, x_abstol=5e-16, outer_x_abstol=5e-16, allow_f_increases=false))
+        fit = optimize(x->MLE_model_func(x, x_data, y_data, irf, gating_function, histogram_resolution), lower_bounds, upper_bounds, params_copy, Fminbox(BFGS(linesearch = LineSearches.BackTracking())), Optim.Options(outer_iterations=20, x_abstol=5e-16, outer_x_abstol=5e-16, allow_f_increases=false))
         res = Optim.minimizer(fit)
 
         if res[1] == lower_bounds[1] || res[1] == upper_bounds[1]

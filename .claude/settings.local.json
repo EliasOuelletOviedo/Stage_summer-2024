@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(julia --version)",
+      "Bash(julia -e 'import Pkg; deps = Pkg.dependencies\\(\\); found = any\\(v.name == \"ZipFile\" for v in values\\(deps\\)\\); println\\(\"ZipFile installed: \", found\\)')",
+      "Bash(FILE=\"/Users/eliasouellet-oviedo/Documents/Stages/Stage2/Partie2/Données/2026-03-12/cell1/60_1/single_c1.sdt\" *)",
+      "Read(//Users/eliasouellet-oviedo/Documents/Stages/Stage2/Partie2/Données/2026-03-12/cell1/60_1/**)",
+      "Bash(julia -e ' *)",
+      "Bash(timeout 300 julia -e ' *)",
+      "Bash(FILE=\"/Users/eliasouellet-oviedo/Documents/Stages/Stage2/Partie2/Données/2026-03-12/FOVs/fov_3.sdt\" *)",
+      "Read(//Users/eliasouellet-oviedo/Documents/Stages/Stage2/Partie2/Données/2026-03-12/FOVs/**)",
+      "Bash(grep -n \"uncompressedsize\\\\|function read\\\\|readbytes\\\\|mutable struct ReadableFile\\\\|struct ReadableFile\" /Users/eliasouellet-oviedo/.julia/packages/ZipFile/yQ7yx/src/ZipFile.jl)",
+      "Read(//Users/eliasouellet-oviedo/.julia/packages/ZipFile/yQ7yx/src/**)",
+      "Bash(xargs ls -la)",
+      "Bash(julia -e 'import Pkg; println\\(Pkg.status\\(\\)\\)')",
+      "Bash(mkdir -p /private/tmp/claude-501/-Users-eliasouellet-oviedo-Documents-Stages-Stage2-Codes-Stage-summer-2024/518ed70f-ebca-4345-911b-9909ab97134e/scratchpad/proto_env)",
+      "Bash(julia --project=. -e ' *)",
+      "Bash(julia --project=. test_codeczlib.jl)",
+      "Bash(julia --project=. compare_codeczlib.jl)"
+    ]
+  }
+}

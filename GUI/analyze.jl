@@ -19,8 +19,8 @@ end
 
 println("Starting analysis")
 
-filepath = "/Users/eliasouellet-oviedo/Desktop/test3.csv.csv"
-# filepath = "/Users/eliasouellet-oviedo/Desktop/analyse1.csv.csv"
+# filepath = "/Users/eliasouellet-oviedo/Desktop/test3.csv.csv"
+filepath = "/Users/eliasouellet-oviedo/Desktop/analyse1.csv.csv"
 # filepath = "/Users/eliasouellet-oviedo/Desktop/test2/analyse2.csv"
 
 println("Opening file : ", filepath)
@@ -40,6 +40,9 @@ signal   = df.Signal
 setpoint = df.Setpoint
 
 setpoint[signal .== 0] .= NaN
+
+concentration = (6 ./ lifetime .- 1)/0.01
+setpoint = (6 ./ setpoint .- 1)/0.01
 
 starts = Int[]
 ends   = Int[]
@@ -73,13 +76,13 @@ for i in eachindex(starts)
     i1 = ends[i]
 
     xseg = collect(times[i0:i1])
-    yseg = lifetime[i0:i1]
+    yseg = concentration[i0:i1]
 
     p0 = [
-        maximum(yseg) - minimum(yseg),
+        minimum(yseg) - maximum(yseg),
         0.1,
         xseg[1],
-        minimum(yseg),
+        maximum(yseg),
     ]
 
     fit = curve_fit(exponential_model, xseg, yseg, p0)
@@ -102,13 +105,13 @@ for i in eachindex(starts)
     end
 
     xseg = collect(times[i0:i1])
-    yseg = lifetime[i0:i1]
+    yseg = concentration[i0:i1]
 
     p0 = [
-        minimum(yseg) - maximum(yseg),
+        maximum(yseg) - minimum(yseg),
         0.1,
         xseg[1],
-        maximum(yseg),
+        minimum(yseg),
     ]
 
     fit = curve_fit(exponential_model, xseg, yseg, p0)
@@ -148,7 +151,7 @@ plot(0, 0, background_color=:gray8, background_color_outside=:gray12, xlabel = "
 span_list = collect(Iterators.flatten(zip(times_i, times_f)))
 vspan!(span_list, color = :gold, alpha = 0.2)
 
-plot!(times, lifetime, background_color=:gray8, background_color_outside=:gray12, xlabel = "Time [s]", ylabel = "Lifetime [ns]", title = "Lifetime", legend = false, linewidth = 1, color = :royalblue)
+plot!(times, concentration, background_color=:gray8, background_color_outside=:gray12, xlabel = "Time [s]", ylabel = "Lifetime [ns]", title = "Lifetime", legend = false, linewidth = 1, color = :royalblue)
 # plot!(times, lifetime, background_color=:gray8, background_color_outside=:gray12, xlabel = "Time [s]", ylabel = "Lifetime [ns]", title = "Lifetime", legend = false, linewidth = 1, color = :transparent)
 
 region = []
@@ -179,7 +182,7 @@ for i in eachindex(starts)
     end
 
     xseg = collect(times[i1:i2])
-    yseg = lifetime[i1:i2]
+    yseg = concentration[i1:i2]
 
     # push!(xsegs, xseg)
 
@@ -202,10 +205,10 @@ plot!(0, 0, legend = false, title = "Lifetime")
 
 # println(starts)
 
-setpoints = [4.8, 4.9, 5.1, 4.7]
-# setpoints = [4.9, 4.9, 4.9, 4.9]
+# setpoints = [4.8, 4.9, 5.1, 4.7]
+setpoints = [4.9, 4.9, 4.9, 4.9]
 
-i = 2
+i = 3
 
 mean_value = mean(region[i])
 std_value = std(region[i])
@@ -217,13 +220,13 @@ println("RMS error : $(round(RMS, digits = 3))")
 
 println("SEM : $(round(SEM, digits = 4))")
 
-println("Setpoint: $(setpoints[i]), Mean: $(round(mean_value, digits = 2)), Std: $(round(std_value, digits = 3))")
+println("Setpoint: $(round((6 / setpoints[i] - 1)/0.01, digits = 2)), Mean: $(round(mean_value, digits = 2)), Std: $(round(std_value, digits = 3))")
 
 x = range(mean_value - 5*std_value, mean_value + 5*std_value, length=length(region[i]))
 bins = range(mean_value - 5*std_value, mean_value + 5*std_value, length=16)
 # println(bins)
 
-histogram(region[i], bins = bins, normalize=:pdf, background_color=:gray8, background_color_outside=:gray12, xlabel = "Lifetime", ylabel = "Probability Density", label = "Region $i", title = "Lifetime Distribution", legend = :topright, linewidth = 1, color = :royalblue)
+histogram(region[i], bins = bins, normalize=:pdf, background_color=:gray8, background_color_outside=:gray12, xlabel = "Concentration [mM]", ylabel = "Probability Density", label = "Region $i", title = "Lifetime Distribution", legend = :topright, linewidth = 1, color = :royalblue)
 vline!([mean(region[i])], linewidth = 4, label = "Mean", color = :darkgreen)
-vline!([setpoints[i]], linewidth = 4, label = "Setpoint", color = :brown)
+vline!([(6 / setpoints[i] - 1)/0.01], linewidth = 4, label = "Setpoint", color = :brown)
 plot!(x, normal_model(x, [mean_value, std_value]), label = "Normal fit", linewidth = 4, color = :chocolate)

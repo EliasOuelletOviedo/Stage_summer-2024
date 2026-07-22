@@ -140,8 +140,10 @@ global axis_counts = Axis(plotgrid[2, 1]; merge(AXIS_ATTRS, Dict(
 ))...)
 
 global axis_life   = Axis(plotgrid[1, 2]; merge(AXIS_ATTRS, Dict(
+    # :title  => "Ion concentration",
     :title  => "Lifetime",
     :xlabel => "Time [s]", 
+    # :ylabel => "Ion concentration [mM]"
     :ylabel => "Lifetime [ns]"
 ))...)
 
@@ -440,8 +442,7 @@ on(button_stop.clicks) do _
 
     if connected[]
         # clear(serial)
-        send_command(serial, "A 0 DS 1 0\n"
-)
+        send_command(serial, "A 0 DS 1 0\n")
     end
 
     button_start.label = "START"
@@ -906,4 +907,4 @@ on(setpoint_textbox.stored_string) do value
     setpoint.args[1][] = parse(Float64, value)
 end
 
-display(fig)
+display(fig)      

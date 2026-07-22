@@ -1,4 +1,4 @@
-using GLMakie
+# using GLMakie
 using Statistics
 using NativeFileDialog
 using ZipFile
@@ -16,20 +16,20 @@ using LsqFit
 include("vec_to_lifetime.jl")
 
 function get_folder_path(str)
-    if isfile(str*"_folder_path.txt")
-        folderpath = open(f->read(f, String), str*"_folder_path.txt")
+    if isfile("GUI/"*str*"_folder_path.txt")
+        folderpath = open(f->read(f, String), "GUI/"*str*"_folder_path.txt")
 
         if isempty(folderpath)
             folderpath = pick_folder()
 
-            open(str*"_folder_path.txt", "w") do io
+            open("GUI/"*str*"_folder_path.txt", "w") do io
                 write(io, folderpath)
             end
         end
     else
         folderpath = pick_folder()
 
-        open(str*"_folder_path.txt", "w") do io
+        open("GUI/"*str*"_folder_path.txt", "w") do io
             write(io, folderpath)
         end
     end
@@ -37,7 +37,7 @@ function get_folder_path(str)
     if isempty(folderpath)
         println("Folder does not exist")
 
-        folderpath = get_folder_path(str)
+        folderpath = get_folder_path("GUI/"*str)
     end
 
     return folderpath
@@ -47,11 +47,11 @@ function get_new_folder_path(str)
     folderpath = pick_folder()
 
     if !isempty(folderpath)
-        open(str*"_folder_path.txt", "w") do io
+        open("GUI/"*str*"_folder_path.txt", "w") do io
             write(io, folderpath)
         end
     else
-        folderpath = open(f->read(f, String), str*"_folder_path.txt")
+        folderpath = open(f->read(f, String), "GUI/"*str*"_folder_path.txt")
     end
 
     return folderpath
@@ -115,8 +115,8 @@ end
 
 function connect_to_port(portName)
     try
-        # ser = LibSerialPort.open("/dev/tty." * portName, 115200)
-        ser = LibSerialPort.open(portName, 115200)
+        ser = LibSerialPort.open("/dev/tty." * portName, 115200)
+        # ser = LibSerialPort.open(portName, 115200)
         LibSerialPort.set_read_timeout(ser, 3)
         sleep(0.1)
         add_to_monitor("Connection successful")
@@ -1416,6 +1416,9 @@ function start_analysis()
     signal   = df.Signal
     setpoint = df.Setpoint
 
+    # concentration = (6 ./ lifetime .- 1)/0.01
+    # setpoint = (6 ./ setpoint .- 1)/0.01
+
     # setpoint[signal .== 0] .= NaN
 
     starts = Int[]
@@ -1452,33 +1455,7 @@ function start_analysis()
         i1 = ends[i]
 
         xseg = collect(times[i0:i1])
-        yseg = lifetime[i0:i1]
-
-        p0 = [
-            maximum(yseg) - minimum(yseg),
-            0.1,
-            xseg[1],
-            minimum(yseg),
-        ]
-
-        fit = curve_fit(exponential_model, xseg, yseg, p0)
-        push!(fits, fit)
-        # println(fit.param)
-        println("Descente $i")
-        # println("Tau = $(round(fit.param[2], digits=3)) s")
-        println("Rise time = $(round(Int, 1/fit.param[2])) s")
-        # println("x offset = $(round(fit.param[3] - times_i[i], digits=1)) s")
-        println("y offset = $(round(fit.param[4], digits=1)) ns\n")
-
-        i0 = ends[i]
-        try
-            i1 = starts[i+1]
-        catch
-            # println("end")
-            i1 = lastindex(times)
-        end
-
-        xseg = collect(times[i0:i1])
+        # yseg = concentration[i0:i1]
         yseg = lifetime[i0:i1]
 
         p0 = [
@@ -1491,14 +1468,43 @@ function start_analysis()
         fit = curve_fit(exponential_model, xseg, yseg, p0)
         push!(fits, fit)
         # println(fit.param)
+        println("Descente $i")
+        # println("Tau = $(round(fit.param[2], digits=3)) s")
+        println("Rise time = $(round(Int, 1/fit.param[2])) s")
+        # println("x offset = $(round(fit.param[3] - times_i[i], digits=1)) s")
+        println("y offset = $(round(fit.param[4], digits=1)) mM\n")
+
+        i0 = ends[i]
+        try
+            i1 = starts[i+1]
+        catch
+            # println("end")
+            i1 = lastindex(times)
+        end
+
+        xseg = collect(times[i0:i1])
+        # yseg = concentration[i0:i1]
+        yseg = lifetime[i0:i1]
+
+        p0 = [
+            maximum(yseg) - minimum(yseg),
+            0.1,
+            xseg[1],
+            minimum(yseg),
+        ]
+
+        fit = curve_fit(exponential_model, xseg, yseg, p0)
+        push!(fits, fit)
+        # println(fit.param)
         println("Montée $i")
         # println("Tau = $(round(fit.param[2], digits=3)) s")
         println("Rise time = $(round(Int, 1/fit.param[2])) s")
         # println("x offset = $(round(fit.param[3] - times_f[i], digits=1)) s")
-        println("y offset = $(round(fit.param[4], digits=1)) ns\n")
+        println("y offset = $(round(fit.param[4], digits=1)) mM\n")
     end
 
     lines!(axis_counts, times, counts, color=Makie.wong_colors()[1])
+    # lines!(axis_life, times, concentration, color=Makie.wong_colors()[1])
     lines!(axis_life, times, lifetime, color=Makie.wong_colors()[1])
     lines!(axis_life, times, setpoint, color=Makie.wong_colors()[2])
     lines!(axis_signal, times, signal, color=Makie.wong_colors()[1])

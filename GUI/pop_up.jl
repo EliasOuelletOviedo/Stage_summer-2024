@@ -122,7 +122,7 @@ AXIS_ATTRS = Dict(
     :width            => nothing
 )
 
-TEXTBOX_ATTRS      = Dict(
+TEXTBOX_ATTRS = Dict(
     :bordercolor               => light_gray,
     :bordercolor_focused       => light_gray,
     :bordercolor_hover         => light_gray,
