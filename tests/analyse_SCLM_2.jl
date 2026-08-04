@@ -37,6 +37,7 @@ warmup_lifetime_fitting!()
 # -----------------------------------------------------------------------------
 
 proteins = ["SCLM", "M2-SCLM", "mCer3_Topaz"]
+# proteins = ["mCer3_Topaz"]
 
 # "F" représente une concentration infinie en Cl- ; "0 mM" est placé à 0.01
 # pour rester affichable sur un axe log, comme dans analyse_SCLM_1.jl.
@@ -297,7 +298,7 @@ end
 lifetime_stats = compute_metric_stats(results; symbol="τ", unit="ns")
 fret_stats     = compute_metric_stats(fret_results; symbol="R", unit="")
 
-lifetime_combined = make_combined_panel(lifetime_stats; title="Lifetime variation of SCLM variants vs [Cl⁻]", ylabel="τ [ns]")
+lifetime_combined = make_combined_panel(lifetime_stats; title="Lifetime variation of SCLM variants vs [Cl⁻]", ylabel="Lifetime [ns]")
 fret_combined     = make_combined_panel(fret_stats; title="FRET ratio variation of SCLM variants vs [Cl⁻]", ylabel="FRET ratio (C2/C1)")
 
 # -----------------------------------------------------------------------------

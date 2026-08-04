@@ -12,11 +12,11 @@ using Combinatorics
 include("ImageJROI.jl")
 using .ImageJROI
 
-try
-    global serial = LibSerialPort.open("/dev/tty.usbmodem11102", 115200)
-catch e
-    println("Error opening serial port: $e")
-end
+# try
+#     global serial = LibSerialPort.open("/dev/tty.usbmodem11102", 115200)
+# catch e
+#     println("Error opening serial port: $e")
+# end
 
 function send_command(serial, command)
     write(serial, command)
@@ -496,7 +496,20 @@ end
 filepath = "/Users/eliasouellet-oviedo/Documents/Maîtrise/Test galvo/fov-001-C2-T005.tif"
 img = load(filepath)
 ny, nx = size(img)
-plot(img, axis=true, ticks=true, legend=false, background_color = RGBA(18.0/255.0, 20.0/255.0, 20.0/255.0))
+# plot(img, axis=true, ticks=true, legend=false, background_color = RGBA(18.0/255.0, 20.0/255.0, 20.0/255.0))
+plot(img, 
+    framestyle = :none,
+    grid = false,
+    legend = false,
+    ticks = false,
+    xlabel = "",
+    ylabel = "",
+    title = "",
+    background_color = :black,
+    background_color_outside = :black,
+    foreground_color = :white,
+    size = (1024, 512)
+)
 
 roi_folderpath = "/Users/eliasouellet-oviedo/Documents/Maîtrise/Test galvo/RoiSet"
 roi_paths = readdir(roi_folderpath; join=true)
@@ -572,24 +585,26 @@ append!(buffer, repeat([first_center], j))
 
 println(buffer)
 
-println("Envoi des commandes au buffer...")
-send_points(serial, buffer)
-println("Commandes envoyées au buffer.")
+# println("Envoi des commandes au buffer...")
+# send_points(serial, buffer)
+# println("Commandes envoyées au buffer.")
 
-response = send_command(serial, "S 1 D 1 R 1\n")
-response *= send_command(serial, "A 1 AA $f $(length(buffer))\n")
-response *= send_command(serial, "A 1 DD 2 $(f*m) $(100-round(Int64, 100*dt/(dt + t))) 1 $m 10\n")
-response *= send_command(serial, "A 0 DO 3 1\n")
+# response = send_command(serial, "S 1 D 1 R 1\n")
+# response *= send_command(serial, "A 1 AA $f $(length(buffer))\n")
+# response *= send_command(serial, "A 1 DD 2 $(f*m) $(100-round(Int64, 100*dt/(dt + t))) 1 $m 10\n")
+# response *= send_command(serial, "A 0 DO 3 1\n")
 
-if occursin("ERR", response)
-    println("Error ($response)")
-end
+# if occursin("ERR", response)
+#     println("Error ($response)")
+# end
 
-LibSerialPort.close(serial)
+# LibSerialPort.close(serial)
 
 
 
 x_pts = [p[1] for p in pts]
 y_pts = [p[2] for p in pts]
-scatter!(x_pts, y_pts, alpha = 0.1, color = :red)
+scatter!(x_pts, y_pts, alpha = 0.2, color = :red)
 # scatter!(0, 0, alpha = 0.1, color = :red)
+
+plot!(0,0)
