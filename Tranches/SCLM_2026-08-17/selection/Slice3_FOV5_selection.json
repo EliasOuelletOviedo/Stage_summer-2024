@@ -1,0 +1,23 @@
+{
+ "fov": "Slice3_FOV5",
+ "n_rois": 10,
+ "kept": [
+  4,
+  7,
+  8,
+  9,
+  10
+ ],
+ "keep": {
+  "1": false,
+  "2": false,
+  "3": false,
+  "4": true,
+  "5": false,
+  "6": false,
+  "7": true,
+  "8": true,
+  "9": true,
+  "10": true
+ }
+}

@@ -1,0 +1,46 @@
+fov	condition	dossier	dy	dx	NCC	statut
+Slice1_FOV1	Basal	FOV_1-001	dy=+0	dx=+0	NCC=1.000	ref
+Slice1_FOV1	High_K	FOV_1-001	dy=-18	dx=+0	NCC=0.366	ok
+Slice1_FOV1	Return	FOV-001	dy=-17	dx=+2	NCC=0.378	ok
+Slice1_FOV2	Basal	FOV_2-001	dy=+0	dx=+0	NCC=1.000	ref
+Slice1_FOV2	High_K	FOV_2-001	dy=-6	dx=+11	NCC=0.308	ok
+Slice1_FOV2	Return	FOV-002	dy=-4	dx=+8	NCC=0.670	ok
+Slice1_FOV3	Basal	FOV_3-001	dy=+0	dx=+0	NCC=1.000	ref
+Slice1_FOV3	High_K	FOV_3-001	dy=-2	dx=-5	NCC=0.332	ok
+Slice1_FOV3	Return	FOV-003	dy=-11	dx=+2	NCC=0.754	ok
+Slice1_FOV4	Basal	FOV_4-001	dy=+0	dx=+0	NCC=1.000	ref
+Slice1_FOV4	High_K	FOV_4-001	dy=-26	dx=-2	NCC=0.188	ok
+Slice1_FOV4	Return	FOV-004	dy=-33	dx=+9	NCC=0.566	ok
+Slice1_FOV5	Basal	FOV_5-001	dy=+0	dx=+0	NCC=1.000	ref
+Slice1_FOV5	High_K	FOV_5-001	dy=+19	dx=+19	NCC=0.479	ok
+Slice1_FOV5	Return	FOV-005	dy=+16	dx=+13	NCC=0.626	ok
+Slice2_FOV1	Basal	FOV-001	dy=+0	dx=+0	NCC=1.000	ref
+Slice2_FOV1	High_K	FOV-001	dy=+14	dx=-4	NCC=0.718	ok
+Slice2_FOV1	Return	FOV-001	dy=+16	dx=-5	NCC=0.668	ok
+Slice2_FOV2	Basal	FOV-002	dy=+0	dx=+0	NCC=1.000	ref
+Slice2_FOV2	High_K	FOV-002	dy=+8	dx=-2	NCC=0.512	ok
+Slice2_FOV2	Return	FOV-002	dy=+4	dx=-1	NCC=0.416	ok
+Slice2_FOV3	Basal	FOV-003	dy=+0	dx=+0	NCC=1.000	ref
+Slice2_FOV3	High_K	FOV-003	dy=+5	dx=-2	NCC=0.578	ok
+Slice2_FOV3	Return	FOV-003	dy=+5	dx=-2	NCC=0.529	ok
+Slice2_FOV4	Basal	FOV-004	dy=+0	dx=+0	NCC=1.000	ref
+Slice2_FOV4	High_K	FOV-004	dy=-4	dx=+5	NCC=0.438	ok
+Slice2_FOV4	Return	FOV-004	dy=-2	dx=+6	NCC=0.337	ok
+Slice2_FOV5	Basal	FOV-005	dy=+0	dx=+0	NCC=1.000	ref
+Slice2_FOV5	High_K	FOV-005	dy=-3	dx=+3	NCC=0.526	ok
+Slice2_FOV5	Return	FOV-005	dy=-3	dx=+6	NCC=0.343	ok
+Slice3_FOV1	Basal	FOV-001	dy=+0	dx=+0	NCC=1.000	ref
+Slice3_FOV1	High_K	FOV-001	dy=+0	dx=+0	NCC=0.028	NON RECALE (NCC faible)
+Slice3_FOV1	Return	FOV-001	dy=+0	dx=+0	NCC=0.138	NON RECALE (NCC faible)
+Slice3_FOV2	Basal	FOV-002	dy=+0	dx=+0	NCC=1.000	ref
+Slice3_FOV2	High_K	FOV-002	dy=+0	dx=+0	NCC=0.077	NON RECALE (NCC faible)
+Slice3_FOV2	Return	FOV-002	dy=+0	dx=+0	NCC=0.064	NON RECALE (NCC faible)
+Slice3_FOV3	Basal	FOV-003	dy=+0	dx=+0	NCC=1.000	ref
+Slice3_FOV3	High_K	FOV-003	dy=+8	dx=+22	NCC=0.330	ok
+Slice3_FOV3	Return	FOV-003	dy=+0	dx=+0	NCC=0.129	NON RECALE (NCC faible)
+Slice3_FOV4	Basal	FOV-004	dy=+0	dx=+0	NCC=1.000	ref
+Slice3_FOV4	High_K	FOV-004	dy=+0	dx=+0	NCC=0.057	NON RECALE (NCC faible)
+Slice3_FOV4	Return	--				ABSENT
+Slice3_FOV5	Basal	FOV-005	dy=+0	dx=+0	NCC=1.000	ref
+Slice3_FOV5	High_K	FOV-005	dy=+24	dx=+17	NCC=0.294	ok
+Slice3_FOV5	Return	FOV-004	dy=+35	dx=+5	NCC=0.376	ok
