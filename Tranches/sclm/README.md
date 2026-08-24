@@ -1,16 +1,23 @@
-# Analyse SCLM — tranches 2026-08-17, ratio C3/C2
+# Analyse SCLM — tranches 2026-08-17, ratio C2/C3
 
 Pipeline en 4 étapes sur `/Users/eliasouellet-oviedo/Documents/Maîtrise/Données/2026-08-17_tranches/SCLM`.
 Le canal **C1 est ignoré** ; seuls C2 et C3 sont utilisés.
 
-Environnement : `~/.venvs/cellpose/bin/python` (Cellpose-SAM 4.2.1, torch 2.13, MPS actif).
+**Les étapes doivent être lancées dans l'ordre** : chacune consomme la sortie de la
+précédente. `step4` refuse de tourner tant que le tri manuel de `step3` n'est pas fait.
+
+Seule l'étape 2 a besoin de Cellpose, donc de l'environnement dédié
+`~/.venvs/cellpose/bin/python` (Cellpose-SAM 4.2.1, torch 2.13, MPS actif).
+Les étapes 1, 3 et 4 n'utilisent que numpy / scipy / matplotlib / pandas / tifffile et
+tournent aussi avec le `python3` du système.
+
 Toutes les commandes se lancent depuis ce dossier (`Tranches/sclm/`).
 
 ```bash
-~/.venvs/cellpose/bin/python step1_sum.py       # recalage + 15 images somme
-~/.venvs/cellpose/bin/python step2_cellpose.py  # segmentation des somas
-~/.venvs/cellpose/bin/python step3_select.py    # tri manuel des ROIs (interactif)
-~/.venvs/cellpose/bin/python step4_ratio.py     # ratios C3/C2 + boxplots
+python3 step1_sum.py                            # recalage + 15 images somme
+~/.venvs/cellpose/bin/python step2_cellpose.py  # segmentation des somas  (Cellpose requis)
+python3 step3_select.py                         # tri manuel des ROIs (interactif)
+python3 step4_ratio.py                          # ratios C2/C3 + boxplots
 ```
 
 Les sorties vont dans `../SCLM_2026-08-17/`.
@@ -75,12 +82,24 @@ en était, ou sur un seul FOV : `step3_select.py Slice2_FOV4`.
 
 ## Étape 4 — ratio et figures
 
-`ratio = moyenne(C3) / moyenne(C2)` sur les pixels du ROI, **valeurs brutes**
+`ratio = moyenne(C2) / moyenne(C3)` sur les pixels du ROI, **valeurs brutes**
 (aucune soustraction de fond), calculé indépendamment dans chaque condition.
 
 Un ROI dont moins de 90 % des pixels restent dans le champ après recalage est mis à
 `NaN` pour cette condition (colonne `note` du CSV).
 
 Sorties dans `../SCLM_2026-08-17/results/` :
-`ratios_C3_C2.csv` (une ligne par ROI × condition), `resume_stats.csv`,
-`boxplot_Slice1.png`, `boxplot_Slice2.png`, `boxplot_Slice3.png`, `boxplot_combine.png`.
+
+| Fichier | Contenu |
+|---|---|
+| `ratios_C2_C3.csv` | une ligne par ROI × condition (`mean_C2`, `mean_C3`, `ratio`, `note`) |
+| `resume_stats.csv` | n, moyenne, médiane, écart-type, Q1, Q3 par tranche × condition |
+| `boxplot_Slice{1,2,3}.png` | distribution du ratio par condition, une figure par tranche |
+| `boxplot_combine.png` | les 3 tranches groupées sur un même axe |
+| `trace_Slice{1,2,3}.png` | **trajectoire de chaque ROI** : un trait mince relie les 3 conditions |
+| `trace_combine.png` | les 3 tranches en petits multiples, axe y commun |
+
+Les deux familles de figures répondent à des questions différentes : le boxplot montre
+la distribution à chaque condition, le tracé apparié montre si les ROIs répondent tous
+dans le même sens ou si la médiane masque des comportements opposés. Un ROI dont une
+condition manque voit son trait s'interrompre au lieu d'être écarté.

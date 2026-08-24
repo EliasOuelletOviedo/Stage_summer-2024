@@ -1,6 +1,6 @@
 """Étape 3 — sélection manuelle des ROIs, un FOV à la fois.
 
-Usage :  ~/.venvs/cellpose/bin/python step3_select.py  [Slice1_FOV3 ...]
+Usage :  python3 step3_select.py  [Slice1_FOV3 ...]
 
 Commandes
   clic sur un ROI  garder / rejeter

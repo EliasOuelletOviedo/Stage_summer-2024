@@ -1,4 +1,4 @@
-"""Configuration partagée pour l'analyse SCLM 2026-08-17 (tranches, ratio C3/C2)."""
+"""Configuration partagée pour l'analyse SCLM 2026-08-17 (tranches, ratio C2/C3)."""
 from pathlib import Path
 
 DATA_ROOT = Path("/Users/eliasouellet-oviedo/Documents/Maîtrise/Données/2026-08-17_tranches/SCLM")
