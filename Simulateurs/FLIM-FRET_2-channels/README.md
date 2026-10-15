@@ -21,7 +21,49 @@ julia --project=. -t 8 step4_monte_carlo.jl     # grille principale : 351 000 r�
 julia --project=. -t 8 step5_nuisances.jl       # balayages de nuisance (≈ 45 min)
 julia --project=. step6_figures.jl              # figures et résumé chiffré (2 min)
 julia --project=. -t 8 step7_cible_mobile.jl    # cible mobile et boucle fermée (optionnel, ≈ 10 min)
+julia --project=. step8_synthese.jl             # figure de synthèse : FR / EN, fond clair / noir (1 min)
 ```
+
+## Figure de synthèse
+
+![Synthèse](sorties/figures/synthese_FR.png)
+
+`sorties/figures/synthese_{FR,EN}{,_dark}.png` : 16:9, 2560 × 1440 px, comme tes slides. Le texte
+ci-dessous est écrit pour la présentation.
+
+> Nous avons construit un simulateur de l'imagerie FLIM à deux canaux du capteur mCer3–Topaz.
+> Il est calé sur la titration en solution du 2026-07-20, et il compare les façons de lire
+> [Cl⁻] à budget de photons égal, avec la borne de Cramér-Rao comme référence.
+>
+> **A.** Un modèle à deux états décrit la titration. Une fraction x des capteurs transfère
+> presque toute son énergie (τ_DA = 0,15 ns, E = 0,96) ; dans les autres, le donneur n'est pas
+> éteint (τ_D0 = 3,69 ns). Le Cl⁻ ne change que x. Ces deux durées de vie, communes aux 27
+> histogrammes, suffisent à les décrire, avec un K vrai de 30 mM.
+>
+> **B.** Sans ajustement supplémentaire, le modèle retrouve les K apparents mesurés :
+> 18,7 mM pour le τ mono-exponentiel (mesuré : 18,5) et 40,6 mM pour le ratio des images
+> (mesuré : 44,2).
+>
+> **C.** Parce que le transfert est presque total, l'état actif est quasi éteint dans le bleu,
+> et sa signature temporelle tient sous la réponse instrumentale. La forme des déclins ne porte
+> qu'environ 3 % de l'information sur [Cl⁻] ; le rapport jaune/bleu en porte presque tout.
+>
+> **D.** Le rapport jaune/bleu atteint la borne : σ ≈ 1 mM à 20 mM pour 10⁴ photons bleus. Les
+> lectures par la forme sont 6 à 8 fois moins précises, la lecture actuelle (τ
+> mono-exponentiel + Hill) environ 60 fois.
+>
+> **E.** Le ratio dépend toutefois de l'échelle relative des deux canaux : 5 % de dérive de gain
+> le biaisent de 3 à 4 mM, alors que la forme y est insensible. À l'inverse, un τ décalé de 5 %
+> entre la solution et la tranche biaise la forme de 7 à 15 mM et laisse le ratio intact.
+>
+> **F.** En boucle fermée, l'intégrateur moyenne le bruit et il ne reste que le biais. Il est
+> presque nul avec le ratio, de −0,75 mM avec la forme et de −1,6 mM avec la lecture actuelle
+> (−7,5 mM à 10³ photons).
+>
+> **À retenir.** Pour ce capteur, il faut lire [Cl⁻] sur le rapport des deux canaux FLIM,
+> étalonner et surveiller le gain relatif des détecteurs, et garder la forme des déclins comme
+> contrôle. Le photoblanchiment et le décalage temporel entre détecteurs ne sont pas simulés ;
+> τ_A (3,0 ns) et les filtres sont supposés.
 
 Tous les paramètres sont dans `parametres.toml`, chacun avec sa provenance. Pour simuler
 SCLM plutôt que mCer3_Topaz, il suffit d'y écrire `proteine = "SCLM"`, `donneur = "cerulean"`,
@@ -497,5 +539,5 @@ Il est mesuré par rapport au monde nominal tiré avec les mêmes germes. En mM,
 | `sorties/resultats/resultats_principaux.csv` | grille principale (fichier plat du plan) |
 | `sorties/resultats/nuisances.csv` | balayages de nuisance |
 | `sorties/resultats/resume.md` | tableaux chiffrés |
-| `sorties/figures/` | figures 1 à 8, carte, titrations |
+| `sorties/figures/` | figures 1 à 8, carte, titrations, synthèse (`synthese_{FR,EN}{,_dark}.png`, étape 8) |
 | `src/` | le simulateur : `Types`, `Photophysics`, `Instrument`, `Spectra`, `Generate`, `Fisher`, `Ajustement`, `Utilisateur`, `Ingest`, `Parametres`, `Estimators`, `Calibrate`, `Experiments`, `Figures`, `Resume` |
