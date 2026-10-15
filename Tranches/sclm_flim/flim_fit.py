@@ -17,6 +17,12 @@ pour les blocs de 3 s. Il ne reste alors que τ et b libres par bloc.
 
 `temps_moyen` est l'estimateur sans ajustement : temps moyen d'arrivée moins celui de
 l'IRF — le « Estimate » de FLIMApp.
+
+`ajuster2` : deux durées de vie, le modèle à 5 paramètres de FLIMApp (`conv_irf_data`)
+qui a servi aux calibrations (tests/analyse_SCLM_3.jl) : a1·exp(−t/τ1) + (1 − a1)·exp(−t/τ2),
+τ1 la plus longue et a1 son amplitude ; `tau_moyen` en donne la moyenne pondérée par
+l'intensité. Trois paramètres libres demandent beaucoup de photons : ~6 000 (un soma,
+un bloc de 3 s) ne suffisent pas, ~260 000 (34 somas réunis) oui.
 """
 import numpy as np
 from scipy.optimize import minimize
@@ -43,18 +49,33 @@ class Modele:
         j = (self.k - int(f) - 1) % self.n
         return (1 - w) * self.irf[i] + w * self.irf[j]
 
-    def forme(self, tau, s):
-        """conv(IRF décalée de s, exp(−t/τ)), normalisée à 1 sur la fenêtre."""
-        c = np.real(np.fft.ifft(np.fft.fft(self._irf_decalee(s)) * np.fft.fft(np.exp(-self.x / tau))))
+    def _convoluer(self, declin, s):
+        """conv(IRF décalée de s, declin), normalisée à 1 sur la fenêtre."""
+        c = np.real(np.fft.ifft(np.fft.fft(self._irf_decalee(s)) * np.fft.fft(declin)))
         c = np.maximum(c, 0)
         return c / max(c[self.lo:self.hi].sum(), 1e-300)
+
+    def forme(self, tau, s):
+        """conv(IRF décalée de s, exp(−t/τ)), normalisée à 1 sur la fenêtre."""
+        return self._convoluer(np.exp(-self.x / tau), s)
+
+    def forme2(self, tau1, tau2, a1, s):
+        """Comme `forme`, pour a1·exp(−t/τ1) + (1 − a1)·exp(−t/τ2)."""
+        return self._convoluer(a1 * np.exp(-self.x / tau1) + (1 - a1) * np.exp(-self.x / tau2), s)
 
     def attendu(self, y, tau, s, b):
         N = y[self.lo:self.hi].sum()
         return N * ((1 - b) * self.forme(tau, s) + b / self.n_fen)
 
     def _deviance(self, y, tau, s, b):
-        m = np.maximum(self.attendu(y, tau, s, b)[self.lo:self.hi], 1e-300)
+        return self._deviance_modele(y, self.attendu(y, tau, s, b))
+
+    def _deviance2(self, y, tau1, tau2, a1, s, b):
+        N = y[self.lo:self.hi].sum()
+        return self._deviance_modele(y, N * ((1 - b) * self.forme2(tau1, tau2, a1, s) + b / self.n_fen))
+
+    def _deviance_modele(self, y, attendu):
+        m = np.maximum(attendu[self.lo:self.hi], 1e-300)
         yy = y[self.lo:self.hi]
         with np.errstate(divide="ignore", invalid="ignore"):
             t = np.where(yy > 0, yy * np.log(yy / m), 0.0)
@@ -101,3 +122,36 @@ class Modele:
             return np.nan, s, np.nan, np.nan
         dof = max(self.n_fen - (3 if libre else 2), 1)
         return float(tau), float(s), float(b), 2 * r.fun * N / dof
+
+    def ajuster2(self, y, s=None, depart=(2.5, 0.4, 0.4, 0.05)):
+        """Deux durées de vie : (τ1, τ2, a1, s, b, déviance réduite), τ1 la plus longue.
+        `s` donné : décalage fixé ; sinon ajusté, en partant de celui de la
+        mono-exponentielle. `depart` : (τ1, τ2, a1, b) de départ."""
+        y = np.asarray(y, float)
+        if y[self.lo:self.hi].sum() < MIN_PHOTONS_FIT:
+            return (np.nan,) * 6
+        N = max(y[self.lo:self.hi].sum(), 1.0)
+        bornes = [(2 * self.dt, 2 * 12.5)] * 2 + [(0, 1), (0, 1)]
+        libre = s is None
+        if libre:
+            r = minimize(lambda p: self._deviance2(y, p[0], p[1], p[2], p[4], p[3]) / N,
+                         list(depart) + [self.ajuster(y)[1]], method="L-BFGS-B",
+                         bounds=bornes + [(-20, 40)])
+            tau1, tau2, a1, b, s = r.x
+        else:
+            r = minimize(lambda p: self._deviance2(y, p[0], p[1], p[2], s, p[3]) / N,
+                         list(depart), method="L-BFGS-B", bounds=bornes)
+            tau1, tau2, a1, b = r.x
+        if not (np.isfinite(r.fun) and np.all(np.isfinite(r.x))):
+            return (np.nan,) * 6
+        if tau2 > tau1:                                  # τ1 la plus longue, comme FLIMApp
+            tau1, tau2, a1 = tau2, tau1, 1 - a1
+        dof = max(self.n_fen - (5 if libre else 4), 1)
+        return float(tau1), float(tau2), float(a1), float(s), float(b), 2 * r.fun * N / dof
+
+
+def tau_moyen(tau1, tau2, a1):
+    """Durée de vie moyenne pondérée par l'intensité, (a1·τ1² + a2·τ2²) / (a1·τ1 + a2·τ2) :
+    le τ moyen de tests/analyse_SCLM_3.jl."""
+    a2 = 1 - a1
+    return (a1 * tau1 ** 2 + a2 * tau2 ** 2) / (a1 * tau1 + a2 * tau2)

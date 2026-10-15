@@ -1,0 +1,4 @@
+# Journaux d'exécution et série temporelle de la cible mobile : régénérables, non versionnés.
+# Restent versionnés : code, paramètres, fichiers plats de résultats, figures.
+sorties/journaux/
+sorties/resultats/cible_mobile.csv

@@ -7,8 +7,8 @@ Usage :  python3 presentation.py            toutes les figures
 Pour retoucher une figure, tout est dans ce fichier : le bloc RÉGLAGES ci-dessous
 (couleurs, polices, tailles, et tous les textes : titres, titres d'axes, légendes,
 notes), puis une fonction par figure. Les calculs, eux, viennent du pipeline
-(Tranches/sclm_flim/ : étape 6 pour la dérive, étape 7 pour les retours) : on ne change
-ici que l'apparence.
+(Tranches/sclm_flim/ : étape 6 pour la dérive, étape 7 pour les retours, flim_fit pour
+les deux durées de vie) : on ne change ici que l'apparence.
 
 Le jeu de données est le dossier parent de celui-ci. Pour un autre jeu, copier ce fichier
 dans son propre dossier `présentation/`.
@@ -32,12 +32,13 @@ from scipy import ndimage as ndi  # noqa: E402
 
 import pandas as pd  # noqa: E402
 from scipy import stats  # noqa: E402
-from scipy.optimize import least_squares  # noqa: E402
 
 import config  # noqa: E402
 import slide_resultats as SR  # noqa: E402  (même dossier : données corrigées des slides)
+import step5_analyse as step5  # noqa: E402
 import step6_ratio_corrige as step6  # noqa: E402
 import step7_retour as step7  # noqa: E402
+from flim_fit import Modele, tau_moyen  # noqa: E402
 
 
 # =====================================================================================
@@ -66,6 +67,9 @@ COULEURS = dict(
     alpha_points=0.8,
     duree_de_vie="#199e70",      # durée de vie de la CFP
     redescente="#d95926",        # redescentes ajustées de la durée de vie
+    tau1="#3987e5",              # deux durées de vie : la longue,
+    tau2="#9085e9",              # la courte,
+    tau_moyen="#199e70",         # et leur moyenne pondérée par l'intensité
     temoin="#8d8d86",            # témoins (fausses stims), figure de corrélation
     droite="#ffffff",            # droite de tendance, figure de corrélation
 )
@@ -83,6 +87,7 @@ FORMAT = dict(            # tailles des figures, en pouces (largeur, hauteur)
     retour=(13, 8.4),
     distribution=(16, 6.4),
     redescente=(11, 4.6),
+    redescente_2exp=(11, 9.6),
     correlation=(12.5, 5.4),
 )
 
@@ -170,6 +175,12 @@ TEXTES = {
     "redescente": dict(           # la figure seule, sans titre
         x="temps (s)",
         y="Δτ CFP (ps)",
+    ),
+    "redescente_2exp": dict(      # un panneau par durée de vie, sans titre
+        x="temps (s)",
+        y_tau1="Δτ₁ (ps)\nτ₁ = {base:.2f} ns",                                 # base : avant la 1re stim
+        y_tau2="Δτ₂ (ps)\nτ₂ = {base:.2f} ns",
+        y_tau_moyen="Δτ moyen (ps)\nτ moyen = {base:.2f} ns",
     ),
     "correlation": dict(
         a_titre="À la ligne de base, d'une cellule à l'autre",
@@ -523,31 +534,6 @@ def distribution(R, nom):
     sauver(fig, nom)
 
 
-def ajuster_redescentes(t, med, fen):
-    """Après chaque stimulation, C_k + A_k·exp(−(t − fin_k)/τ) jusqu'à la stimulation
-    suivante : un τ commun, une amplitude et un équilibre par stim, moindres carrés.
-    Une à une, les redescentes de la durée de vie sont trop bruitées pour être ajustées
-    (τ de 29 ± 122 s à la stim 1, à la borne de 300 s à la stim 4) ; ensemble, si.
-    Rend τ, son erreur type, et [(A_k, C_k, fin_k, premier, dernier temps ajusté)]."""
-    segs = []
-    for i, (_, b) in enumerate(fen):
-        nxt = fen[i + 1][0] if i + 1 < len(fen) else t[-1] + 1
-        m = (t > b) & (t < nxt) & np.isfinite(med)
-        segs.append((b, t[m] - b, med[m]))
-
-    def residus(p):
-        return np.concatenate([p[2 + 2 * k] + p[1 + 2 * k] * np.exp(-x / p[0]) - y
-                               for k, (_, x, y) in enumerate(segs)])
-
-    p0 = [15.0] + [v for _, x, y in segs for v in (y[:3].mean() - y[-10:].mean(), y[-10:].mean())]
-    n = len(segs)
-    r = least_squares(residus, p0, bounds=([0.3] + [-200, -100] * n, [300] + [200, 100] * n))
-    s2 = (r.fun ** 2).sum() / max(len(r.fun) - len(r.x), 1)
-    se = np.sqrt(np.diag(np.linalg.inv(r.jac.T @ r.jac) * s2))
-    return r.x[0], se[0], [(r.x[1 + 2 * k], r.x[2 + 2 * k], b, x.min(), x.max())
-                           for k, (b, x, _) in enumerate(segs)]
-
-
 def redescente(d, nom):
     """Durée de vie de la CFP sur la session, somas (médiane ± écart interquartile, corrigée
     de la descente graduelle comme dans les slides), blocs de stim compris ; et les
@@ -565,7 +551,7 @@ def redescente(d, nom):
     ax.fill_between(t, q1, q3, color=C["duree_de_vie"], alpha=0.25, lw=0, zorder=2)
     ax.plot(t, med, color=C["duree_de_vie"], lw=2.2, zorder=3)
     ax.axhline(0, color=C["texte_2"], lw=0.9, ls="--", zorder=1)
-    tau, se, courbes = ajuster_redescentes(t, med_fit, fen)
+    tau, se, courbes = SR.ajuster_retours(t, med_fit, fen)     # un τ commun aux stims
     for A_, C_, b, x0, x1 in courbes:
         xx = np.linspace(x0, x1, 300)
         ax.plot(b + xx, C_ + A_ * np.exp(-xx / tau), color=C["redescente"], lw=2.2, zorder=4)
@@ -574,6 +560,76 @@ def redescente(d, nom):
     sauver(fig, nom)
     print(f"     redescentes : τ commun = {tau:.1f} ± {se:.1f} s ; "
           f"A par stim : {', '.join(f'{a:+.1f}' for a, *_ in courbes)} ps")
+
+
+def ecart_a_la_derive(t, v, stim, fen):
+    """v moins sa droite de dérive, ajustée sur les blocs hors réponse (ni stim, ni dans les
+    EXCLURE_APRES_STIM_S qui suivent une stim) ; et la pente."""
+    hors = ~stim & np.isfinite(v)
+    for _, b in fen:
+        hors &= ~((t > b) & (t < b + config.EXCLURE_APRES_STIM_S))
+    a, pente = np.polynomial.polynomial.polyfit(t[hors], v[hors], 1)
+    return v - (a + pente * t), pente
+
+
+def deux_durees_de_vie(d, canal=1):
+    """Somme des déclins du canal `canal` (1 : CFP, 2 : YFP) des somas retenus, bloc par bloc, ajustée à deux durées de vie
+    (flim_fit.Modele.ajuster2, le modèle des calibrations) : τ1, τ2 et τ moyen. Un soma n'a
+    que ~6 000 photons par bloc de 3 s, trop peu pour trois paramètres libres, et la médiane
+    des ajustements par soma n'est pas moins bruitée que l'ajustement de la somme (~260 000
+    photons). Décalage de l'IRF ajusté sur toute la session, puis fixé.
+    Chaque série est rapportée à sa droite de dérive (`ecart_a_la_derive`) plutôt qu'à la
+    pente à un niveau par intervalle des slides : sur la mono-exponentielle, les deux
+    s'accordent (+16,8 et +16,1 ps/100 s), mais sur ces séries 3 à 10 fois plus bruitées,
+    la pente estimée intervalle par intervalle s'égare (τ1 : +25 ps/100 s, contre +10 ± 5
+    pour la droite) et fabrique une fausse descente sur la session.
+    Rend {nom: (Δ par bloc en ps, valeur avant la 1re stim en ns, pente en ps/s)}."""
+    D, s = d["D"], d["sr"]
+    info = json.loads((D["projections"] / "session.json").read_text())
+    dec = np.load(D["mesures"] / "declins.npz")
+    k, nb, *_ = step5.tranches(info)                                 # blocs de ~3 s, comme l'étape 5
+    valide = step5.regrouper(dec["frac_cellpose"][:, d["kept"]], k, nb, np.min) >= config.MIN_VALID_FRAC
+    H = step5.regrouper(dec["cellpose"][d["kept"], :, canal - 1].swapaxes(0, 1), k, nb)   # [bloc, soma, 256]
+    H = (H * valide[..., None]).sum(1)
+    I, dt = config.irf(ROOT)
+    M = Modele(I[canal], dt)
+    g = M.ajuster2(H.sum(0))
+    p = np.array([M.ajuster2(h, s=g[3], depart=(g[0], g[1], g[2], g[4]))[:3] for h in H])
+    out = {}
+    for nom, v in (("tau1", p[:, 0]), ("tau2", p[:, 1]), ("tau_moyen", tau_moyen(*p.T))):
+        v = v * 1000                                                 # ps
+        ecart, pente = ecart_a_la_derive(s["t"], v, s["stim"], s["fen"])
+        out[nom] = (ecart, np.nanmedian(v[s["base"]]) / 1000, pente)
+    return out
+
+
+def redescente_2exp(d, nom, canal=1):
+    """Comme `redescente`, avec deux durées de vie : τ1, τ2 et τ moyen de la somme des
+    somas, un panneau chacun. Trait fin : chaque bloc ; épais : lissé comme dans les
+    slides ; redescentes ajustées hors stim, un τ commun aux stims dans chaque panneau."""
+    T, s = TEXTES["redescente_2exp"], d["sr"]
+    t, fen = s["t"], s["fen"]
+    series = deux_durees_de_vie(d, canal)
+    fig, axes = plt.subplots(len(series), 1, figsize=FORMAT["redescente_2exp"], sharex=True,
+                             facecolor=C["fond"])
+    for ax, (cle, (v, base, pente)) in zip(axes, series.items()):
+        style(ax)
+        bandes_stim(ax, fen)
+        ax.plot(t, v, color=C[cle], lw=0.8, alpha=0.45, zorder=2)
+        ax.plot(t, SR.lisser(v[None, :])[0], color=C[cle], lw=2.2, zorder=3)
+        ax.axhline(0, color=C["texte_2"], lw=0.9, ls="--", zorder=1)
+        tau, se, courbes = SR.ajuster_retours(t, np.where(s["stim"], np.nan, v), fen)
+        for A_, C_, b, x0, x1 in courbes:
+            xx = np.linspace(x0, x1, 300)
+            ax.plot(b + xx, C_ + A_ * np.exp(-xx / tau), color=C["redescente"], lw=2.2, zorder=4)
+        ylim_robuste(ax, v, marge=0.08)
+        axe_titre(ax, y=T[f"y_{cle}"].format(base=base))
+        print(f"     {cle:9s} base {base:.3f} ns, dérive {pente * 100:+.1f} ps/100 s ; τ commun = "
+              f"{tau:.1f} ± {se:.1f} s ; A par stim : {', '.join(f'{a:+.1f}' for a, *_ in courbes)} ps")
+    axe_titre(axes[-1], x=T["x"])
+    fig.align_ylabels(axes)
+    fig.tight_layout()
+    sauver(fig, nom)
 
 
 def correlation(d, nom):
@@ -641,6 +697,8 @@ FIGURES = {
     "retour_equilibre_cellpose":      (lambda d, R, n: retour(R, n), "R"),
     "temps_de_remontee":              (lambda d, R, n: distribution(R, n), "R"),
     "duree_de_vie_redescente":        (lambda d, R, n: redescente(d, n), "d"),
+    "duree_de_vie_redescente_2exp":   (lambda d, R, n: redescente_2exp(d, n), "d"),
+    "duree_de_vie_redescente_2exp_canal2": (lambda d, R, n: redescente_2exp(d, n, canal=2), "d"),
     "correlation_ratio_duree_de_vie": (lambda d, R, n: correlation(d, n), "d"),
 }
 

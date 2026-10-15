@@ -1,0 +1,54 @@
+# Paramètres du simulateur FLIM-FRET à deux canaux.
+#
+# Chaque valeur porte sa provenance. Les valeurs inférées sont des points de
+# départ : pour les remplacer par une mesure, écrire le nombre à la place
+# (et mettre à jour la source). Mots-clés :
+#   "titration" : lu dans sorties/titration/parametres_<proteine>.toml (step1)
+#   "spectres"  : lu dans sorties/spectres/eta.toml (step0)
+#   "fpbase"    : rendement quantique FPbase de la protéine (step0)
+
+[capteur]
+# Titration du 2026-07-20 (Maîtrise/Données/2026-07-20_SCLM) : "mCer3_Topaz",
+# "SCLM" ou "M2-SCLM". mCer3_Topaz par défaut : donneur mCerulean3 comme dans
+# le plan, et la seule des trois que M2 lent décrit proprement (README).
+proteine = "mCer3_Topaz"
+# Donneur pour η et Φ_D : "mcerulean3", ou "cerulean" pour SCLM et M2-SCLM.
+donneur = "mcerulean3"
+
+tau_D0 = "titration"   # ns ; déclin long, lié sur toute la titration
+tau_DA = "titration"   # ns ; déclin court, lié sur toute la titration
+x0 = "titration"       # fraction active à 0 mM (isotherme sur les x)
+x_sat = "titration"    # fraction active à saturation (« F »)
+K_D = "titration"      # mM, K VRAI (isotherme sur x), pas le K apparent de ton Hill
+n = "titration"        # coefficient de Hill de l'isotherme sur x
+
+tau_A = 3.0            # ns ; inféré des YFP T203Y, à mesurer sur mTopaz seul
+Phi_D = "fpbase"       # 0,87 (mCerulean3) ; 0,62 pour Cerulean
+Phi_A = "fpbase"       # 0,60 (Topaz)
+mecanisme = "M2_lent"  # ou "M2_rapide" (échange rapide, un seul τ qui glisse)
+
+[optique]
+# η[canal, émetteur] : spectres FPbase de mCerulean3 et Topaz intégrés sur les
+# transmissions FPbase de tes filtres (Chroma D470/40m, Chroma ET530/30m),
+# détection plate. Pour imposer une matrice : eta = [[BD, BA], [YD, YA]].
+eta = "spectres"
+# Excitation directe de l'accepteur à 800 nm : ≈ 0,02–0,05 d'après le spectre
+# 2P mesuré de mCer3 (Leben 2022) ÷ le spectre 2P inféré de Citrine
+# (Drobizhev 2011). Valeur centrale ; balayée de 0 à 0,10 à l'étape 5.
+epsilon = 0.03
+# ε_dark·Φ_dark de la forme protonée (absorbe vers 400 nm, donc excitée à
+# 800 nm en 2P) : considérée non émissive, d'où 0. Balayé de 0 à 0,05.
+epsilonPhi_dark = 0.0
+
+[instrument]
+irf = "/Users/eliasouellet-oviedo/Documents/Maîtrise/Données/2026-07-20_SCLM/irf_20260710_16x_sclm.sdt"
+n_bins = 256
+T_rep = 12.5           # ns, laser à 80 MHz
+t0 = 0.0               # ns, décalage de l'IRF (l'ajustement global trouve ≈ −0,015 ns)
+# Canaux valides : ton gating de vec_to_lifetime (5,098 % et 94,90 % du TAC) ;
+# les canaux 1–13 et 245–256 de tes .sdt sont vides (limites du TAC).
+fenetre = [14, 242]
+
+[experience]
+C_max = 150.0          # mM, plafond des estimations (≈ ta concentration de titration la plus haute)
+# Normalisation A : N = photons bleus attendus à 20 mM (C_REF_NORMALISATION_A, src/Generate.jl).

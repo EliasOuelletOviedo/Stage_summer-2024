@@ -121,7 +121,7 @@ Deux pièges propres à ce montage :
 |---|---|
 | `config.py` | paramètres, lecture d'une session, masques des ROIs FLIMApp |
 | `spc.py` | décodage des `.spc` et rangement des photons (vectorisé, un passage) |
-| `flim_fit.py` | ajustement des durées de vie, temps moyen |
+| `flim_fit.py` | ajustement des durées de vie (une, ou deux comme les calibrations), temps moyen |
 | `figures.py` | style commun des figures |
 | `step1` … `step7` | les étapes |
 | `<jeu>/présentation/presentation.py` | (dans chaque jeu) figures sur fond noir : images avec et sans ROIs, photons et ratio image par image, ratio corrigé, retour à l'équilibre, temps de remontée. Calculs importés d'ici ; couleurs, polices, tailles et tous les textes réglables en tête du script |
