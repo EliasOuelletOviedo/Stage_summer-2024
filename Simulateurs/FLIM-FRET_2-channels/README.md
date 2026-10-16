@@ -1204,6 +1204,80 @@ monotones (*) ne donnent qu'une valeur indicative, exclue de la moyenne.
 | `inconnue.csv`, `inconnue_combinee.csv`, `inconnue_diagnostics.csv` | l'échantillon inconnu : valeur et incertitudes par lecture et par longueur d'onde, moyenne des longueurs d'onde, contrôles, t₀ et tension rapport/forme |
 | `sorties/figures/fig17_deux_canaux_SCLM_…` à `fig23_…` | RMSE et concentration, RMSE et budget à 20 mM, blanchiment, carte finale, ajustement global, calibration, échantillon inconnu |
 
+## Étape 15 appliquée au capteur KIRIN (titration du 2026-10-16, fig. `…_KIRIN_…`)
+
+La même chaîne, sans changer l'analyse, tourne sur `Data/2026-10-16/KIRIN` : 8 concentrations (0, 2,5,
+5, 10, 20, 40, 80 et 150 mM) × 3 longueurs d'onde × 10 acquisitions de 1 s. Le dossier `unknown` est
+ignoré, et les données sont traitées seules.
+
+```bash
+julia --project=. -t 8 step15_analyse_deux_canaux.jl --donnees Data/2026-10-16/KIRIN charger global calibrer amincir blanchir agreger
+```
+
+Les sorties vont dans `sorties/deux_canaux_2026-10-16_KIRIN/` et `sorties/figures/fig17_deux_canaux_KIRIN_…`
+à `fig22_…`. Pour que deux capteurs ne s'écrasent pas, le nom du jeu de données entre désormais dans les
+noms de sortie (SCLM : `…_SCLM`).
+
+### Ce que disent les données
+
+- **KIRIN répond à l'envers de SCLM et sature tôt.**
+  - J/B augmente avec le Cl⁻ : ×2,2 (750 nm), ×2,4 (800 nm), ×2,3 (850 nm).
+  - Les K apparents valent 2 à 4 mM pour toutes les lectures utilisables.
+  - Au-delà de 40 mM, la courbe est presque plate : à 800 nm, J/B vaut 3,61 à 40 mM, 3,71 à 80 mM et
+    3,76 à 150 mM.
+- **Le mélange statique à deux états décrit bien KIRIN.**
+  - L'excès de χ²ᵣ d'un mélange des deux extrêmes est ≈ 0 à tous les points, sauf à 2,5 mM (1,4 à 2,7).
+  - La population de l'état FRET (amplitude de τ₂ du bleu) passe de 0,12–0,19 à 0 mM à 0,56–0,59 à
+    150 mM.
+- **La composante rapide du jaune est une montée, pas une fuite.**
+  - Son amplitude est négative (τ_J = 0,53 à 0,57 ns) : c'est l'émission sensibilisée.
+  - Le lien τ_J = τ₂ est rejeté (Δdéviance/χ²ᵣ de 18 à 189), et λ_fuite est négatif.
+  - La lecture 1c n'a donc pas de sens ici ; elle est non monotone aux trois longueurs d'onde.
+- **La règle ne désigne aucune gagnante, sauf à 850 nm et 10⁵ photons (J/B et 5d).** Elle juge les
+  points de 2,5 à 80 mM, et KIRIN ne distingue pas 80 de 150 mM. À 80 mM, 2 à 12 % des tirages de J/B
+  sortent de la plage calibrée à 10⁴ photons. À 750 nm, J/B et 5d sont même non monotones (J/B baisse
+  de 80 à 150 mM, 3,7 σ) et sont écartés entièrement.
+- **Dans sa plage utile, KIRIN se lit très bien par J/B ou 5d** (ex aequo, sur la borne de Fisher ; le
+  jumeau rend les mêmes σ à 0,4 % près en médiane). RMSE vraie de J/B à 800 nm et 10⁴ photons bleus :
+
+  | [Cl⁻] | 2,5 mM | 5 mM | 10 mM | 20 mM | 40 mM | 80 mM |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | RMSE | 0,15 mM | 0,31 | 0,93 | 3,0 | 10 | 23 |
+
+  - Médiane sur 5–35 mM à 800 nm : 3,6 mM à 10³ photons, 2,1 à 3·10³, 0,9 à 10⁴, 0,5 à 3·10⁴,
+    0,3 à 10⁵. À 850 nm, c'est 5 à 15 % de plus.
+  - Le déclin du bleu porte 3 fois moins d'information que J/B à 5–10 mM. Les lectures de durée de vie
+    (2, 6, 4) sont ~3 fois moins précises et biaisées au-dessus de 20 mM.
+- **La carte finale** donne 5d ou J/B de 0 à 40 mM à 800 et 850 nm, à partir de 10⁴ photons pour 20 et
+  40 mM. Aucune lecture ne passe à 80 et 150 mM (sauf 850 nm, 80 mM, 10⁵ photons). À 750 nm, faute de
+  J/B, ce sont les lectures de forme (5a, 4) qui gagnent, et seulement sous 40 mM.
+- **Le blanchiment.** Les intensités baissent dans 9 cellules sans que J/B bouge (signature C, ou baisse
+  d'excitation), au plus 1,4 % par seconde. Taux tolérable pour J/B à 800 et 850 nm (|biais| < 1 mM sur
+  5–35 mM, 10⁴ photons) : 0,85 % (A), 1,1–1,2 % (B), 15–18 % (C).
+- **La longueur d'onde.** À photons égaux, sur 5–35 mM, 800 nm fait un peu mieux que 850 nm (0,93
+  contre 1,06 mM à 10⁴), et donne le plus de photons bleus (193 000/s à 20 mM). 750 nm est écarté.
+
+- **L'échantillon inconnu** (`KIRIN/unknown`, étape `inconnue`, `fig23_deux_canaux_KIRIN_inconnue.png`).
+  - Il tombe dans la zone saturée, entre 40 et 80 mM.
+  - Valeurs moyennées sur les longueurs d'onde : J/B **54 ± 2** mM, 5d 54 ± 3, mono-exponentiel bleu
+    54 ± 4, phasor 57 ± 4, bi-exp. à τ figés 59 ± 4, 5a 58 ± 10.
+  - Les lectures s'accordent : la tension rapport/forme vaut 1 à 10, dans la plage des étalons.
+  - L'interpolation entre 40 et 80 mM domine l'incertitude (2 à 3,5 mM) : un étalon à 60 mM la
+    réduirait.
+  - 2J, 3 et 1c sont inutilisables ici : courbes plates ou non monotones.
+  - Son J/B dérive pendant l'acquisition à 800 nm (−0,17 % par acquisition, t = −5,7), et disperse à
+    2 × Poisson à 750 et 800 nm.
+
+### Réserves propres à KIRIN
+
+- **Les règles du document jugent la plage 2,5–80 mM**, que KIRIN ne couvre pas : il est fait pour les
+  faibles concentrations. Jugé sur 2,5–20 mM, J/B et 5d passeraient dès quelques milliers de photons.
+  Ce critère n'est pas celui écrit d'avance : à décider avant de l'appliquer.
+- **La non-monotonie de 80 à 150 mM** (750 nm surtout) écarte des lectures entières pour un défaut
+  situé hors de leur plage utile. Un étalon à 150 mM n'apporte rien à ce capteur.
+- **La diffusion n'est pas constante** d'un échantillon à l'autre (écart-type relatif de 21 à 27 %,
+  contre moins de 5 % pour SCLM). Elle reste exclue des populations, mais son niveau varie.
+
 ## 1. Ta titration et le test de M2 lent (`step1_titration.jl`)
 
 Ajustement global du canal bleu, sur les canaux 14–242 (ton gating ; les canaux 1–13 et 245–256 de tes .sdt

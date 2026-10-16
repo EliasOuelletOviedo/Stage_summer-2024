@@ -1,0 +1,33 @@
+N =   300  σ_C à 20 mM : J/B 4.80, 5a p 32.69, q 48.01, p+q 27.02 mM ; w = (-319, 149)
+  aucune       σ_w,g = 1e-04  biais fin : J/B  +0.11  5a +13.71  Kalman  +0.98 mM ; P11/err² complet 1.52, diagonal 1.39
+  rampe 5 %    σ_w,g = 1e-04  biais fin : J/B  -1.46  5a +14.01  Kalman  -0.04 mM ; P11/err² complet 1.87, diagonal 1.72
+  rampe 10 %   σ_w,g = 1e-04  biais fin : J/B  -2.77  5a +13.56  Kalman  -0.96 mM ; P11/err² complet 1.68, diagonal 1.62
+  rampe 20 %   σ_w,g = 1e-04  biais fin : J/B  -4.75  5a +13.27  Kalman  -2.59 mM ; P11/err² complet 0.79, diagonal 0.82
+  saut 5 %     σ_w,g = 1e-04  biais fin : J/B  -1.77  5a +13.88  Kalman  -0.41 mM ; P11/err² complet 1.64, diagonal 1.53
+N =  1000  σ_C à 20 mM : J/B 2.28, 5a p 15.82, q 24.52, p+q 13.29 mM ; w = (-335, 138)
+  aucune       σ_w,g = 1e-04  biais fin : J/B  -0.01  5a  +3.31  Kalman  +0.22 mM ; P11/err² complet 1.52, diagonal 1.46
+  rampe 5 %    σ_w,g = 1e-04  biais fin : J/B  -1.70  5a  +3.30  Kalman  -0.65 mM ; P11/err² complet 1.41, diagonal 1.37
+  rampe 10 %   σ_w,g = 1e-04  biais fin : J/B  -3.23  5a  +3.23  Kalman  -1.45 mM ; P11/err² complet 0.90, diagonal 0.89
+  rampe 20 %   σ_w,g = 1e-04  biais fin : J/B  -5.62  5a  +3.16  Kalman  -2.89 mM ; P11/err² complet 0.33, diagonal 0.33
+  saut 5 %     σ_w,g = 1e-04  biais fin : J/B  -2.03  5a  +3.29  Kalman  -0.99 mM ; P11/err² complet 0.98, diagonal 0.97
+  aucune       σ_w,g = 3e-04  biais fin : J/B  -0.01  5a  +3.31  Kalman  +0.22 mM ; P11/err² complet 1.53, diagonal 1.47
+  rampe 5 %    σ_w,g = 3e-04  biais fin : J/B  -1.70  5a  +3.30  Kalman  -0.58 mM ; P11/err² complet 1.45, diagonal 1.41
+  rampe 10 %   σ_w,g = 3e-04  biais fin : J/B  -3.23  5a  +3.23  Kalman  -1.31 mM ; P11/err² complet 0.97, diagonal 0.96
+  rampe 20 %   σ_w,g = 3e-04  biais fin : J/B  -5.62  5a  +3.16  Kalman  -2.65 mM ; P11/err² complet 0.37, diagonal 0.37
+  saut 5 %     σ_w,g = 3e-04  biais fin : J/B  -2.03  5a  +3.29  Kalman  -0.87 mM ; P11/err² complet 1.04, diagonal 1.02
+  aucune       σ_w,g = 1e-03  biais fin : J/B  -0.01  5a  +3.31  Kalman  +0.24 mM ; P11/err² complet 1.63, diagonal 1.56
+  rampe 5 %    σ_w,g = 1e-03  biais fin : J/B  -1.70  5a  +3.30  Kalman  -0.20 mM ; P11/err² complet 1.64, diagonal 1.58
+  rampe 10 %   σ_w,g = 1e-03  biais fin : J/B  -3.23  5a  +3.23  Kalman  -0.64 mM ; P11/err² complet 1.40, diagonal 1.36
+  rampe 20 %   σ_w,g = 1e-03  biais fin : J/B  -5.62  5a  +3.16  Kalman  -1.45 mM ; P11/err² complet 0.72, diagonal 0.72
+  saut 5 %     σ_w,g = 1e-03  biais fin : J/B  -2.03  5a  +3.29  Kalman  -0.29 mM ; P11/err² complet 1.36, diagonal 1.32
+  aucune       σ_w,g = 3e-03  biais fin : J/B  -0.01  5a  +3.31  Kalman  +0.28 mM ; P11/err² complet 1.78, diagonal 1.71
+  rampe 5 %    σ_w,g = 3e-03  biais fin : J/B  -1.70  5a  +3.30  Kalman  +0.15 mM ; P11/err² complet 1.80, diagonal 1.73
+  rampe 10 %   σ_w,g = 3e-03  biais fin : J/B  -3.23  5a  +3.23  Kalman  -0.03 mM ; P11/err² complet 1.80, diagonal 1.74
+  rampe 20 %   σ_w,g = 3e-03  biais fin : J/B  -5.62  5a  +3.16  Kalman  -0.31 mM ; P11/err² complet 1.61, diagonal 1.56
+  saut 5 %     σ_w,g = 3e-03  biais fin : J/B  -2.03  5a  +3.29  Kalman  +0.21 mM ; P11/err² complet 1.78, diagonal 1.72
+N =  3000  σ_C à 20 mM : J/B 1.25, 5a p 8.68, q 13.82, p+q 7.35 mM ; w = (-343, 133)
+  aucune       σ_w,g = 1e-04  biais fin : J/B  +0.00  5a  +0.63  Kalman  +0.12 mM ; P11/err² complet 1.34, diagonal 1.32
+  rampe 5 %    σ_w,g = 1e-04  biais fin : J/B  -1.69  5a  +0.64  Kalman  -0.67 mM ; P11/err² complet 1.02, diagonal 1.01
+  rampe 10 %   σ_w,g = 1e-04  biais fin : J/B  -3.23  5a  +0.60  Kalman  -1.45 mM ; P11/err² complet 0.48, diagonal 0.48
+  rampe 20 %   σ_w,g = 1e-04  biais fin : J/B  -5.80  5a  +0.61  Kalman  -2.82 mM ; P11/err² complet 0.15, diagonal 0.15
+  saut 5 %     σ_w,g = 1e-04  biais fin : J/B  -2.02  5a  +0.61  Kalman  -1.01 mM ; P11/err² complet 0.57, diagonal 0.57

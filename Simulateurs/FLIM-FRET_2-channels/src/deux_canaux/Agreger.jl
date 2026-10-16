@@ -324,8 +324,9 @@ function regle_longueur_onde(flat::DataFrame, regles::DataFrame, controles::Data
             jaune_accepteur_0mM = gl.intensite_tauA_jaune[1], cmax_mM = gl.cl_mM[end], jaune_diffusion_cmax = gl.intensite_diffusion_jaune[end],
             jaune_rapide_cmax = gl.intensite_tauJ_jaune[end], jaune_accepteur_cmax = gl.intensite_tauA_jaune[end]))
     end
-    out.meilleure_photons_egaux = out.rmse_mediane_photons_egaux_mM .== minimum(filter(isfinite, vcat(out.rmse_mediane_photons_egaux_mM, Inf)))
-    out.meilleure_temps_egal = out.rmse_mediane_temps_egal_mM .== minimum(filter(isfinite, vcat(out.rmse_mediane_temps_egal_mM, Inf)))
+    # aucune gagnante à aucune longueur d'onde : aucune n'est « meilleure »
+    out.meilleure_photons_egaux = out.rmse_mediane_photons_egaux_mM .== minimum(vcat(filter(isfinite, out.rmse_mediane_photons_egaux_mM), Inf))
+    out.meilleure_temps_egal = out.rmse_mediane_temps_egal_mM .== minimum(vcat(filter(isfinite, out.rmse_mediane_temps_egal_mM), Inf))
     return out
 end
 
