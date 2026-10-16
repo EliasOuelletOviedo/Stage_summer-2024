@@ -25,7 +25,7 @@ mkpath(dossier)
 
 cfg = TOML.parsefile(S.FICHIER_PARAMETRES)
 f = cfg["instrument"]["fenetre"]
-irf_mat = S.charger_irf_utilisateur(cfg["instrument"]["irf"])
+irf_mat = S.charger_irf_utilisateur(S.valeur_cfg(cfg["instrument"]["irf"]))
 inst = S.InstrumentParams(irf = S.irf_normalisee(irf_mat), fenetre = f[1]:f[2])
 inst_u = S.charger_instance_utilisateur(irf_mat)
 
@@ -73,8 +73,25 @@ for prot in proteines
     end
     dist = [S.distance_droite(z, P_D0, P_DA) for z in phas]
 
+    # 7. le test d'intensité (la « porte » de la note de changements) : acquisitions à
+    #    temps fixé ? Si oui, les comptages totaux, fond retiré, doivent monter avec [Cl⁻]
+    #    comme (1 − E·x(C))/(1 − E·x₀), l'amplitude du donneur à t = 0 restant constante.
+    acq = [S.lire_acquisition(h.fichier) for h in hs]
+    m_fen = length(inst.fenetre)
+    N_net = [sum(h.n[inst.fenetre]) for h in hs] .- g.b .* m_fen
+    E = 1 - g.τ_DA / g.τ_D0
+    x_iso = S.isotherme(C, [iso.x₀, iso.x_sat, iso.K_D, iso.n])
+    I_pred = (1 .- E .* x_iso) ./ (1 - E * iso.x₀)
+    N0 = mean(N_net[C.==0])
+    rapport_mes = mean(N_net[isinf.(C)]) / N0
+    rapport_pred = (1 - E * iso.x_sat) / (1 - E * iso.x₀)
+    @printf("acquisitions : durée %s s, arrêt sur temps : %s\n", join(unique(round.(first.(acq), digits = 3)), "/"), join(unique(last.(acq)), "/"))
+    @printf("test d'intensité : comptages nets saturant / 0 mM mesurés ×%.3f, prédits (1 − E·x_sat)/(1 − E·x₀) = ×%.3f\n", rapport_mes, rapport_pred)
+
     df = DataFrame(proteine = prot, concentration = [h.dossier for h in hs], C_mM = C, replicat = [h.replicat for h in hs],
-        N_fenetre = [sum(h.n[inst.fenetre]) for h in hs],
+        duree_acquisition_s = first.(acq), arret_sur_temps = last.(acq),
+        N_fenetre = [sum(h.n[inst.fenetre]) for h in hs], N_net = N_net, intensite_nette_sur_0mM = N_net ./ N0,
+        intensite_predite_sur_0mM = I_pred,
         tau_mono_ns = [p[1] for p in mono], chi2_mono = χ2_mono, chi2_mono_predit_M2 = first.(pred),
         x = g.x, sigma_x = g.σ_x, intensite_relative = g.A ./ mean(g.A), fond_par_canal = g.b, chi2_global = g.chi2,
         tau_D0_libre = [l[1][1] for l in libres], tau_DA_libre = [l[1][2] for l in libres], x_libre = [l[1][3] for l in libres],
@@ -99,13 +116,15 @@ for prot in proteines
 
     out = Dict{String,Any}(
         "proteine" => prot, "date" => string(Dates.today()),
-        "source" => "$(S.DOSSIER_TITRATION)/$prot, IRF $(cfg["instrument"]["irf"]), fenêtre $(f[1])–$(f[2])",
+        "source" => "$(S.DOSSIER_TITRATION)/$prot, IRF $(S.valeur_cfg(cfg["instrument"]["irf"])), fenêtre $(f[1])–$(f[2])",
         "tau_D0" => g.τ_D0, "tau_D0_sigma" => g.σ_glob[1], "tau_DA" => g.τ_DA, "tau_DA_sigma" => g.σ_glob[2],
         "t0" => g.t₀, "chi2_r_global" => g.chi2_global, "chi2_r_libres_moyen" => mean(last.(libres)),
         "x0" => iso.x₀, "x_sat" => iso.x_sat, "K_D" => iso.K_D, "n" => iso.n,
         "isotherme_n1" => Dict("x0" => iso1.x₀, "x_sat" => iso1.x_sat, "K_D" => iso1.K_D),
         "isotherme_sans_F" => Dict("x0" => isoF.x₀, "x_sat" => isoF.x_sat, "K_D" => isoF.K_D, "n" => isoF.n),
         "intensite_relative_cv" => std(g.A) / mean(g.A),
+        "acquisition_duree_s" => unique(first.(acq)), "acquisition_arret_sur_temps" => all(last.(acq)),
+        "test_intensite" => Dict("mesure_sat_sur_0" => rapport_mes, "predit_sat_sur_0" => rapport_pred, "E" => E),
         "phasor_distance_mediane" => median(dist),
         "phasor_tau_D0" => [real(P_D0), imag(P_D0)], "phasor_tau_DA" => [real(P_DA), imag(P_DA)],
     )

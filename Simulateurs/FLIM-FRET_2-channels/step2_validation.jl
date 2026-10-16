@@ -1,7 +1,9 @@
 # Étape 2 — validation interne : les huit tests du plan, plus trois tests de
 # fidélité (noyau contre intégrale exacte, FFT contre convolution directe,
-# adaptateur contre tes propres résultats). Tant qu'ils ne passent pas tous,
-# aucun résultat du simulateur ne vaut la peine d'être interprété.
+# adaptateur contre tes propres résultats), et huit tests des modules ajoutés
+# à la révision du 2026-10-15 (modèle à N états, IRF dilatée, retard du jaune,
+# blanchiment, ingestion du bleu et du jaune, dérive de gain). Tant qu'ils ne
+# passent pas tous, aucun résultat du simulateur ne vaut la peine d'être interprété.
 #
 #   julia --project=. -t 8 step2_validation.jl
 #
@@ -267,6 +269,109 @@ let
     τu = S.ajuster_mono_utilisateur(iu, h.n)[1][1]
     verdict!("11 adaptateur : ton τ mono de SCLM 0 mM c1 (raw_data.csv)", "identique", @sprintf("%.16f contre %.16f", τu, ligne.tau_1exp[1]),
         τu == ligne.tau_1exp[1])
+end
+
+# -----------------------------------------------------------------------------
+# 12–19. Révision du 2026-10-15 (changements à apporter) : nouveaux modules
+# -----------------------------------------------------------------------------
+let
+    # 12. modèle à N états : avec les deux états de M2 lent, redonne expsums
+    e = maximum(map((0.0, 0.2, x20, 0.43)) do x
+        eB, eY = S.canaux_etats(S.etats_M2(x, m.p)..., m.p, m.o)
+        a = S.formes_x(x, m, ws)
+        max(relerr(S.forward(eB, m.inst, ws)[W], a[1][W]), relerr(S.forward(eY, m.inst, ws)[W], a[2][W]))
+    end)
+    verdict!("12 modèle à N états (canaux_etats) ≡ M2 lent à deux états", "écart relatif < 1e-12", @sprintf("%.1e", e), e < 1e-12)
+
+    # 13. IRF dilatée : identité à s = 1, aire conservée, largeur monotone en s
+    irf = m.inst.irf
+    e1 = relerr(S.irf_dilatee(irf, 1.0), irf)
+    aires = [sum(S.irf_dilatee(irf, s)) for s in (0.9, 1.1)]
+    larg(v) = (t = 1:length(v); μ = sum(t .* v) / sum(v); k = argmax(v); w = max(1, k - 6):min(length(v), k + 6);
+        sqrt(sum((t[w] .- μ) .^ 2 .* v[w]) / sum(v[w])))
+    l = [larg(S.irf_dilatee(irf, s)) for s in (0.9, 1.0, 1.1)]
+    ok = e1 < 1e-12 && all(abs.(aires .- 1) .< 1e-12) && l[1] < l[2] < l[3]
+    verdict!("13 IRF dilatée : identité à s = 1, aire conservée, largeur monotone", "1e-12 ; croissante",
+        @sprintf("%.1e ; aires −1 = %.1e ; largeurs %.2f < %.2f < %.2f canaux", e1, maximum(abs.(aires .- 1)), l...), ok)
+
+    # 14. retard du détecteur jaune : formes et dérivées cohérentes
+    mΔ = S.remplacer(m; inst = S.remplacer(m.inst; Δt_jaune = 0.037))
+    mB, mY = S.formes_x(x20, mΔ, ws)
+    _, eY = S.expsums(x20, m.p, m.o)
+    ref = S.forward(eY, S.remplacer(m.inst; t₀ = m.inst.t₀ + 0.037), ws)
+    S.masquer!(ref, W)
+    e_f = relerr(mY, ref)
+    _, _, dB, dY = S.formes_et_derivees(x20, mΔ, ws)
+    h = 1e-6
+    mBp, mYp = S.formes_x(x20, mΔ, ws; t₀ = m.inst.t₀ + h)
+    mBm, mYm = S.formes_x(x20, mΔ, ws; t₀ = m.inst.t₀ - h)
+    e_d = max(relerr((mBp .- mBm) ./ 2h, dB[:, 5]), relerr((mYp .- mYm) ./ 2h, dY[:, 5]))
+    # différences centrées sur un noyau seulement C¹ : précision de l'ordre de 1e-5 ; une erreur de formule donnerait O(1)
+    verdict!("14 retard Δt du jaune : forme décalée et ∂/∂t₀ (différences finies)", "1e-12 ; 1e-5", @sprintf("%.1e ; %.1e", e_f, e_d),
+        e_f < 1e-12 && e_d < 1e-5)
+
+    # 15. blanchiment : la branche « états blanchis » à β = 0 redonne M2 ; β → 0 continu ;
+    #     β_D = 0 : la population de donneurs est conservée et les accepteurs intacts valent (1 − e^{−κ_A})/κ_A
+    eb0, ey0 = S.canaux_etats(S.etats_blanchis(x20, m.p)..., m.p, m.o)
+    a = S.formes_x(x20, m, ws)
+    e0 = max(relerr(S.forward(eb0, m.inst, ws)[W], a[1][W]), relerr(S.forward(ey0, m.inst, ws)[W], a[2][W]))
+    mε = S.remplacer(m; p = S.remplacer(m.p; β_A = 1e-9, β_D = 1e-9))
+    eε = relerr(S.formes_x(x20, mε, ws)[1], a[1])
+    e1 = maximum(map((0.1, 0.5, 0.9)) do βA
+        et, pops = S.etats_blanchis(x20, S.remplacer(m.p; β_A = βA))
+        κ = -log(1 - βA)
+        don = sum(pops[[e.donneur for e in et]])
+        acc = sum(pops[[e.donneur && e.accepteur in (:actif, :protone) for e in et]])
+        max(abs(don - 1), abs(acc - (-expm1(-κ) / κ)))
+    end)
+    verdict!("15 blanchiment : β = 0 ≡ M2, β → 0 continu, populations conservées", "1e-12 ; 1e-7 ; 1e-12",
+        @sprintf("%.1e ; %.1e ; %.1e", e0, eε, e1), e0 < 1e-12 && eε < 1e-7 && e1 < 1e-12)
+
+    # 16. blanchiment du donneur seul : intégrale du bleu × (1 − e^{−κ})/κ (règle de somme)
+    βD = 0.2
+    mD = S.remplacer(m; p = S.remplacer(m.p; β_D = βD))
+    κ = -log(1 - βD)
+    eBD, _ = S.expsums(0.0, mD.p, mD.o)
+    eB0, _ = S.expsums(0.0, m.p, m.o)
+    e = abs(S.integrale(eBD) / S.integrale(eB0) / (-expm1(-κ) / κ) - 1)
+    verdict!("16 blanchiment du donneur : moyenne de la survie sur l'acquisition", "écart relatif < 1e-12", @sprintf("%.1e", e), e < 1e-12)
+
+    # 17. ingestion : titration synthétique sans bruit (sans fuite de l'accepteur dans le bleu) → paramètres exacts
+    hs = S.lire_titration(cfg["capteur"]["proteine"])
+    refT = S.Reference(hs, m.inst; τ_D0_init = m.p.τ_D0, τ_DA_init = m.p.τ_DA)
+    m_sans = S.remplacer(m; o = S.remplacer(m.o; η = SMatrix{2,2}([m.o.η[1, 1] 0.0; m.o.η[2, 1] m.o.η[2, 2]])))
+    hyp = S.Hypothese(cle = "H1", description = "", p = S.remplacer(m.p; τ_D0 = refT.g.τ_D0, τ_DA = refT.g.τ_DA))
+    syn = S.titration_synthetique(hyp, refT, m_sans, StableRNG(1); bruit = false)
+    g = S.ajuster_global(syn, m.inst; τ_D0_init = 3.0, τ_DA_init = 0.5)
+    e_τ = max(abs(g.τ_D0 / refT.g.τ_D0 - 1), abs(g.τ_DA / refT.g.τ_DA - 1))
+    e_x = maximum(abs.(g.x .- refT.g.x))
+    e_t = abs(g.t₀ - refT.g.t₀)
+    g2 = S.ajuster_global(syn, m.inst; τ_D0_init = 3.0, τ_DA_init = 0.5, t0_par_histo = true)
+    e_t2 = maximum(abs.(g2.t0s .- refT.g.t₀))
+    verdict!("17 ingestion : titration synthétique sans bruit, paramètres retrouvés", "τ < 1e-6 rel., x < 1e-6, t₀ < 1e-6 ns (aussi t₀ par histogramme)",
+        @sprintf("τ %.1e ; x %.1e ; t₀ %.1e ns ; t₀ par histo %.1e ns", e_τ, e_x, e_t, e_t2), e_τ < 1e-6 && e_x < 1e-6 && e_t < 1e-6 && e_t2 < 1e-6)
+
+    # 18. canal jaune : banc simulé sans bruit → ajustement conjoint exact
+    banc = S.remplacer(S.avec_fuite(m, 0.8); p = S.remplacer(m.p; τ_A = 2.8, Φ_A_eff = 0.5),
+        o = S.remplacer(S.avec_fuite(m, 0.8).o; ε = 0.04), inst = S.remplacer(m.inst; Δt_jaune = 0.03))
+    hB, hY = Vector{Float64}[], Vector{Float64}[]
+    for C in (0.0, 30.0, Inf)
+        μB, μY = S.attendus(C, banc, 1e6, :A, ws)
+        μB[W] .+= 50
+        μY[W] .+= 30
+        push!(hB, μB)
+        push!(hY, μY)
+    end
+    rc = S.ajuster_bleu_jaune(hB, hY, m.inst, m; τ_fixes = true)
+    v = S.verite_jaune(banc)
+    e = maximum(abs(getfield(rc, k) - getfield(v, k)) / max(abs(getfield(v, k)), 0.01) for k in keys(v))
+    verdict!("18 canal jaune : ajustement conjoint d'un banc simulé sans bruit", "écart relatif max < 1e-4", @sprintf("%.1e", e), e < 1e-4)
+
+    # 19. dérive de gain : écart-type de log g après τ_g = amplitude
+    rng = StableRNG(19)
+    fin = [log(S.derive_gain(rng, 3001, 0.1; τ_g = 300.0)[end]) for _ in 1:4000]
+    e = abs(std(fin) / 0.05 - 1)
+    verdict!("19 dérive de gain : écart-type de log g après τ_g", "à 5 % près (4 000 marches)", @sprintf("%.3f contre 0.050", std(fin)), e < 0.05)
 end
 
 # -----------------------------------------------------------------------------

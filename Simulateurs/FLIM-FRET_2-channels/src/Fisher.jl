@@ -18,6 +18,7 @@ M2 lent seulement (les durées de vie sont constantes).
 """
 function formes_et_derivees(x::Real, m::Modele, ws::EspaceTravail; t₀::Float64 = m.inst.t₀)
     m.p.mecanisme === :M2_lent || error("dérivées analytiques écrites pour :M2_lent seulement")
+    (m.p.β_A == 0 && m.p.β_D == 0) || error("dérivées analytiques écrites sans blanchiment")
     α, dα_dx, dα_dτD0, dα_dτDA, dα_dτA = d_amplitudes_M2_lent(x, m.p, m.o)
     τs = durees_M2_lent(m.p)                  # (τ_DA, τ_D0, τ_A)
     n = ws.n
@@ -27,20 +28,29 @@ function formes_et_derivees(x::Real, m::Modele, ws::EspaceTravail; t₀::Float64
     for i in 1:3
         bases_derivees!(B[i], dBτ[i], dBt[i], ws, τs[i], t₀)
     end
+    # canal jaune décalé de Δt_jaune : ses propres bases
+    Δ = m.inst.Δt_jaune
+    BY, dBτY, dBtY = Δ == 0 ? (B, dBτ, dBt) : ([zeros(n) for _ in 1:3], [zeros(n) for _ in 1:3], [zeros(n) for _ in 1:3])
+    if Δ != 0
+        for i in 1:3
+            bases_derivees!(BY[i], dBτY[i], dBtY[i], ws, τs[i], t₀ + Δ)
+        end
+    end
     sorties = map(1:2) do c
+        Bc, dBτc, dBtc = c == 1 ? (B, dBτ, dBt) : (BY, dBτY, dBtY)
         mc = zeros(n)
         d = zeros(n, 5)
         for i in 1:3
-            mc .+= α[c, i] .* B[i]
-            d[:, 1] .+= dα_dx[c, i] .* B[i]
-            d[:, 2] .+= dα_dτD0[c, i] .* B[i]
-            d[:, 3] .+= dα_dτDA[c, i] .* B[i]
-            d[:, 4] .+= dα_dτA[c, i] .* B[i]
-            d[:, 5] .+= α[c, i] .* dBt[i]
+            mc .+= α[c, i] .* Bc[i]
+            d[:, 1] .+= dα_dx[c, i] .* Bc[i]
+            d[:, 2] .+= dα_dτD0[c, i] .* Bc[i]
+            d[:, 3] .+= dα_dτDA[c, i] .* Bc[i]
+            d[:, 4] .+= dα_dτA[c, i] .* Bc[i]
+            d[:, 5] .+= α[c, i] .* dBtc[i]
         end
-        d[:, 2] .+= α[c, 2] .* dBτ[2]         # τ_D0 est le terme 2
-        d[:, 3] .+= α[c, 1] .* dBτ[1]         # τ_DA est le terme 1
-        d[:, 4] .+= α[c, 3] .* dBτ[3]         # τ_A est le terme 3
+        d[:, 2] .+= α[c, 2] .* dBτc[2]         # τ_D0 est le terme 2
+        d[:, 3] .+= α[c, 1] .* dBτc[1]         # τ_DA est le terme 1
+        d[:, 4] .+= α[c, 3] .* dBτc[3]         # τ_A est le terme 3
         masquer!(mc, m.inst.fenetre)
         for j in 1:5
             masquer!(view(d, :, j), m.inst.fenetre)
@@ -64,7 +74,7 @@ function information_fisher(C::Real, m::Modele, N::Real, norm::Symbol, ws::Espac
                             params = (:x,), canaux = (:B, :Y), echelles::Symbol = :commune)
     x = fraction_active(C, m.p)
     mB, mY, dB, dY = formes_et_derivees(x, m, ws)
-    mB_ref = norm === :A ? formes(C_REF_NORMALISATION_A, m, ws)[1] : mB
+    mB_ref = norm === :A ? formes(C_REF_NORMALISATION_A, sans_blanchiment(m), ws)[1] : mB
     S = echelle(norm, N, mB, mY, mB_ref)
     W = m.inst.fenetre
     cols = [findfirst(==(p), NOMS_PHYSIQUES) for p in params]
@@ -95,7 +105,7 @@ Paramètres (x, log S).
 function information_fisher_totaux(C::Real, m::Modele, N::Real, norm::Symbol, ws::EspaceTravail)
     x = fraction_active(C, m.p)
     mB, mY, dB, dY = formes_et_derivees(x, m, ws)
-    mB_ref = norm === :A ? formes(C_REF_NORMALISATION_A, m, ws)[1] : mB
+    mB_ref = norm === :A ? formes(C_REF_NORMALISATION_A, sans_blanchiment(m), ws)[1] : mB
     S = echelle(norm, N, mB, mY, mB_ref)
     I = zeros(2, 2)
     for (mc, dc) in ((mB, dB), (mY, dY))

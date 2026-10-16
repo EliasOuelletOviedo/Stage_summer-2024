@@ -21,7 +21,9 @@ struct Histogramme
     C::Float64
     replicat::Int
     n::Vector{Float64}
+    fichier::String
 end
+Histogramme(p, d, C, r, n) = Histogramme(p, d, C, r, n, "")
 
 """
 Histogramme du canal 1 d'un .sdt, lu comme `read_sdt_frame` (tests/lifetime_analysis.jl) :
@@ -36,6 +38,19 @@ function lire_sdt(chemin::AbstractString)
     off = Int(sdt.header.meas_desc_block_offset)
     frame_time = reinterpret(Float32, brut[off+216:off+219])[1]
     return h, res, frame_time
+end
+
+"""
+    lire_acquisition(chemin) -> (duree_s, arret_sur_temps)
+
+Mode d'acquisition d'un .sdt : temps de collecte (col_t, s) et arrêt sur temps
+(stopt). C'est ce qui tranche « temps fixé ou photons fixés » : à temps fixé,
+l'intensité totale porte une information que le modèle doit reproduire.
+"""
+function lire_acquisition(chemin::AbstractString)
+    sdt = SdtFile.read_sdt(read(chemin), basename(chemin))
+    mi = sdt.measure_info[1]
+    return (Float64(mi.col_t), mi.stopt != 0)
 end
 
 """
@@ -64,7 +79,7 @@ function lire_titration(proteine::AbstractString; dossier = DOSSIER_TITRATION)
         for f in sort(filter(endswith(".sdt"), readdir(rep)))
             m = match(r"_c(\d+)\.sdt$", f)
             h, _, _ = lire_sdt(joinpath(rep, f))
-            push!(out, Histogramme(proteine, d, C, m === nothing ? 0 : parse(Int, m[1]), h))
+            push!(out, Histogramme(proteine, d, C, m === nothing ? 0 : parse(Int, m[1]), h, joinpath(rep, f)))
         end
     end
     return out
@@ -79,7 +94,8 @@ end
 
 `τ_D0, τ_DA, t₀` liés ; par histogramme : `x`, `A` (intensité), `b` (fond par
 canal) et leurs incertitudes ; `chi2` : χ²_r de Pearson par histogramme et
-global ; `μ` : modèle par histogramme (fenêtre).
+global ; `μ` : modèle par histogramme (fenêtre) ; `t0s` : le t₀ de chaque
+histogramme (tous égaux, sauf avec `t0_par_histo`).
 """
 struct ResultatGlobal
     τ_D0::Float64
@@ -96,47 +112,63 @@ struct ResultatGlobal
     converge::Bool
     μ::Vector{Vector{Float64}}
     cov::Matrix{Float64}
+    t0s::Vector{Float64}
+    σ_t0s::Vector{Float64}
 end
 
 """
-    ajuster_global(histos, inst; init) -> ResultatGlobal
+    ajuster_global(histos, inst; init, t0_fixe, t0_par_histo, tau_D0_fixe, tau_DA_fixe) -> ResultatGlobal
 
 Modèle pour l'histogramme h : μ_h = A_h·[x_h·B(τ_DA) + (1 − x_h)·B(τ_D0)] + b_h,
 B = IRF ⊛ noyau (unité d'amplitude à t = 0), donc x_h est directement la
 fraction d'amplitude du déclin court. Canal bleu pur donneur : la fuite de
 l'accepteur dans le bleu (η_BA/η_BD ≈ 0,6 %) est négligée ici.
+
+Options (changements 1 et 2) : `t0_fixe` impose le décalage de l'IRF (test d'un
+canal de décalage) ; `t0_par_histo` libère un t₀ par histogramme (diagnostic :
+un t₀ qui dérive avec [Cl⁻] serait un artefact corrélé au signal) ;
+`tau_D0_fixe`, `tau_DA_fixe` imposent les durées de vie. L'IRF de l'ajustement
+est celle de `inst`, qui peut différer de celle des données (hypothèse H5).
 """
 function ajuster_global(histos::Vector{Histogramme}, inst::InstrumentParams;
-                        τ_D0_init = 3.0, τ_DA_init = 0.8, t₀_init = 0.0, maxiter = 500)
+                        τ_D0_init = 3.0, τ_DA_init = 0.8, t₀_init = 0.0, maxiter = 500,
+                        t0_fixe::Union{Nothing,Real} = nothing, t0_par_histo::Bool = false,
+                        tau_D0_fixe::Union{Nothing,Real} = nothing, tau_DA_fixe::Union{Nothing,Real} = nothing)
     ws = EspaceTravail(inst)
     W = collect(inst.fenetre)
     m = length(W)
     H = length(histos)
-    P = 3 + 3H
+    nt = t0_par_histo ? H : 1
+    P = 2 + nt + 3H
+    it(h) = t0_par_histo ? 2 + h : 3
+    iX(h) = 2 + nt + h
+    iA(h) = 2 + nt + H + h
+    ib(h) = 2 + nt + 2H + h
     n = vcat([h.n[W] for h in histos]...)
-    iX(h) = 3 + h
-    iA(h) = 3 + H + h
-    ib(h) = 3 + 2H + h
 
-    n_full = ws.n
-    BD0, dBD0τ, dBD0t = zeros(n_full), zeros(n_full), zeros(n_full)
-    BDA, dBDAτ, dBDAt = zeros(n_full), zeros(n_full), zeros(n_full)
+    nf = ws.n
+    nouveaux() = [zeros(nf) for _ in 1:nt]
+    BD0, dBD0τ, dBD0t, BDA, dBDAτ, dBDAt = nouveaux(), nouveaux(), nouveaux(), nouveaux(), nouveaux(), nouveaux()
     function modele!(μ, J, θ)
-        τ_D0, τ_DA, t₀ = θ[1], θ[2], θ[3]
-        bases_derivees!(BD0, dBD0τ, dBD0t, ws, τ_D0, t₀)
-        bases_derivees!(BDA, dBDAτ, dBDAt, ws, τ_DA, t₀)
+        τ_D0, τ_DA = θ[1], θ[2]
+        for j in 1:nt
+            bases_derivees!(BD0[j], dBD0τ[j], dBD0t[j], ws, τ_D0, θ[2+j])
+            bases_derivees!(BDA[j], dBDAτ[j], dBDAt[j], ws, τ_DA, θ[2+j])
+        end
         fill!(J, 0.0)
         for h in 1:H
+            j = t0_par_histo ? h : 1
             x, A, b = θ[iX(h)], θ[iA(h)], θ[ib(h)]
             r0 = (h - 1) * m
+            bD0, bDA = BD0[j], BDA[j]
             @inbounds for (i, k) in enumerate(W)
                 r = r0 + i
-                f = x * BDA[k] + (1 - x) * BD0[k]
+                f = x * bDA[k] + (1 - x) * bD0[k]
                 μ[r] = A * f + b
-                J[r, 1] = A * (1 - x) * dBD0τ[k]
-                J[r, 2] = A * x * dBDAτ[k]
-                J[r, 3] = A * (x * dBDAt[k] + (1 - x) * dBD0t[k])
-                J[r, iX(h)] = A * (BDA[k] - BD0[k])
+                J[r, 1] = A * (1 - x) * dBD0τ[j][k]
+                J[r, 2] = A * x * dBDAτ[j][k]
+                J[r, it(h)] = A * (x * dBDAt[j][k] + (1 - x) * dBD0t[j][k])
+                J[r, iX(h)] = A * (bDA[k] - bD0[k])
                 J[r, iA(h)] = f
                 J[r, ib(h)] = 1.0
             end
@@ -144,20 +176,26 @@ function ajuster_global(histos::Vector{Histogramme}, inst::InstrumentParams;
         return nothing
     end
 
-    lo = vcat([0.2, 0.01, -1.5], fill(-0.5, H), fill(0.0, H), fill(0.0, H))
-    hi = vcat([12.0, 6.0, 1.5], fill(1.5, H), fill(Inf, H), fill(Inf, H))
+    borne(v, a, b) = v === nothing ? (a, b) : (Float64(v), Float64(v))
+    (lD0, hD0), (lDA, hDA), (lt, ht) = borne(tau_D0_fixe, 0.2, 12.0), borne(tau_DA_fixe, 0.01, 6.0), borne(t0_fixe, -1.5, 1.5)
+    lo = vcat([lD0, lDA], fill(lt, nt), fill(-0.5, H), fill(0.0, H), fill(0.0, H))
+    hi = vcat([hD0, hDA], fill(ht, nt), fill(1.5, H), fill(Inf, H), fill(Inf, H))
+    t0_depart = t0_fixe === nothing ? t₀_init : Float64(t0_fixe)
+    τD0_depart = tau_D0_fixe === nothing ? τ_D0_init : Float64(tau_D0_fixe)
+    departs_τDA = tau_DA_fixe === nothing ? (τ_DA_init, 0.3, 0.6, 1.2, 1.8) : (Float64(tau_DA_fixe),)
 
     meilleur = nothing
-    for τDA0 in (τ_DA_init, 0.3, 0.6, 1.2, 1.8), τD00 in (τ_D0_init,)
-        τDA0 < τD00 || continue
+    for τDA0 in departs_τDA
+        τDA0 < τD0_depart || continue
         θ0 = zeros(P)
-        θ0[1:3] = [τD00, τDA0, t₀_init]
-        base!(BD0, ws, τD00, t₀_init)
-        base!(BDA, ws, τDA0, t₀_init)
+        θ0[1:2] = [τD0_depart, τDA0]
+        θ0[3:2+nt] .= t0_depart
+        base!(BD0[1], ws, τD0_depart, t0_depart)
+        base!(BDA[1], ws, τDA0, t0_depart)
         for (h, hist) in enumerate(histos)
             θ0[iX(h)] = 0.5
             θ0[ib(h)] = 0.05 * minimum(hist.n[W])
-            f = 0.5 .* (BDA[W] .+ BD0[W])
+            f = 0.5 .* (BDA[1][W] .+ BD0[1][W])
             θ0[iA(h)] = (sum(hist.n[W]) - m * θ0[ib(h)]) / sum(f)
         end
         r = lm_poisson(modele!, θ0, lo, hi, n; maxiter, tol_dec = 1e-8)
@@ -165,17 +203,21 @@ function ajuster_global(histos::Vector{Histogramme}, inst::InstrumentParams;
     end
     r = meilleur
     θ = r.θ
-    cov = try
-        inv(Symmetric(r.fisher))
+    libres = findall(lo .< hi)
+    cov = fill(0.0, P, P)
+    try
+        cov[libres, libres] = inv(Symmetric(r.fisher[libres, libres]))
     catch
-        fill(NaN, P, P)
+        cov .= NaN
     end
     μs = [r.μ[(h-1)*m+1:h*m] for h in 1:H]
-    chi2 = [sum((histos[h].n[W] .- μs[h]) .^ 2 ./ μs[h]) / (m - 3 - 3 / H) for h in 1:H]
-    chi2_g = sum(sum((histos[h].n[W] .- μs[h]) .^ 2 ./ μs[h]) for h in 1:H) / (H * m - P)
+    chi2 = [sum((histos[h].n[W] .- μs[h]) .^ 2 ./ μs[h]) / (m - 3 - (length(libres) - 3H) / H) for h in 1:H]
+    chi2_g = sum(sum((histos[h].n[W] .- μs[h]) .^ 2 ./ μs[h]) for h in 1:H) / (H * m - length(libres))
     σ = sqrt.(max.(diag(cov), 0))
-    return ResultatGlobal(θ[1], θ[2], θ[3], σ[1:3], θ[4:3+H], σ[4:3+H], θ[4+H:3+2H], θ[4+2H:3+3H],
-        chi2, chi2_g, r.dev, r.converge, μs, cov)
+    t0s = t0_par_histo ? θ[3:2+H] : fill(θ[3], H)
+    σt0s = t0_par_histo ? σ[3:2+H] : fill(σ[3], H)
+    return ResultatGlobal(θ[1], θ[2], mean(t0s), [σ[1], σ[2], σ[3]], θ[iX(1):iX(H)], σ[iX(1):iX(H)],
+        θ[iA(1):iA(H)], θ[ib(1):ib(H)], chi2, chi2_g, r.dev, r.converge, μs, cov, t0s, σt0s)
 end
 
 """

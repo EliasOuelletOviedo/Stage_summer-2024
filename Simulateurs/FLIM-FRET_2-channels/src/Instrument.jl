@@ -93,17 +93,26 @@ function noyau_derivees(u::Float64, τ::Float64, Δ::Float64, T::Float64)
     return F, dF_du, dF_dτ
 end
 
-"""f[m+1] = F(mΔ − t₀), m = 0…n−1."""
+"""
+f[i+1] = F(mΔ − t₀) pour i = 0…L−1, avec le retard m = i si i < n et m = i − L sinon
+(retards négatifs en fin de tableau). L = n : convolution circulaire, m = i (la période
+remplit les n canaux). L = 2n : convolution linéaire (la période ne remplit pas les
+canaux) ; F étant périodisé en T, le retard négatif donne la fin de l'impulsion précédente.
+"""
 function noyau!(f::AbstractVector, τ, t₀, n::Int, Δ, T)
-    @inbounds for m in 0:n-1
-        f[m+1] = noyau(m * Δ - t₀, τ, Δ, T)
+    L = length(f)
+    @inbounds for i in 0:L-1
+        m = i < n ? i : i - L
+        f[i+1] = noyau(m * Δ - t₀, τ, Δ, T)
     end
     return f
 end
 
 function noyau_derivees!(f, dfτ, dfu, τ::Float64, t₀::Float64, n::Int, Δ::Float64, T::Float64)
-    @inbounds for m in 0:n-1
-        f[m+1], dfu[m+1], dfτ[m+1] = noyau_derivees(m * Δ - t₀, τ, Δ, T)
+    L = length(f)
+    @inbounds for i in 0:L-1
+        m = i < n ? i : i - L
+        f[i+1], dfu[i+1], dfτ[i+1] = noyau_derivees(m * Δ - t₀, τ, Δ, T)
     end
     return nothing
 end
@@ -121,34 +130,45 @@ avant les boucles parallèles), puis réutilisés.
 """
 struct EspaceTravail{P1,P2}
     n::Int
+    L::Int                     # n (circulaire) ou 2n (linéaire)
     Δ::Float64
     T::Float64
     irf::Vector{Float64}
     plan_r::P1
     plan_ir::P2
-    H::Vector{ComplexF64}      # rfft de l'IRF
+    H::Vector{ComplexF64}      # rfft de l'IRF (complétée de zéros jusqu'à L)
     f::Vector{Float64}
     dfτ::Vector{Float64}
     dfu::Vector{Float64}
     Fk::Vector{ComplexF64}
     tmp::Vector{ComplexF64}
+    sortie::Vector{Float64}
 end
+
+"""La période remplit-elle exactement les n canaux ? Sinon, convolution linéaire."""
+periode_pleine(inst::InstrumentParams) = abs(inst.n_bins * pas_temps(inst) - inst.T_rep) <= 1e-9 * inst.T_rep
 
 function EspaceTravail(inst::InstrumentParams)
     n = inst.n_bins
     length(inst.irf) == n || error("IRF de $(length(inst.irf)) canaux pour une grille de $n")
-    plan_r = plan_rfft(zeros(n))
-    plan_ir = plan_irfft(zeros(ComplexF64, n ÷ 2 + 1), n)
-    H = plan_r * inst.irf
-    return EspaceTravail(n, pas_temps(inst), inst.T_rep, copy(inst.irf), plan_r, plan_ir, H,
-        zeros(n), zeros(n), zeros(n), zeros(ComplexF64, n ÷ 2 + 1), zeros(ComplexF64, n ÷ 2 + 1))
+    L = periode_pleine(inst) ? n : 2n
+    plan_r = plan_rfft(zeros(L))
+    plan_ir = plan_irfft(zeros(ComplexF64, L ÷ 2 + 1), L)
+    H = plan_r * vcat(inst.irf, zeros(L - n))
+    return EspaceTravail(n, L, pas_temps(inst), inst.T_rep, copy(inst.irf), plan_r, plan_ir, H,
+        zeros(L), zeros(L), zeros(L), zeros(ComplexF64, L ÷ 2 + 1), zeros(ComplexF64, L ÷ 2 + 1), zeros(L))
 end
 
-"""out = IRF ⊛ g (circulaire, sur la période)."""
+"""out = IRF ⊛ g (circulaire sur la période si elle remplit les canaux, linéaire sinon)."""
 function convoluer!(out::AbstractVector{Float64}, ws::EspaceTravail, g::AbstractVector{Float64})
     mul!(ws.Fk, ws.plan_r, g)
     ws.tmp .= ws.H .* ws.Fk
-    mul!(out, ws.plan_ir, ws.tmp)   # c2r détruit tmp : tampon jetable
+    if ws.L == ws.n
+        mul!(out, ws.plan_ir, ws.tmp)   # c2r détruit tmp : tampon jetable
+    else
+        mul!(ws.sortie, ws.plan_ir, ws.tmp)
+        @views out .= ws.sortie[1:ws.n]
+    end
     return out
 end
 
@@ -184,18 +204,22 @@ function forward(es::ExpSum, inst::InstrumentParams, ws::EspaceTravail)
     return μ
 end
 
-"""Même modèle par convolution directe O(n²), générique (différentiation automatique)."""
+"""
+Même modèle par convolution directe O(n²), générique (différentiation automatique) :
+μ[k] = Σ_j IRF[j]·F((k − j)Δ − t₀), F périodisé en T. Quand la période remplit les n
+canaux, c'est la convolution circulaire ; sinon, la linéaire.
+"""
 function forward_direct(es::ExpSum, irf::AbstractVector, t₀, n::Int, Δ, T)
     Tt = promote_type(eltype(es.α), eltype(es.τ), typeof(t₀))
-    g = zeros(Tt, n)
+    g = zeros(Tt, 2n - 1)                     # retards −(n−1)…(n−1)
     for (α, τ) in zip(es.α, es.τ)
-        for m in 0:n-1
-            g[m+1] += α * noyau(m * Δ - t₀, τ, Δ, T)
+        for m in -(n-1):(n-1)
+            g[m+n] += α * noyau(m * Δ - t₀, τ, Δ, T)
         end
     end
     μ = zeros(Tt, n)
     for k in 0:n-1, j in 0:n-1
-        μ[k+1] += irf[j+1] * g[mod(k - j, n)+1]
+        μ[k+1] += irf[j+1] * g[k-j+n]
     end
     return μ
 end
@@ -209,4 +233,25 @@ function masquer!(μ::AbstractVector, fenetre::UnitRange{Int})
         k in fenetre || (μ[k] = 0.0)
     end
     return μ
+end
+
+# -----------------------------------------------------------------------------
+# Perturbations de l'IRF (changements 1 et 2)
+# -----------------------------------------------------------------------------
+
+"""
+    irf_dilatee(irf, s) -> Vector
+
+IRF élargie (s > 1) ou rétrécie (s < 1) d'un facteur s autour de son pic, aire
+conservée : la fonction de répartition de l'histogramme (linéaire par morceaux)
+est dilatée autour du milieu du canal du maximum, puis réintégrée canal par
+canal. s = 1 rend l'IRF inchangée.
+"""
+function irf_dilatee(irf::AbstractVector, s::Real)
+    n = length(irf)
+    F = vcat(0.0, cumsum(irf))
+    cdf(u) = u <= 0 ? 0.0 : u >= n ? F[end] : (k = floor(Int, u); F[k+1] + (u - k) * (F[k+2] - F[k+1]))
+    c = argmax(irf) - 0.5
+    out = [cdf((k - c) / s + c) - cdf((k - 1 - c) / s + c) for k in 1:n]
+    return out ./ sum(out)
 end

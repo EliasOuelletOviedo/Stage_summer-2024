@@ -34,9 +34,24 @@ Base.@kwdef struct SensorParams
     K_D::Float64             # mM
     n::Float64 = 1.0         # coefficient de Hill de l'isotherme
     Φ_D::Float64 = 0.87      # rendement quantique du donneur seul
-    Φ_A::Float64 = 0.60      # rendement quantique de l'accepteur
+    Φ_A::Float64 = 0.60      # rendement quantique de l'accepteur, valeur de catalogue
+    Φ_A_eff::Float64 = NaN   # rendement effectif dans le capteur (mesuré au banc) ; NaN : Φ_A
     mecanisme::Symbol = :M2_lent
+    # Blanchiment pendant l'acquisition (changement 5) : fractions d'accepteurs (β_A) et de
+    # donneurs (β_D) blanchies à la fin de l'acquisition, décroissance exponentielle de chacun ;
+    # un donneur sans accepteur a la durée de vie τ_nu (mCerulean3 seul, FPbase).
+    β_A::Float64 = 0.0
+    β_D::Float64 = 0.0
+    τ_nu::Float64 = 4.1
+    # Produit du blanchiment de l'accepteur : false, il n'absorbe plus (le donneur devient nu,
+    # τ_nu) ; true, il absorbe encore mais n'émet plus (extincteur sombre : le bleu est inchangé,
+    # seule l'émission sensibilisée disparaît — ce que suggèrent les tranches : ratio instable,
+    # durée de vie stable sous illumination répétée).
+    blanchi_sombre::Bool = false
 end
+
+"""Rendement quantique de l'accepteur utilisé par le modèle : l'effectif s'il est connu."""
+phi_A(p) = isnan(p.Φ_A_eff) ? p.Φ_A : p.Φ_A_eff
 
 """
     OpticsParams
@@ -59,6 +74,7 @@ end
 `irf` : réponse instrumentale sur la grille des `n_bins` canaux, normalisée à
 somme 1. `t₀` : décalage de l'IRF (ns), paramètre du modèle même s'il vaut 0.
 `fenetre` : canaux valides du TAC (les autres ne reçoivent aucun photon).
+`Δt_jaune` : décalage temporel du détecteur jaune par rapport au bleu (0 = banc calibré).
 """
 Base.@kwdef struct InstrumentParams
     n_bins::Int = 256
@@ -66,9 +82,14 @@ Base.@kwdef struct InstrumentParams
     irf::Vector{Float64}
     t₀::Float64 = 0.0
     fenetre::UnitRange{Int} = 14:242
+    Δt_jaune::Float64 = 0.0   # ns, retard du canal jaune sur le bleu (changement 5)
+    # Pas d'un canal (ns). NaN : la période remplit exactement les n_bins canaux (T_rep/n_bins,
+    # titration du 2026-07-20). Sinon (banc du 2026-10-16 : TAC de 16,4 ns sur 256 canaux,
+    # 64 ps, une période = 195,3 canaux), la convolution avec l'IRF est linéaire.
+    pas::Float64 = NaN
 end
 
-pas_temps(inst::InstrumentParams) = inst.T_rep / inst.n_bins
+pas_temps(inst::InstrumentParams) = isnan(inst.pas) ? inst.T_rep / inst.n_bins : inst.pas
 
 """Un monde simulé complet : capteur, optique, instrument."""
 struct Modele

@@ -25,5 +25,11 @@ include("Parametres.jl")
 include("Estimators.jl")
 include("Calibrate.jl")
 include("Experiments.jl")
+include("Batterie.jl")
+include("Reel.jl")
+include("Incertitude.jl")
+include("Jaune.jl")
+include("Fusion.jl")
+include("Banc.jl")
 
 end

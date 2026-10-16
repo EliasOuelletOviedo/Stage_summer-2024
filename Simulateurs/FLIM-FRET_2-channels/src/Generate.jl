@@ -22,7 +22,9 @@ end
 function formes_x(x::Real, m::Modele, ws::EspaceTravail; t₀::Float64 = m.inst.t₀)
     esB, esY = expsums(x, m.p, m.o)
     inst = t₀ == m.inst.t₀ ? m.inst : remplacer(m.inst; t₀ = t₀)
-    mB, mY = forward(esB, inst, ws), forward(esY, inst, ws)
+    mB = forward(esB, inst, ws)
+    # le détecteur jaune peut être en retard de Δt_jaune sur le bleu
+    mY = forward(esY, inst.Δt_jaune == 0 ? inst : remplacer(inst; t₀ = t₀ + inst.Δt_jaune), ws)
     for μ in (mB, mY)
         lim = 1e-10 * maximum(abs, μ)
         minimum(μ) < -lim && error("comptage attendu négatif (min $(minimum(μ))) : paramètres incohérents")
@@ -59,7 +61,9 @@ il sort du modèle).
 function attendus(C::Real, m::Modele, N::Real, norm::Symbol, ws::EspaceTravail;
                   C_ref::Real = C_REF_NORMALISATION_A, t₀::Float64 = m.inst.t₀)
     mB, mY = formes(C, m, ws; t₀)
-    mB_ref = norm === :A ? formes(C_ref, m, ws; t₀)[1] : mB
+    # normalisation A : le temps d'acquisition est fixé par le capteur intact (un
+    # échantillon blanchi émet moins pour le même temps)
+    mB_ref = norm === :A ? formes(C_ref, sans_blanchiment(m), ws; t₀)[1] : mB
     S = echelle(norm, N, mB, mY, mB_ref)
     return S .* mB, S .* mY
 end
@@ -83,4 +87,25 @@ function tirer_deux!(nB, nY, μB, μY, rng::AbstractRNG)
     tirer!(nB, μB, rng)
     tirer!(nY, μY, rng)
     return nothing
+end
+
+"""Le même monde sans blanchiment (référence de la normalisation A)."""
+sans_blanchiment(m::Modele) = (m.p.β_A == 0 && m.p.β_D == 0) ? m : remplacer(m; p = remplacer(m.p; β_A = 0.0, β_D = 0.0))
+
+"""
+    derive_gain(rng, n, dt; τ_g, amplitude) -> Vector{Float64}
+
+Gain du canal jaune relatif au bleu au cours du temps (changement 4) : marche
+aléatoire sur ℓ = log g, ℓ_{k+1} = ℓ_k + σ√dt·ξ_k, avec σ = amplitude/√τ_g. Après
+τ_g secondes, l'écart-type de ℓ vaut `amplitude` (5 % par défaut) : τ_g est
+l'échelle de temps de la dérive des détecteurs (quelques minutes à l'heure).
+g(0) = 1 (gain calibré au départ).
+"""
+function derive_gain(rng::AbstractRNG, n::Integer, dt::Real; τ_g::Real, amplitude::Real = 0.05)
+    σ = amplitude / sqrt(τ_g)
+    ℓ = zeros(n)
+    for k in 2:n
+        ℓ[k] = ℓ[k-1] + σ * sqrt(dt) * randn(rng)
+    end
+    return exp.(ℓ)
 end

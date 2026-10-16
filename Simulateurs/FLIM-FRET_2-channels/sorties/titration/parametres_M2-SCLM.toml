@@ -1,4 +1,6 @@
 K_D = 19.452728214318782
+acquisition_arret_sur_temps = true
+acquisition_duree_s = [10.0]
 chi2_r_global = 2.7101435146809947
 chi2_r_libres_moyen = 2.3810581205120616
 date = "2026-10-15"
@@ -27,3 +29,8 @@ K_D = 19.285090403108303
 n = 1.2396439075215813
 x0 = 0.5352830510577878
 x_sat = 0.2581895799478488
+
+[test_intensite]
+E = 0.863437051800286
+mesure_sat_sur_0 = 2.3010835982141367
+predit_sat_sur_0 = 1.4473858312905183

@@ -9,10 +9,16 @@
 #   « exacte »   : construits sur le monde perturbé lui-même → effet de la
 #                  nuisance sur la précision seule.
 # Balayages : fuite η_YD (0 à 1,5×), excitation directe ε (0 à 0,10), τ_D0 et
-# τ_DA (±5, ±10 %), τ_A (±5, ±10, ±15 %), ε_dark·Φ_dark (0 à 0,05), et τ_DA
-# du capteur (capteurs hypothétiques à FRET moins efficace, mode exact seul),
-# et le gain du canal jaune (dérive de détecteur : change l'échelle du jaune,
-# pas sa forme ; mode nominal seul).
+# τ_DA (±5, ±10 %), τ_A (±5 à ±20 %), Φ_A effectif (±15, ±30 %), ε_dark·Φ_dark
+# (0 à 0,05), et τ_DA du capteur (capteurs hypothétiques à FRET moins efficace,
+# mode exact seul), le gain du canal jaune (dérive de détecteur : change
+# l'échelle du jaune, pas sa forme ; mode nominal seul), et les deux biais exclus
+# jusqu'ici (changement 5, mode nominal seul) : le retard Δt du détecteur jaune
+# sur le bleu (−200 à +200 ps) et le blanchiment pendant l'acquisition, de
+# l'accepteur et du donneur séparément (fraction blanchie en fin d'acquisition,
+# 0,02 à 0,3 ; accepteur blanchi non absorbant, ou extincteur sombre). Le balayage
+# « reference » est le monde nominal avec les mêmes germes : la différence avec lui
+# isole le biais ajouté par chaque nuisance du biais propre à N fini.
 # Dans le balayage des τ, l'estimateur conjoint en mode nominal est le 5b du
 # plan (τ figés à des valeurs fausses).
 #
@@ -41,10 +47,18 @@ balayages = [
     ("epsilon", [0.0, 0.02, 0.04, 0.06, 0.08, 0.10], v -> avec_o(m; ε = v), ("nominale", "exacte")),
     ("tau_D0_relatif", [0.90, 0.95, 1.05, 1.10], v -> avec_p(m; τ_D0 = v * m.p.τ_D0), ("nominale", "exacte")),
     ("tau_DA_relatif", [0.90, 0.95, 1.05, 1.10], v -> avec_p(m; τ_DA = v * m.p.τ_DA), ("nominale", "exacte")),
-    ("tau_A_relatif", [0.85, 0.90, 0.95, 1.05, 1.10, 1.15], v -> avec_p(m; τ_A = v * m.p.τ_A), ("nominale", "exacte")),
+    ("tau_A_relatif", [0.80, 0.85, 0.90, 0.95, 1.05, 1.10, 1.15, 1.20], v -> avec_p(m; τ_A = v * m.p.τ_A), ("nominale", "exacte")),
+    ("Phi_A_relatif", [0.70, 0.85, 1.15, 1.30], v -> avec_p(m; Φ_A_eff = v * S.phi_A(m.p)), ("nominale", "exacte")),
     ("epsilonPhi_dark", [0.0, 0.01, 0.02, 0.03, 0.04, 0.05], v -> avec_o(m; εΦ_dark = v), ("nominale", "exacte")),
     ("tau_DA_capteur_ns", [0.5, 1.0, 1.5, 2.1], v -> avec_p(m; τ_DA = v), ("exacte",)),
     ("gain_jaune_relatif", [0.8, 0.9, 0.95, 1.05, 1.1, 1.2], v -> avec_gain(m, v), ("nominale",)),
+    ("decalage_jaune_ps", [-200.0, -100.0, -50.0, -20.0, -10.0, 10.0, 20.0, 50.0, 100.0, 200.0],
+        v -> S.remplacer(m; inst = S.remplacer(m.inst; Δt_jaune = v / 1000)), ("nominale",)),
+    ("blanchiment_accepteur", [0.02, 0.05, 0.10, 0.20, 0.30], v -> avec_p(m; β_A = v), ("nominale",)),
+    ("blanchiment_donneur", [0.02, 0.05, 0.10, 0.20, 0.30], v -> avec_p(m; β_D = v), ("nominale",)),
+    ("blanchiment_accepteur_sombre", [0.02, 0.05, 0.10, 0.20, 0.30], v -> avec_p(m; β_A = v, blanchi_sombre = true), ("nominale",)),
+    # le monde nominal lui-même, mêmes germes : la référence des biais AJOUTÉS par une nuisance
+    ("reference", [0.0], v -> m, ("nominale",)),
 ]
 isempty(ARGS) || filter!(b -> b[1] in ARGS, balayages)
 

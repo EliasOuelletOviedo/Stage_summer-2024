@@ -60,6 +60,47 @@ function ecrire(df, nu, chemin)
             g = combine(groupby(dn, [:estimateur, :N_photons]), :RMSE_mM => mean => :RMSE_mM, :taux_echec => maximum => :taux_echec)
             tableau(io, g, :RMSE_mM, Ns)
         end
+        if "variance_parametrique_mM2" in names(df)
+            println(io, "## Incertitude des paramètres ajustés (étape 11), normalisation A\n")
+            println(io, "σ photonique (bruit de Poisson), σ paramétrique (200 vecteurs tirés des covariances de l'ajustement global et de ",
+                "l'isotherme, lus sans bruit) et σ total = √(somme des variances), en mM.\n")
+            for N in (1e3, 1e4)
+                println(io, "**N = $(budgets(N))**\n")
+                println(io, "| Estimateur | ", join(["$(Int(c)) mM : phot. / param. / total" for c in (5.0, 20.0, 40.0)], " | "), " |")
+                println(io, "| --- |", repeat(" ---: |", 3))
+                for k in ORDRE
+                    v = map((5.0, 20.0, 40.0)) do c
+                        s_ = sel(df; estimateur = k, N_photons = N, normalisation = "A", mode_calibration = "exacte", C_vrai = c)
+                        nrow(s_) == 0 ? "—" : string(fmt(s_.sigma_mM[1]), " / ", fmt(sqrt(s_.variance_parametrique_mM2[1])), " / ", fmt(s_.sigma_total_mM[1]))
+                    end
+                    println(io, "| ", NOMS[k], " | ", join(v, " | "), " |")
+                end
+                println(io)
+            end
+        end
+        if nu !== nothing && any(nu.parametre_nuisance .== "reference")
+            println(io, "## Biais ajouté par les deux nuisances exclues jusqu'ici (étape 5), à 20 mM et 10⁴ photons\n")
+            println(io, "Biais en calibration nominale moins biais du monde nominal avec les mêmes germes (balayage « reference »), en mM.\n")
+            r = sel(nu; parametre_nuisance = "reference", C_vrai = 20.0, N_photons = 1e4)
+            b0 = Dict(row.estimateur => row.biais_mM for row in eachrow(r))
+            for p in ("decalage_jaune_ps", "blanchiment_accepteur", "blanchiment_accepteur_sombre", "blanchiment_donneur")
+                dp = sel(nu; parametre_nuisance = p, C_vrai = 20.0, N_photons = 1e4, mode_calibration = "nominale")
+                nrow(dp) == 0 && continue
+                vals = sort(unique(dp.valeur_nuisance))
+                println(io, "**$p**\n")
+                println(io, "| Estimateur | ", join(fmt.(vals; d = 2), " | "), " |")
+                println(io, "| --- |", repeat(" ---: |", length(vals)))
+                for k in ORDRE
+                    v = [begin
+                        s_ = sel(dp; estimateur = k, valeur_nuisance = x)
+                        nrow(s_) == 0 ? NaN : s_[1, :biais_mM] - get(b0, k, NaN)
+                    end for x in vals]
+                    all(isnan, v) && continue
+                    println(io, "| ", NOMS[k], " | ", join(fmt.(v), " | "), " |")
+                end
+                println(io)
+            end
+        end
         if nu !== nothing && nrow(nu) > 0
             println(io, "## Nuisances, à 20 mM et 10⁴ photons\n")
             println(io, "Biais (mM) en calibration nominale (estimateurs et calibrations construits sur les valeurs nominales, données ",

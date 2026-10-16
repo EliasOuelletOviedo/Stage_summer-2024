@@ -70,7 +70,7 @@ function amplitudes_M2_lent(x, τ_D0, τ_DA, τ_A, Φ_D, Φ_A, η, ε, εΦ_dark
 end
 
 amplitudes_M2_lent(x, p::SensorParams, o::OpticsParams) =
-    amplitudes_M2_lent(x, p.τ_D0, p.τ_DA, p.τ_A, p.Φ_D, p.Φ_A, o.η, o.ε, o.εΦ_dark)
+    amplitudes_M2_lent(x, p.τ_D0, p.τ_DA, p.τ_A, p.Φ_D, phi_A(p), o.η, o.ε, o.εΦ_dark)
 
 durees_M2_lent(p::SensorParams) = (p.τ_DA, p.τ_D0, p.τ_A)
 
@@ -81,7 +81,7 @@ Dérivées analytiques des amplitudes (matrices 2×3). Les dérivées en τ pass
 par les taux : ∂/∂τ = −k² ∂/∂k.
 """
 function d_amplitudes_M2_lent(x, p::SensorParams, o::OpticsParams)
-    Φ_D, Φ_A, η, ε, εΦd = p.Φ_D, p.Φ_A, o.η, o.ε, o.εΦ_dark
+    Φ_D, Φ_A, η, ε, εΦd = p.Φ_D, phi_A(p), o.η, o.ε, o.εΦ_dark
     k_D0, k_DA, k_A = 1 / p.τ_D0, 1 / p.τ_DA, 1 / p.τ_A
     k_t = k_DA - k_D0
     den = k_DA - k_A
@@ -128,8 +128,8 @@ function amplitudes_M2_rapide(x, p::SensorParams, o::OpticsParams)
     k_D0, k_DA, k_A = 1 / p.τ_D0, 1 / p.τ_DA, 1 / p.τ_A
     k_t = k_DA - k_D0
     k_eff = k_D0 + x * k_t
-    s = p.Φ_A * k_A * x * k_t / (k_eff - k_A)
-    d = o.ε * x * p.Φ_A * k_A
+    s = phi_A(p) * k_A * x * k_t / (k_eff - k_A)
+    d = o.ε * x * phi_A(p) * k_A
     g = o.εΦ_dark * (1 - x) * k_A
     D = p.Φ_D * k_D0
     α = Matrix{Float64}(undef, 2, 2)
@@ -146,6 +146,9 @@ end
 Les deux canaux pour une fraction active `x`, selon `p.mecanisme`.
 """
 function expsums(x::Real, p::SensorParams, o::OpticsParams)
+    if p.β_A > 0 || p.β_D > 0
+        return canaux_etats(etats_blanchis(x, p)..., p, o)
+    end
     if p.mecanisme === :M2_lent
         α = amplitudes_M2_lent(x, p, o)
         τ = collect(durees_M2_lent(p))
@@ -163,4 +166,95 @@ integrale(es::ExpSum) = sum(es.α .* es.τ)
 """Intégrales analytiques attendues (test 2) : donneur et émission sensibilisée."""
 integrale_donneur(x, p::SensorParams) = p.Φ_D * (x * p.τ_DA / p.τ_D0 + 1 - x)
 efficacite_FRET(p::SensorParams) = 1 - p.τ_DA / p.τ_D0
-integrale_sensibilisee(x, p::SensorParams) = p.Φ_A * x * efficacite_FRET(p)
+integrale_sensibilisee(x, p::SensorParams) = phi_A(p) * x * efficacite_FRET(p)
+
+# -----------------------------------------------------------------------------
+# Modèle à N états du donneur (changements 1 et 5)
+# -----------------------------------------------------------------------------
+
+"""
+    EtatDonneur(τ, accepteur[, donneur])
+
+Une sous-population de capteurs, dont le donneur a la durée de vie τ.
+`accepteur` dit ce que reçoit l'énergie :
+- `:actif`   accepteur déprotoné émetteur : émission sensibilisée et excitation directe (M2) ;
+- `:sombre`  transfert vers un accepteur qui n'émet pas (hypothèse H2) ;
+- `:protone` accepteur protoné, pas de transfert ; émission ε_dark·Φ_dark éventuelle ;
+- `:nu`      pas d'accepteur (maturation incomplète, accepteur blanchi).
+`donneur = false` : donneur blanchi ; seule l'excitation directe de l'accepteur reste.
+"""
+struct EtatDonneur
+    τ::Float64
+    accepteur::Symbol
+    donneur::Bool
+end
+EtatDonneur(τ, accepteur) = EtatDonneur(τ, accepteur, true)
+
+"""
+    canaux_etats(etats, pops, p, o) -> (ExpSum bleu, ExpSum jaune)
+
+Généralisation de M2 lent à un nombre quelconque d'états du donneur, de
+populations `pops`. Le taux radiatif du donneur k_r = Φ_D/τ_D0 est le même dans
+tous les états : l'amplitude du donneur à t = 0 vaut k_r × population, seule la
+durée de vie change. Un état `:actif` de durée de vie τ transfère au taux
+1/τ − 1/τ_D0 vers l'accepteur. Avec les deux états de M2 lent, redonne exactement
+`expsums` (test 21).
+"""
+function canaux_etats(etats::AbstractVector{EtatDonneur}, pops::AbstractVector, p::SensorParams, o::OpticsParams)
+    k_r, k_A, ΦA = p.Φ_D / p.τ_D0, 1 / p.τ_A, phi_A(p)
+    τs, αB, αY = Float64[], Float64[], Float64[]
+    ajoute!(τ, aD, aA) = (push!(τs, τ); push!(αB, o.η[1, 1] * aD + o.η[1, 2] * aA); push!(αY, o.η[2, 1] * aD + o.η[2, 2] * aA))
+    for (e, q) in zip(etats, pops)
+        q == 0 && continue
+        if e.donneur
+            ajoute!(e.τ, k_r * q, 0.0)
+            if e.accepteur === :actif && e.τ < p.τ_D0
+                k_t = 1 / e.τ - 1 / p.τ_D0
+                s = ΦA * k_A * q * k_t / (1 / e.τ - k_A)
+                ajoute!(e.τ, 0.0, -s)
+                ajoute!(p.τ_A, 0.0, s)
+            end
+        end
+        e.accepteur === :actif && o.ε > 0 && ajoute!(p.τ_A, 0.0, o.ε * q * ΦA * k_A)
+        e.accepteur === :protone && o.εΦ_dark > 0 && ajoute!(p.τ_A, 0.0, o.εΦ_dark * q * k_A)
+    end
+    return ExpSum(αB, τs), ExpSum(αY, τs)
+end
+
+"""États et populations de M2 lent : (actif, τ_DA, x) et (protoné, τ_D0, 1 − x)."""
+etats_M2(x, p::SensorParams) = ([EtatDonneur(p.τ_DA, :actif), EtatDonneur(p.τ_D0, :protone)], [x, 1 - x])
+
+"""Moyenne de e^{−κu} sur u ∈ [0, 1] : fraction moyenne de molécules intactes pendant l'acquisition."""
+moyenne_survie(κ) = κ < 1e-12 ? 1.0 : -expm1(-κ) / κ
+
+"""
+    etats_blanchis(x, p) -> (etats, pops)
+
+Blanchiment pendant l'acquisition (changement 5) : le nombre de donneurs et
+d'accepteurs intacts décroît exponentiellement, chacun à son taux, et
+indépendamment l'un de l'autre. `β_D`, `β_A` sont les fractions blanchies à la
+fin de l'acquisition (taux × durée = −ln(1 − β)). L'histogramme accumulé est
+celui des populations moyennées sur l'acquisition :
+- capteur intact (actif x, protoné 1 − x) : moyenne de e^{−(κ_A+κ_D)u} ;
+- accepteur blanchi, donneur intact : donneur nu, durée de vie τ_nu (ou, si
+  `blanchi_sombre`, extincteur sombre : transfert inchangé, aucune émission) ;
+- donneur blanchi, accepteur intact : excitation directe de l'accepteur seule.
+Simplification : les taux ne dépendent pas de l'état (un donneur éteint par FRET
+passe en réalité moins de temps excité, et l'accepteur, excité surtout par
+transfert, blanchit plus vite quand x est grand).
+"""
+function etats_blanchis(x, p::SensorParams)
+    κA, κD = -log1p(-p.β_A), -log1p(-p.β_D)
+    mAD, mD, mA = moyenne_survie(κA + κD), moyenne_survie(κD), moyenne_survie(κA)
+    if p.blanchi_sombre
+        # accepteur blanchi en extincteur sombre : il transfère encore (fraction x), sans émettre
+        etats = [EtatDonneur(p.τ_DA, :actif), EtatDonneur(p.τ_D0, :protone), EtatDonneur(p.τ_DA, :sombre),
+                 EtatDonneur(p.τ_D0, :nu), EtatDonneur(p.τ_DA, :actif, false), EtatDonneur(p.τ_D0, :protone, false)]
+        pops = [x * mAD, (1 - x) * mAD, x * (mD - mAD), (1 - x) * (mD - mAD), x * (mA - mAD), (1 - x) * (mA - mAD)]
+        return etats, pops
+    end
+    etats = [EtatDonneur(p.τ_DA, :actif), EtatDonneur(p.τ_D0, :protone), EtatDonneur(p.τ_nu, :nu),
+             EtatDonneur(p.τ_DA, :actif, false), EtatDonneur(p.τ_D0, :protone, false)]
+    pops = [x * mAD, (1 - x) * mAD, mD - mAD, x * (mA - mAD), (1 - x) * (mA - mAD)]
+    return etats, pops
+end

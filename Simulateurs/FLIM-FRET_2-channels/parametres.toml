@@ -1,11 +1,19 @@
 # Paramètres du simulateur FLIM-FRET à deux canaux.
 #
-# Chaque valeur porte sa provenance. Les valeurs inférées sont des points de
-# départ : pour les remplacer par une mesure, écrire le nombre à la place
-# (et mettre à jour la source). Mots-clés :
+# Chaque paramètre porte un statut parmi trois :
+#   "ajusté"  : tiré de données par ce simulateur (titration, images) ;
+#   "supposé" : valeur de catalogue, de spectres ou hypothèse ;
+#   "mesuré"  : mesuré au banc. `date` et `incertitude` sont alors obligatoires
+#               (le chargeur refuse un « mesuré » sans elles).
+# `valeur` est un nombre, ou un mot-clé :
 #   "titration" : lu dans sorties/titration/parametres_<proteine>.toml (step1)
 #   "spectres"  : lu dans sorties/spectres/eta.toml (step0)
 #   "fpbase"    : rendement quantique FPbase de la protéine (step0)
+#   "catalogue" : Φ_A effectif = Φ_A de catalogue (tant qu'il n'est pas mesuré)
+# `incertitude` : écart-type (statut mesuré) ou demi-plage honnête (supposé), dans
+# l'unité de la valeur ; c'est la plage balayée par les étapes 5 et 11.
+# Pour remplacer une valeur supposée par une mesure : écrire le nombre, passer le
+# statut à "mesuré", remplir date, incertitude et source (step12 écrit ce bloc).
 
 [capteur]
 # Titration du 2026-07-20 (Maîtrise/Données/2026-07-20_SCLM) : "mCer3_Topaz",
@@ -14,41 +22,93 @@
 proteine = "mCer3_Topaz"
 # Donneur pour η et Φ_D : "mcerulean3", ou "cerulean" pour SCLM et M2-SCLM.
 donneur = "mcerulean3"
-
-tau_D0 = "titration"   # ns ; déclin long, lié sur toute la titration
-tau_DA = "titration"   # ns ; déclin court, lié sur toute la titration
-x0 = "titration"       # fraction active à 0 mM (isotherme sur les x)
-x_sat = "titration"    # fraction active à saturation (« F »)
-K_D = "titration"      # mM, K VRAI (isotherme sur x), pas le K apparent de ton Hill
-n = "titration"        # coefficient de Hill de l'isotherme sur x
-
-tau_A = 3.0            # ns ; inféré des YFP T203Y, à mesurer sur mTopaz seul
-Phi_D = "fpbase"       # 0,87 (mCerulean3) ; 0,62 pour Cerulean
-Phi_A = "fpbase"       # 0,60 (Topaz)
 mecanisme = "M2_lent"  # ou "M2_rapide" (échange rapide, un seul τ qui glisse)
+
+[capteur.tau_D0]
+valeur = "titration"
+statut = "ajusté"
+source = "déclin long, lié sur les 27 histogrammes de la titration du 2026-07-20 (step1)"
+
+[capteur.tau_DA]
+valeur = "titration"
+statut = "ajusté"
+source = "déclin court, lié sur les 27 histogrammes ; sensible à l'IRF (step9, step11)"
+
+[capteur.x0]
+valeur = "titration"
+statut = "ajusté"
+source = "isotherme sur les x de la titration, fraction active à 0 mM"
+
+[capteur.x_sat]
+valeur = "titration"
+statut = "ajusté"
+source = "isotherme sur les x de la titration, fraction active à saturation (« F »)"
+
+[capteur.K_D]
+valeur = "titration"
+statut = "ajusté"
+source = "isotherme sur x : K VRAI en mM, pas le K apparent d'un ajustement de Hill"
+
+[capteur.n]
+valeur = "titration"
+statut = "ajusté"
+source = "coefficient de Hill de l'isotherme sur x"
+
+[capteur.tau_A]
+valeur = 3.0
+statut = "supposé"
+incertitude = 0.6
+source = "ns ; inféré des YFP T203Y ; à mesurer sur le canal jaune (step12). Incertitude : ±20 %"
+
+[capteur.Phi_D]
+valeur = "fpbase"
+statut = "supposé"
+incertitude = 0.05
+source = "0,87 (mCerulean3, FPbase) ; 0,62 pour Cerulean"
+
+[capteur.Phi_A]
+valeur = "fpbase"
+statut = "supposé"
+incertitude = 0.18
+source = "0,60 (Topaz isolé, FPbase). Incertitude : ±30 %"
+
+[capteur.Phi_A_eff]
+valeur = "catalogue"
+statut = "supposé"
+incertitude = 0.18
+source = "rendement effectif de l'accepteur dans le capteur (inclut η_YA) ; égal au catalogue tant qu'il n'est pas mesuré (step12)"
 
 [optique]
 # η[canal, émetteur] : spectres FPbase de mCerulean3 et Topaz intégrés sur les
-# transmissions FPbase de tes filtres (Chroma D470/40m, Chroma ET530/30m),
-# détection plate. Pour imposer une matrice : eta = [[BD, BA], [YD, YA]].
-eta = "spectres"
+# transmissions FPbase des filtres (Chroma D470/40m, Chroma ET530/30m),
+# détection plate. Pour imposer une matrice : valeur = [[BD, BA], [YD, YA]].
+# η_YD (fuite du donneur dans le jaune) peut aussi être remplacé seul.
+eta = { valeur = "spectres", statut = "supposé", source = "spectres FPbase × filtres Chroma, détection plate" }
+eta_YD = { valeur = "spectres", statut = "supposé", incertitude = 0.082, source = "fuite du donneur dans le jaune ; ±50 %. Inversion du K apparent du ratio : sorties/calibration/eta_YD_inverse.toml" }
 # Excitation directe de l'accepteur à 800 nm : ≈ 0,02–0,05 d'après le spectre
 # 2P mesuré de mCer3 (Leben 2022) ÷ le spectre 2P inféré de Citrine
 # (Drobizhev 2011). Valeur centrale ; balayée de 0 à 0,10 à l'étape 5.
-epsilon = 0.03
+epsilon = { valeur = 0.03, statut = "supposé", incertitude = 0.02, source = "rapport de spectres 2P (Leben 2022, Drobizhev 2011)" }
 # ε_dark·Φ_dark de la forme protonée (absorbe vers 400 nm, donc excitée à
 # 800 nm en 2P) : considérée non émissive, d'où 0. Balayé de 0 à 0,05.
-epsilonPhi_dark = 0.0
+epsilonPhi_dark = { valeur = 0.0, statut = "supposé", incertitude = 0.05, source = "forme protonée supposée non émissive" }
 
 [instrument]
-irf = "/Users/eliasouellet-oviedo/Documents/Maîtrise/Données/2026-07-20_SCLM/irf_20260710_16x_sclm.sdt"
+irf = { valeur = "/Users/eliasouellet-oviedo/Documents/Maîtrise/Données/2026-07-20_SCLM/irf_20260710_16x_sclm.sdt", statut = "mesuré", date = "2026-07-10", incertitude = "largeur ±10 % (step11)", source = "IRF du canal bleu, analyse_SCLM_2.jl" }
 n_bins = 256
 T_rep = 12.5           # ns, laser à 80 MHz
-t0 = 0.0               # ns, décalage de l'IRF (l'ajustement global trouve ≈ −0,015 ns)
-# Canaux valides : ton gating de vec_to_lifetime (5,098 % et 94,90 % du TAC) ;
-# les canaux 1–13 et 245–256 de tes .sdt sont vides (limites du TAC).
+t0 = { valeur = 0.0, statut = "ajusté", source = "décalage de l'IRF ; l'ajustement global trouve −0,015 ns (step1)" }
+# Retard du détecteur jaune sur le bleu (ns). À mesurer au diffuseur vu par les deux
+# canaux (20 min de banc) ; tolérance requise : sorties/figures/fig13_tolerance_decalage.png.
+dt_jaune = { valeur = 0.0, statut = "supposé", incertitude = 0.1, source = "deux HPM-100-40-C supposés synchrones" }
+# Canaux valides : gating de vec_to_lifetime (5,098 % et 94,90 % du TAC) ;
+# les canaux 1–13 et 245–256 des .sdt sont vides (limites du TAC).
 fenetre = [14, 242]
 
 [experience]
-C_max = 150.0          # mM, plafond des estimations (≈ ta concentration de titration la plus haute)
+C_max = 150.0          # mM, plafond des estimations (≈ la concentration de titration la plus haute)
 # Normalisation A : N = photons bleus attendus à 20 mM (C_REF_NORMALISATION_A, src/Generate.jl).
+# Blanchiment pendant l'acquisition (fractions blanchies en fin d'acquisition) : 0 au nominal,
+# balayé à l'étape 5.
+beta_A = { valeur = 0.0, statut = "supposé", source = "pas de mesure ; balayé de 0 à 0,3" }
+beta_D = { valeur = 0.0, statut = "supposé", source = "pas de mesure ; balayé de 0 à 0,3" }
