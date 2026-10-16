@@ -1,10 +1,15 @@
-# figures.jl — le rendu, après la simulation : la vidéo d'une course et la figure de résumé.
+# figures.jl — le rendu, après la simulation : les vidéos, le résumé, le réglage du filtre,
+# Fisher contre Monte-Carlo, le test d'amplitudes.
 
 using CairoMakie
 
 const SURFACE = colorant"#fcfcfb"
-const COULEURS = Dict("J/B" => colorant"#d9822b", "5a" => colorant"#7b5ea7", "Kalman R complet" => colorant"#1b7f79",
-                      "Kalman R diagonal" => colorant"#9aa5a4", "bleu" => colorant"#3b6fd6", "jaune" => colorant"#c99a06")
+const COULEURS = Dict("J/B" => colorant"#d9822b", "5a" => colorant"#7b5ea7", "Kalman" => colorant"#1b7f79",
+                      "ancien" => colorant"#9aa5a4", "bleu" => colorant"#3b6fd6", "jaune" => colorant"#c99a06")
+# une couleur par réglage du filtre (marche aléatoire : dégradé de vert ; modèle à vitesse : rouges ; OU : brun)
+const PALETTE_DERIVE = [colorant"#222222", colorant"#4c78a8", colorant"#1b7f79", colorant"#d9822b", colorant"#b8336a"]
+couleur_filtre(nom) = startswith(nom, "MA") ? COULEURS["Kalman"] : startswith(nom, "OU") ? colorant"#8c564b" : colorant"#c03d3e"
+axe(pos; kw...) = Axis(pos; backgroundcolor = SURFACE, kw...)
 
 """
 Trois panneaux empilés : [Cl⁻] (vérité, J/B, 5a, Kalman ± 2√P₁₁), ĝ (vérité, estimation),
@@ -23,14 +28,14 @@ function video(T, H, p::Params, chemin)
     pts(v) = @lift Point2f.(t[1:$k], v[1:$k])
     σ = 2 .* sqrt.(T[:P11])
     band!(ax1, @lift(t[1:$k]), @lift(T[:C_kalman][1:$k] .- σ[1:$k]), @lift(T[:C_kalman][1:$k] .+ σ[1:$k]),
-          color = (COULEURS["Kalman R complet"], 0.25))
+          color = (COULEURS["Kalman"], 0.25))
     lines!(ax1, t, T[:C_vrai], color = :black, linewidth = 2, label = "vérité")
     scatter!(ax1, pts(T[:C_ratio]), markersize = 4, color = COULEURS["J/B"], label = "J/B")
     scatter!(ax1, pts(T[:C_5a]), markersize = 4, color = COULEURS["5a"], label = "5a")
-    lines!(ax1, pts(T[:C_kalman]), color = COULEURS["Kalman R complet"], linewidth = 2.5, label = "Kalman ± 2√P₁₁")
+    lines!(ax1, pts(T[:C_kalman]), color = COULEURS["Kalman"], linewidth = 2.5, label = "Kalman ± 2√P₁₁")
     axislegend(ax1, position = :rt, framevisible = false)
     lines!(ax2, t, T[:g_vrai], color = :black, linewidth = 2, label = "vérité")
-    lines!(ax2, pts(T[:g_chapeau]), color = COULEURS["Kalman R complet"], linewidth = 2.5, label = "ĝ")
+    lines!(ax2, pts(T[:g_chapeau]), color = COULEURS["Kalman"], linewidth = 2.5, label = "ĝ")
     axislegend(ax2, position = :lt, framevisible = false)
     x = (W .- 1) .* p.pas
     for (i, nom) in ((1, "bleu"), (2, "jaune"))
@@ -48,76 +53,134 @@ function video(T, H, p::Params, chemin)
 end
 
 """
-Résumé : (a) biais des 30 dernières secondes contre la dérive, (b) P₁₁ annoncé ÷ erreur
-réelle du Kalman avec R complet et diagonal, (c) RMSE contre le budget, (d) ĝ après le saut.
+Résumé au réglage de référence (N = 300 retiré : ce n'est pas un régime de fonctionnement) :
+(a) biais des 30 dernières secondes contre la dérive ; (b) le même biais pour chaque modèle de g ;
+(c) RMSE contre le budget ; (d) ĝ autour du saut, moyenne des répétitions, pour chaque modèle de g.
 """
 function figure_resume(resume, saut, p::Params, chemin)
+    ref, anc = reference(p), nom_ma(minimum(p.toml["kalman"]["balayage_sigma_wg"]))
     Nv = p.toml["video"]["N_bleu"]
+    Ns = p.toml["criteres"]["budgets"]
     αs = p.toml["derive"]["balayage_alpha"]
-    lect = ["J/B", "5a", "Kalman R complet", "Kalman R diagonal"]
-    σ0 = p.toml["kalman"]["sigma_wg"]
-    ligne(N, nom, l) = resume[findfirst(r -> r[1] == N && r[2] == nom && r[3] == σ0 && r[4] == l, resume)]
-    nomα(α) = α == 0 ? "aucune" : @sprintf("rampe %g %%", 100α)
-    fig = Figure(size = (1200, 900), backgroundcolor = SURFACE, fontsize = 14)
-    ax = [Axis(fig[i, j], backgroundcolor = SURFACE, xscale = (i, j) == (2, 1) ? log10 : identity,
-               yscale = (i, j) == (2, 1) ? log10 : identity) for i in 1:2, j in 1:2]
-    ax[1, 1].title = @sprintf("(a) biais sur les 30 dernières secondes, N = %g", Nv)
-    ax[1, 1].xlabel, ax[1, 1].ylabel = "dérive α du gain jaune (%)", "biais moyen (mM)"
-    for l in lect
-        r = [ligne(Nv, nomα(α), l) for α in αs]
-        errorbars!(ax[1, 1], 100 .* αs, getindex.(r, 7), getindex.(r, 8), color = COULEURS[l])
-        scatterlines!(ax[1, 1], 100 .* αs, getindex.(r, 7), color = COULEURS[l], label = l)
+    nomα(α) = nom_derive("rampe", α, p)
+    lect = [("J/B", "J/B", COULEURS["J/B"], :solid), ("5a", "5a", COULEURS["5a"], :solid),
+            (ref, "Kalman, " * ref * " (référence)", COULEURS["Kalman"], :solid), (anc, "Kalman, " * anc * " (ancien défaut)", COULEURS["ancien"], :dash)]
+    fig = Figure(size = (1300, 950), backgroundcolor = SURFACE, fontsize = 14)
+    a = axe(fig[1, 1], title = @sprintf("(a) biais sur les 30 dernières secondes, N = %g", Nv), xlabel = "dérive α du gain jaune (%)", ylabel = "biais moyen (mM)")
+    for (f, lab, col, st) in lect
+        r = [ligne(resume, Nv, nomα(α), f) for α in αs]
+        errorbars!(a, 100 .* αs, getfield.(r, :biais_30s), getfield.(r, :biais_30s_sd), color = col)
+        scatterlines!(a, 100 .* αs, getfield.(r, :biais_30s), color = col, linestyle = st, label = lab)
     end
-    hlines!(ax[1, 1], [0.0], color = :black, linewidth = 0.8)
-    axislegend(ax[1, 1], position = :lb, framevisible = false)
-    ax[1, 2].title = "(b) calibration du filtre : P₁₁ annoncé ÷ erreur quadratique réelle"
-    ax[1, 2].xlabel, ax[1, 2].ylabel = "dérive α du gain jaune (%)", "P₁₁ / err²"
-    for (N, st) in zip(p.toml["photons"]["balayage"], (:dot, :dash, :solid)), l in lect[3:4]
-        lines!(ax[1, 2], 100 .* αs, [ligne(N, nomα(α), l)[12] for α in αs], color = COULEURS[l], linestyle = st,
-               label = @sprintf("%s, N = %g", replace(l, "Kalman " => ""), N))
+    hlines!(a, [0.0], color = :black, linewidth = 0.8)
+    axislegend(a, position = :lb, framevisible = false)
+    b = axe(fig[1, 2], title = @sprintf("(b) modèles de g : biais sur les 30 dernières secondes, N = %g", Nv), xlabel = "dérive α du gain jaune (%)", ylabel = "biais moyen (mM)")
+    for nom in unique(r.filtre for r in resume if r.lecture == "Kalman" && (r.filtre == ref || !startswith(r.filtre, "MA")))
+        r = [ligne(resume, Nv, nomα(α), nom) for α in αs]
+        scatterlines!(b, 100 .* αs, getfield.(r, :biais_30s), color = couleur_filtre(nom), label = nom,
+                      linestyle = nom == ref ? :solid : occursin("1e-05", nom) ? :dot : occursin("1e-03", nom) ? :dashdot : :dash)
     end
-    hlines!(ax[1, 2], [1.0], color = :black, linewidth = 0.8)
-    axislegend(ax[1, 2], position = :rb, framevisible = false, nbanks = 2)
-    ax[2, 1].title = @sprintf("(c) RMSE sur toute la course, rampe %g %%", 100p.toml["video"]["alpha"])
-    ax[2, 1].xlabel, ax[2, 1].ylabel = "photons bleus par acquisition", "RMSE (mM)"
-    Ns = p.toml["photons"]["balayage"]
-    for l in lect
-        scatterlines!(ax[2, 1], Ns, [ligne(N, nomα(p.toml["video"]["alpha"]), l)[5] for N in Ns], color = COULEURS[l], label = l)
+    hlines!(b, [0.0], color = :black, linewidth = 0.8)
+    axislegend(b, position = :lb, framevisible = false)
+    c = axe(fig[2, 1], title = "(c) RMSE sur toute la course, rampe 10 %", xlabel = "photons bleus par acquisition", ylabel = "RMSE (mM)",
+            xscale = log10, yscale = log10, xticks = (Ns, [@sprintf("%g", N) for N in Ns]))
+    for (f, lab, col, st) in lect
+        scatterlines!(c, Ns, [ligne(resume, N, "rampe 10 %", f).rmse for N in Ns], color = col, linestyle = st, label = lab)
     end
-    axislegend(ax[2, 1], position = :rt, framevisible = false)
-    ax[2, 2].title = @sprintf("(d) ĝ autour d'un saut de %g %% à %g s, N = %g (R complet)", 100p.derive.saut, p.derive.t_saut, Nv)
-    ax[2, 2].xlabel, ax[2, 2].ylabel = "temps (s)", "g"
-    σs = p.toml["kalman"]["balayage_sigma_wg"]
-    for (i, σ) in enumerate(σs)
-        T = saut[(Nv, σ)]
-        lines!(ax[2, 2], T[:t], T[:g_chapeau], color = (COULEURS["Kalman R complet"], 0.35 + 0.65(i - 1) / max(length(σs) - 1, 1)),
-               label = @sprintf("ĝ, σ_w,g = %.0e", σ))
+    axislegend(c, position = :rt, framevisible = false)
+    d = axe(fig[2, 2], title = @sprintf("(d) ĝ autour du saut de %g %% à %g s, N = %g (moyenne de %d courses)", 100p.derive.saut,
+            p.derive.t_saut, Nv, p.toml["course"]["repetitions"]), xlabel = "temps (s)", ylabel = "g")
+    for (nom, s) in sort(collect(saut); by = first)
+        (nom == ref || nom == anc || !startswith(nom, "MA")) || continue
+        lines!(d, s.t, s.gm, color = nom == anc ? COULEURS["ancien"] : couleur_filtre(nom), label = nom,
+               linestyle = nom in (ref, anc) ? :solid : occursin("1e-05", nom) ? :dot : occursin("1e-03", nom) ? :dashdot : :dash)
     end
-    lines!(ax[2, 2], saut[(Nv, σ0)][:t], saut[(Nv, σ0)][:g_vrai], color = :black, linewidth = 2, label = "vérité")
-    axislegend(ax[2, 2], position = :lt, framevisible = false)
+    s = saut[ref]
+    lines!(d, s.t, s.g, color = :black, linewidth = 2, label = "vérité")
+    xlims!(d, p.derive.t_saut - 10, s.t[end])
+    axislegend(d, position = :rb, framevisible = false)
     save(chemin, fig)
 end
 
 """
-Distribution de l'écart Ĉ − C (mesuré − attendu) sur les 900 pas d'une course, un panneau par
-technique : histogramme normalisé, gaussienne de même moyenne et même écart-type, et l'erreur
-RMS. Pour J/B et 5a, les pas hors de la plage calibrée (échecs) sont exclus et comptés.
+Le critère de réglage (correctif 4) : P₁₁/err² contre σ_w,g, une courbe par dérive, avec la
+bande des critères de sortie ; en dessous, ce que coûte chaque réglage en biais et en RMSE.
 """
-function figure_ecarts(T, p::Params, chemin, titre)
-    fig = Figure(size = (1500, 520), backgroundcolor = SURFACE, fontsize = 15)
-    Label(fig[0, 1:3], titre, fontsize = 17, font = :bold)
-    for (j, (nom, col, cle)) in enumerate((("J/B", "J/B", :C_ratio), ("5a", "5a", :C_5a), ("Kalman", "Kalman R complet", :C_kalman)))
-        e = T[cle] .- T[:C_vrai]
-        v = filter(!isnan, e)
-        rms, m, s = sqrt(mean(v .^ 2)), mean(v), std(v)
-        ax = Axis(fig[1, j], title = nom, xlabel = "écart Ĉ − C (mM)", ylabel = j == 1 ? "densité" : "", backgroundcolor = SURFACE)
-        hist!(ax, v, bins = 40, normalization = :pdf, color = (COULEURS[col], 0.55), strokecolor = COULEURS[col], strokewidth = 0.5)
-        x = range(m - 4s, m + 4s; length = 300)
-        lines!(ax, x, exp.(-(x .- m) .^ 2 ./ (2s^2)) ./ (s * sqrt(2π)), color = :black, linewidth = 1.5)
-        vlines!(ax, [0.0], color = :black, linestyle = :dash, linewidth = 0.8)
-        txt = @sprintf("RMS = %.2f mM\nmoyenne = %+.2f mM\nσ = %.2f mM", rms, m, s)
-        length(v) < length(e) && (txt *= @sprintf("\néchecs : %d / %d pas", length(e) - length(v), length(e)))
-        text!(ax, 0.03, 0.97, text = txt, space = :relative, align = (:left, :top), fontsize = 14)
+function figure_reglage(resume, p::Params, chemin)
+    σs = p.toml["kalman"]["balayage_sigma_wg"]
+    ders = [[nom_derive("rampe", α, p) for α in p.toml["derive"]["balayage_alpha"]]; nom_derive("saut", 0, p)]
+    Ns = p.toml["criteres"]["budgets"]
+    bande = p.toml["criteres"]["P11_sur_err2"]
+    fig = Figure(size = (1300, 950), backgroundcolor = SURFACE, fontsize = 14)
+    for (j, N) in enumerate(Ns)
+        a = axe(fig[1, j], title = @sprintf("P₁₁ annoncé ÷ erreur quadratique réelle, N = %g", N), xlabel = "σ_w,g (par pas)",
+                ylabel = "P₁₁ / err²", xscale = log10, yscale = log10)
+        hspan!(a, bande..., color = (:black, 0.06))
+        hlines!(a, [1.0], color = :black, linewidth = 0.8)
+        for (d, col) in zip(ders, PALETTE_DERIVE)
+            scatterlines!(a, σs, [ligne(resume, N, d, nom_ma(σ)).P11_sur_err2 for σ in σs], color = col, label = d)
+        end
+        axislegend(a, position = :rb, framevisible = false)
+    end
+    for (j, (champ, titre)) in enumerate(((:biais_30s, "biais sur les 30 dernières secondes (mM)"), (:rmse, "RMSE sur toute la course (mM)")))
+        a = axe(fig[2, j], title = titre * " ; trait plein N = $(Int(Ns[1])), tirets N = $(Int(Ns[2]))", xlabel = "σ_w,g (par pas)", xscale = log10)
+        for (N, st) in zip(Ns, (:solid, :dash)), (d, col) in zip(ders, PALETTE_DERIVE)
+            lines!(a, σs, [getfield(ligne(resume, N, d, nom_ma(σ)), champ) for σ in σs], color = col, linestyle = st, label = N == Ns[1] ? d : nothing)
+            scatter!(a, σs, [getfield(ligne(resume, N, d, nom_ma(σ)), champ) for σ in σs], color = col, markersize = 6)
+        end
+        if champ === :biais_30s
+            hlines!(a, [0.0], color = :black, linewidth = 0.8)
+            hlines!(a, [-0.3, 0.3], color = :black, linewidth = 0.6, linestyle = :dot)
+        end
+        axislegend(a, position = champ === :biais_30s ? :rb : :rt, framevisible = false)
+    end
+    save(chemin, fig)
+end
+
+"""Fisher contre Monte-Carlo : var(J/B), var(5a), covariance et corrélation, aux trois budgets."""
+function figure_fisher(verif, chemin)
+    fig = Figure(size = (1500, 420), backgroundcolor = SURFACE, fontsize = 14)
+    N = [v.N_photons_bleus for v in verif]
+    M = [v.tirages for v in verif]
+    for (j, (reel, fisher, titre, log)) in enumerate(((:var_ratio_reelle, :var_ratio_fisher, "var(J/B)", true),
+            (:var_5a_reelle, :var_5a_fisher, "var(z_5a) (mM²-équivalent)", true), (:cov_reelle, :cov_fisher, "cov(J/B, z_5a)", false),
+            (:rho_reel, :rho_fisher, "corrélation ρ", false)))
+        a = axe(fig[1, j], title = titre, xlabel = "photons bleus par acquisition", xscale = log10, yscale = log ? log10 : identity,
+                xticks = (N, [@sprintf("%g", n) for n in N]))
+        r, f = [getfield(v, reel) for v in verif], [getfield(v, fisher) for v in verif]
+        e = j <= 2 ? r .* sqrt.(2 ./ (M .- 1)) :
+            j == 3 ? [sqrt((v.var_ratio_reelle * v.var_5a_reelle + v.cov_reelle^2) / (v.tirages - 1)) for v in verif] :
+            (1 .- r .^ 2) ./ sqrt.(M .- 1)
+        scatterlines!(a, N, f, color = COULEURS["Kalman"], label = "Fisher")
+        errorbars!(a, N, r, e, color = :black, whiskerwidth = 8)
+        scatter!(a, N, r, color = :black, marker = :circle, markersize = 7, label = "Monte-Carlo (±1σ)")
+        j >= 3 && hlines!(a, [0.0], color = :black, linewidth = 0.5)
+        j == 1 && axislegend(a, position = :rt, framevisible = false)
+    end
+    save(chemin, fig)
+end
+
+"""Test d'amplitudes sans bruit : p et q retrouvés par 5a contre injectés, avec et sans la diffusion du générateur."""
+function figure_amplitudes(amp, chemin)
+    C = [a.C_mM for a in amp]
+    fig = Figure(size = (1200, 800), backgroundcolor = SURFACE, fontsize = 14)
+    for (j, (x, nom, col)) in enumerate(((:p, "p (fraction d'amplitude de τ₂, bleu)", COULEURS["bleu"]),
+                                          (:q, "q (fraction d'amplitude de τ_J, jaune)", COULEURS["jaune"])))
+        inj = [getfield(a, Symbol(x, :_injecte)) for a in amp]
+        av = [getfield(a, Symbol(x, :_avec_diffusion)) for a in amp]
+        sa = [getfield(a, Symbol(x, :_sans_diffusion)) for a in amp]
+        a = axe(fig[1, j], title = nom, ylabel = string(x))
+        lines!(a, C, inj, color = :black, linewidth = 2, label = "injecté (Langmuir de la titration)")
+        scatter!(a, C, av, color = col, label = "5a, générateur avec diffusion")
+        scatter!(a, C, sa, color = :black, marker = :xcross, markersize = 9, label = "5a, générateur sans diffusion")
+        axislegend(a, position = x === :p ? :rt : :lt, framevisible = false)
+        b = axe(fig[2, j], title = "écart relatif 5a − injecté", xlabel = "[Cl⁻] (mM)", ylabel = "écart (%)")
+        scatterlines!(b, C, 100 .* (av .- inj) ./ inj, color = col, label = "avec diffusion")
+        scatterlines!(b, C, 100 .* (sa .- inj) ./ inj, color = :black, marker = :xcross, label = "sans diffusion")
+        d = [getfield(a, x === :p ? :d_bleu : :d_jaune) for a in amp]
+        lines!(b, C, d ./ maximum(d) .* maximum(100 .* (av .- inj) ./ inj), color = (col, 0.5), linestyle = :dash,
+               label = "fraction de diffusion d(C), échelle arbitraire")
+        axislegend(b, position = :rt, framevisible = false)
     end
     save(chemin, fig)
 end

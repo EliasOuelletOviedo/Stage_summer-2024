@@ -1,12 +1,16 @@
-# kalman.jl — filtre de Kalman étendu sur l'état x = (C, g).
+# kalman.jl — filtre de Kalman étendu sur l'état (C, g) ou (C, g, ġ).
 #
 # Le filtre ne connaît rien de la photophysique : il reçoit des observables, leur
 # covariance R et, pour chaque mesure, une fonction h(C) et sa dérivée, multipliée ou non
 # par g. Ici, le rapport vaut g·h_R(C) et 5a vaut h_S(C) : H a un zéro dans la colonne de
 # g pour 5a, c'est ce qui rend C et g identifiables.
 #
-# Propagation minimale (la trajectoire est inconnue) : C relaxe vers son repos avec τ_KCC2,
-# g suit une marche aléatoire. Q = diag(σ²_w,C, σ²_w,g) est le seul vrai réglage.
+# Propagation (la trajectoire est inconnue) : C relaxe vers son repos avec τ_KCC2. Pour g,
+# deux modèles :
+#   :marche   g_{k+1} = g_k + w_g                       (marche aléatoire)
+#   :vitesse  g_{k+1} = g_k + Δt·ġ_k + w_g,  ġ_{k+1} = ρ·ġ_k + w_ġ
+# avec ρ = 1 (vitesse constante : suit une rampe sans traînage) ou ρ = 1 − Δt/τ_ġ
+# (Ornstein-Uhlenbeck : oublie une pente apprise après un saut). Q est diagonale.
 
 using LinearAlgebra
 
@@ -14,23 +18,30 @@ mutable struct EKF
     x::Vector{Float64}
     P::Matrix{Float64}
     Q::Matrix{Float64}
-    dt::Float64
-    C_repos::Float64
-    τ::Float64
+    F::Matrix{Float64}          # x_{k+1} = F·x_k + b
+    b::Vector{Float64}
     h::Vector{Function}
     dh::Vector{Function}
     gain::Vector{Bool}          # la mesure i vaut g·hᵢ(C) si gain[i], hᵢ(C) sinon
 end
 
-EKF(; x0, P0, σw, dt, C_repos, τ, h, dh, gain) =
-    EKF(float.(copy(x0)), Matrix{Float64}(P0), Matrix(Diagonal(float.(σw) .^ 2)), dt, C_repos, τ, h, dh, gain)
+function EKF(; modele = :marche, x0::Vector{Float64}, σ0::Vector{Float64}, σw::Vector{Float64}, dt, C_repos, τ,
+             τ_gp = Inf, h, dh, gain)
+    a = 1 - dt / τ
+    F = modele === :marche ? [a 0.0; 0.0 1.0] :
+        modele === :vitesse ? [a 0.0 0.0; 0.0 1.0 dt; 0.0 0.0 (isinf(τ_gp) ? 1.0 : 1 - dt / τ_gp)] :
+        error("modèle de g inconnu : $modele")
+    n = size(F, 1)
+    length(x0) == length(σ0) == length(σw) == n || error("état de dimension $n attendu")
+    b = zeros(n)
+    b[1] = (1 - a) * C_repos
+    return EKF(copy(x0), Matrix(Diagonal(σ0 .^ 2)), Matrix(Diagonal(σw .^ 2)), F, b, h, dh, gain)
+end
 
-"""C_{k+1} = C_k + Δt·(C_repos − C_k)/τ + w_C ; g_{k+1} = g_k + w_g."""
+"""Prédiction : x ← F·x + b, P ← F·P·Fᵀ + Q."""
 function predire!(f::EKF)
-    a = 1 - f.dt / f.τ
-    f.x[1] = f.C_repos + a * (f.x[1] - f.C_repos)
-    F = [a 0.0; 0.0 1.0]
-    f.P = F * f.P * F' + f.Q
+    f.x = f.F * f.x .+ f.b
+    f.P = f.F * f.P * f.F' + f.Q
     return f
 end
 
@@ -43,9 +54,10 @@ function mettre_a_jour!(f::EKF, z::AbstractVector, R::AbstractMatrix, ok::Abstra
     out = fill(NaN, length(z))
     idx = findall(ok)
     isempty(idx) && return out
-    C, g = f.x
+    C, g = f.x[1], f.x[2]
+    zr = zeros(1, length(f.x) - 2)
     hx = [f.gain[i] ? g * f.h[i](C) : f.h[i](C) for i in idx]
-    H = reduce(vcat, [(f.gain[i] ? [g * f.dh[i](C) f.h[i](C)] : [f.dh[i](C) 0.0]) for i in idx])
+    H = reduce(vcat, [hcat(f.gain[i] ? [g * f.dh[i](C) f.h[i](C)] : [f.dh[i](C) 0.0], zr) for i in idx])
     Ri = R[idx, idx]
     ν = z[idx] .- hx
     S = Symmetric(H * f.P * H' + Ri)
@@ -57,6 +69,6 @@ function mettre_a_jour!(f::EKF, z::AbstractVector, R::AbstractMatrix, ok::Abstra
     return out
 end
 
-"""Les diagnostics d'un pas : Ĉ, ĝ, P₁₁, P₂₂ et la corrélation ρ₁₂ = P₁₂/√(P₁₁P₂₂)."""
-diagnostics(f::EKF) = (C = f.x[1], g = f.x[2], P11 = f.P[1, 1], P22 = f.P[2, 2],
+"""Les diagnostics d'un pas : Ĉ, ĝ, la pente ĝ̇ (NaN sans état de vitesse), P₁₁, P₂₂, ρ₁₂ = P₁₂/√(P₁₁P₂₂)."""
+diagnostics(f::EKF) = (C = f.x[1], g = f.x[2], gp = length(f.x) > 2 ? f.x[3] : NaN, P11 = f.P[1, 1], P22 = f.P[2, 2],
                        rho12 = f.P[1, 2] / sqrt(f.P[1, 1] * f.P[2, 2]))

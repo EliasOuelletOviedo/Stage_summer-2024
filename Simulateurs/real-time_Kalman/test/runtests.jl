@@ -1,5 +1,5 @@
-# Les quatre tests à faire passer avant le reste, plus un test du filtre seul sur des mesures
-# fabriquées à la main (sans histogramme). Lancer : julia --project=. test/runtests.jl
+# Les quatre tests à faire passer avant le reste, plus deux tests du filtre seul sur des mesures
+# fabriquées à la main (sans histogramme) et le test d'amplitudes sans diffusion. Lancer : julia --project=. test/runtests.jl
 
 using Test, Statistics, StableRNGs
 include(joinpath(@__DIR__, "..", "run.jl"))
@@ -43,14 +43,19 @@ end
 end
 
 @testset "4. filtre à g constant : le Kalman converge vers J/B" begin
-    T, _ = course(avec(p; alpha = 0.0), lec, 1)
-    for m in MODES
-        t, K, R = T[m][:t], T[m][:C_kalman], T[m][:C_ratio]
-        v = .!isnan.(R)
-        fin = v .& (t .>= t[end] - 30)
-        @test abs(mean(K[fin]) - mean(R[fin])) / mean(R[fin]) < 0.05
-        @test abs(mean(K[v]) - mean(R[v])) / mean(R[v]) < 0.05
-        @test abs(mean(T[m][:g_chapeau][fin]) - 1) < 0.02
+    # une seule course varie de ±5 % (ĝ erre autour de 1) : la convergence se juge sur 8 courses
+    res = Vector{Any}(undef, 8)
+    Threads.@threads for r in 1:8
+        res[r] = course(avec(p; alpha = 0.0), lec, r)[1]
+    end
+    for m in (reference(p), nom_ma(1e-4))            # la référence et l'ancien défaut
+        ecart(sel) = mean(begin
+            T = x[m]; t, K, R = T[:t], T[:C_kalman], T[:C_ratio]
+            v = .!isnan.(R) .& sel(t)
+            (mean(K[v]) - mean(R[v])) / mean(R[v]) end for x in res)
+        @test abs(ecart(t -> t .>= t[end] - 30)) < 0.05
+        @test abs(ecart(t -> trues(length(t)))) < 0.05
+        @test abs(mean(mean(x[m][:g_chapeau][x[m][:t] .>= 60]) for x in res) - 1) < 0.02
     end
 end
 
@@ -58,8 +63,9 @@ end
     hR, dhR = c -> 6 / (1 + c / 30), c -> -0.2 / (1 + c / 30)^2
     hS, dhS = c -> c / (c + 40), c -> 40 / (c + 40)^2
     σR, σS = 0.03, 0.02
-    fab(ok) = EKF(x0 = [20.0, 1.0], P0 = Diagonal([4.0, 0.05^2]), σw = [0.1, 1e-4], dt = 0.1, C_repos = 20.0, τ = 1e9,
-                  h = Function[hR, hS], dh = Function[dhR, dhS], gain = [true, false])
+    fab(ok; modele = :marche) = EKF(modele = modele, x0 = modele === :marche ? [20.0, 1.0] : [20.0, 1.0, 0.0],
+        σ0 = modele === :marche ? [2.0, 0.05] : [2.0, 0.05, 2e-3], σw = modele === :marche ? [0.1, 1e-4] : [0.1, 1e-4, 1e-5],
+        dt = 0.1, C_repos = 20.0, τ = 1e9, h = Function[hR, hS], dh = Function[dhR, dhS], gain = [true, false])
     # g constant à 1,05, inconnu (le filtre part de 1) : un filtre juste l'apprend et reste
     # cohérent avec son P. Suivre une rampe est une question de réglage de Q, pas de code :
     # c'est la course qui le mesure.
@@ -78,4 +84,34 @@ end
     # filtre l'avoue par un P₁₁ qui ne se resserre pas
     @test abs(f1.x[1] - 20.0) > 3 * abs(f2.x[1] - 20.0)
     @test f1.P[1, 1] > 10 * f2.P[1, 1]
+end
+
+@testset "6. modèle (g, ġ), mesures fabriquées : une rampe se suit sans traînage" begin
+    hR, dhR = c -> 6 / (1 + c / 30), c -> -0.2 / (1 + c / 30)^2
+    hS, dhS = c -> c / (c + 40), c -> 40 / (c + 40)^2
+    mk(m) = EKF(modele = m, x0 = m === :marche ? [20.0, 1.0] : [20.0, 1.0, 0.0], σ0 = m === :marche ? [2.0, 0.05] : [2.0, 0.05, 2e-3],
+                σw = m === :marche ? [0.1, 1e-4] : [0.1, 1e-4, 1e-5], dt = 0.1, C_repos = 20.0, τ = 1e9,
+                h = Function[hR, hS], dh = Function[dhR, dhS], gain = [true, false])
+    rng = StableRNG(2)
+    fv, fm = mk(:vitesse), mk(:marche)
+    R = Diagonal([0.03^2, 0.02^2])
+    g = 1.0
+    for k in 1:900
+        g = 1 + 0.10 * k / 900                        # rampe : ġ = 1,11e-3 s⁻¹
+        z = [g * hR(20.0) + 0.03 * randn(rng), hS(20.0) + 0.02 * randn(rng)]
+        mettre_a_jour!(predire!(fv), z, R, [true, true])
+        mettre_a_jour!(predire!(fm), z, R, [true, true])
+    end
+    @test abs(fv.x[2] - g) < 3 * sqrt(fv.P[2, 2]) + 1e-3      # le modèle à vitesse suit, et le sait
+    @test abs(fv.x[3] - 0.10 / 90) < 3 * sqrt(fv.P[3, 3])     # et retrouve la pente
+    @test abs(fm.x[2] - g) > 5 * abs(fv.x[2] - g)             # la marche aléatoire raide traîne
+end
+
+@testset "7. amplitudes : sans diffusion, 5a retrouve exactement p et q injectés" begin
+    q0 = sans_diffusion(p)
+    for C in (0.0, 20.0, 80.0, 131.0)
+        μ = histogrammes_c(C, 1.0, q0)
+        @test estimer(μ..., Cfg5a(p, (1.0, 0.0))).z ≈ p.lang["p_bleu"](C) atol = 1e-6
+        @test estimer(μ..., Cfg5a(p, (0.0, 1.0))).z ≈ p.lang["q_jaune"](C) atol = 1e-6
+    end
 end
