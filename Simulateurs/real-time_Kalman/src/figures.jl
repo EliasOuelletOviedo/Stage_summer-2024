@@ -60,11 +60,13 @@ Résumé au réglage de référence (N = 300 retiré : ce n'est pas un régime d
 function figure_resume(resume, saut, p::Params, chemin)
     ref, anc = reference(p), nom_ma(minimum(p.toml["kalman"]["balayage_sigma_wg"]))
     Nv = p.toml["video"]["N_bleu"]
+    mar = ma_reglee(p, Nv)
     Ns = p.toml["criteres"]["budgets"]
     αs = p.toml["derive"]["balayage_alpha"]
     nomα(α) = nom_derive("rampe", α, p)
     lect = [("J/B", "J/B", COULEURS["J/B"], :solid), ("5a", "5a", COULEURS["5a"], :solid),
-            (ref, "Kalman, " * ref * " (référence)", COULEURS["Kalman"], :solid), (anc, "Kalman, " * anc * " (ancien défaut)", COULEURS["ancien"], :dash)]
+            (ref, "Kalman, " * ref * " (référence)", colorant"#8c564b", :solid), (mar, "Kalman, " * mar * " (marche réglée)", COULEURS["Kalman"], :solid),
+            (anc, "Kalman, " * anc * " (premier défaut)", COULEURS["ancien"], :dash)]
     fig = Figure(size = (1300, 950), backgroundcolor = SURFACE, fontsize = 14)
     a = axe(fig[1, 1], title = @sprintf("(a) biais sur les 30 dernières secondes, N = %g", Nv), xlabel = "dérive α du gain jaune (%)", ylabel = "biais moyen (mM)")
     for (f, lab, col, st) in lect
@@ -75,10 +77,10 @@ function figure_resume(resume, saut, p::Params, chemin)
     hlines!(a, [0.0], color = :black, linewidth = 0.8)
     axislegend(a, position = :lb, framevisible = false)
     b = axe(fig[1, 2], title = @sprintf("(b) modèles de g : biais sur les 30 dernières secondes, N = %g", Nv), xlabel = "dérive α du gain jaune (%)", ylabel = "biais moyen (mM)")
-    for nom in unique(r.filtre for r in resume if r.lecture == "Kalman" && (r.filtre == ref || !startswith(r.filtre, "MA")))
+    for nom in unique(r.filtre for r in resume if r.lecture == "Kalman" && (r.filtre == mar || !startswith(r.filtre, "MA")))
         r = [ligne(resume, Nv, nomα(α), nom) for α in αs]
         scatterlines!(b, 100 .* αs, getfield.(r, :biais_30s), color = couleur_filtre(nom), label = nom,
-                      linestyle = nom == ref ? :solid : occursin("1e-05", nom) ? :dot : occursin("1e-03", nom) ? :dashdot : :dash)
+                      linestyle = nom in (ref, mar) ? :solid : occursin("1e-05", nom) ? :dot : occursin("1e-03", nom) ? :dashdot : :dash)
     end
     hlines!(b, [0.0], color = :black, linewidth = 0.8)
     axislegend(b, position = :lb, framevisible = false)
@@ -91,9 +93,9 @@ function figure_resume(resume, saut, p::Params, chemin)
     d = axe(fig[2, 2], title = @sprintf("(d) ĝ autour du saut de %g %% à %g s, N = %g (moyenne de %d courses)", 100p.derive.saut,
             p.derive.t_saut, Nv, p.toml["course"]["repetitions"]), xlabel = "temps (s)", ylabel = "g")
     for (nom, s) in sort(collect(saut); by = first)
-        (nom == ref || nom == anc || !startswith(nom, "MA")) || continue
+        (nom == mar || nom == anc || !startswith(nom, "MA")) || continue
         lines!(d, s.t, s.gm, color = nom == anc ? COULEURS["ancien"] : couleur_filtre(nom), label = nom,
-               linestyle = nom in (ref, anc) ? :solid : occursin("1e-05", nom) ? :dot : occursin("1e-03", nom) ? :dashdot : :dash)
+               linestyle = nom in (ref, anc, mar) ? :solid : occursin("1e-05", nom) ? :dot : occursin("1e-03", nom) ? :dashdot : :dash)
     end
     s = saut[ref]
     lines!(d, s.t, s.g, color = :black, linewidth = 2, label = "vérité")
@@ -181,6 +183,56 @@ function figure_amplitudes(amp, chemin)
         lines!(b, C, d ./ maximum(d) .* maximum(100 .* (av .- inj) ./ inj), color = (col, 0.5), linestyle = :dash,
                label = "fraction de diffusion d(C), échelle arbitraire")
         axislegend(b, position = :rt, framevisible = false)
+    end
+    save(chemin, fig)
+end
+
+"""
+La courbure d'inversion, en trois panneaux : (1) biais de la concentration inversée contre σ²
+de l'observable, à C = 20 mM, trois budgets, avec la droite par l'origine ajustée sur 5a
+(Jensen) ; (2) biais de l'observable contre biais après inversion ; (3) ce que le filtre hérite,
+sur la même course sans dérive (30 dernières secondes).
+"""
+function figure_courbure(biais5a, resume, p::Params, chemin)
+    Ns = p.toml["photons"]["balayage"]
+    ref = reference(p)
+    b(N, l) = biais5a[findfirst(x -> x.N_photons_bleus == N && x.C_mM == 20.0 && x.lecture == l, biais5a)]
+    fig = Figure(size = (1600, 560), backgroundcolor = SURFACE, fontsize = 14)
+    Label(fig[0, 1:3], "Transmettre au filtre l'observable brute plutôt que la concentration inversée évite le biais de courbure de la calibration",
+          fontsize = 16, font = :bold)
+    a = axe(fig[1, 1], title = "(1) biais d'inversion contre σ², C = 20 mM", xlabel = "σ² de l'observable (mM²-équivalent)",
+            ylabel = "biais de la concentration inversée (mM)", xscale = log10, yscale = log10)
+    s2 = [b(N, "5a").sigma_mM^2 for N in Ns]
+    bi = [b(N, "5a").biais_inverse_mM for N in Ns]
+    k = sum(bi .* s2) / sum(s2 .^ 2)
+    x = exp10.(range(log10(minimum(s2)) - 0.3, log10(maximum(s2)) + 0.2; length = 50))
+    lines!(a, x, k .* x, color = (COULEURS["5a"], 0.6), linestyle = :dash, label = @sprintf("biais = %.4f·σ² (5a)", k))
+    scatter!(a, s2, bi, color = COULEURS["5a"], markersize = 12, label = "5a, N = " * join((@sprintf("%g", N) for N in Ns), " / "))
+    for (N, s, y) in zip(Ns, s2, bi)
+        text!(a, s, y, text = @sprintf("  %g", N), align = (:left, :center), fontsize = 12)
+    end
+    jb2 = [b(N, "J/B").sigma_mM^2 for N in Ns]
+    jbi = [b(N, "J/B").biais_inverse_mM for N in Ns]
+    ok = jbi .> 0
+    scatter!(a, jb2[ok], jbi[ok], color = COULEURS["J/B"], markersize = 12, label = "J/B")
+    axislegend(a, position = :lt, framevisible = false)
+    for (j, (titre, vals, noms)) in enumerate((
+            ("(2) 5a à C = 20 mM : où naît le biais", N -> (b(N, "5a").biais_observable_mM, b(N, "5a").biais_inverse_mM),
+             ["observable", "après inversion"]),
+            ("(3) ce que le filtre hérite (course sans dérive, 30 dernières s)",
+             N -> (ligne(resume, N, "aucune", ref).biais_30s, ligne(resume, N, "aucune", "5a").biais_lineaire_30s, ligne(resume, N, "aucune", "5a").biais_30s),
+             ["Kalman (référence)", "observable de 5a", "5a inversé"])))
+        ax = axe(fig[1, j+1], title = titre, ylabel = "biais (mM)", xticks = (1:length(Ns), [@sprintf("N = %g", N) for N in Ns]))
+        V = reduce(hcat, [collect(vals(N)) for N in Ns])
+        cols = [colorant"#8c564b", COULEURS["5a"], colorant"#c9b8e0"][end-length(noms)+1:end]
+        nb = length(noms)
+        for i in 1:nb
+            xs = (1:length(Ns)) .+ (i - (nb + 1) / 2) * 0.8 / nb
+            barplot!(ax, xs, V[i, :], width = 0.8 / nb, color = cols[i], label = noms[i])
+            text!(ax, xs, V[i, :], text = [@sprintf("%+.2f", v) for v in V[i, :]], align = (:center, :bottom), fontsize = 11)
+        end
+        hlines!(ax, [0.0], color = :black, linewidth = 0.8)
+        axislegend(ax, position = :rt, framevisible = false)
     end
     save(chemin, fig)
 end

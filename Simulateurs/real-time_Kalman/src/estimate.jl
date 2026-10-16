@@ -22,9 +22,12 @@ end
 
 """
 5a : un ajustement par canal, durées de vie figées, IRF du canal, fond figé, échelle libre
-par canal (A_B et A_J indépendants absorbent g). μ = a₁·b_rapide + a₂·b_lente + fond ; la
-fraction d'amplitude p = a₁/(a₁ + a₂) (bleu), q de même (jaune). Les deux canaux ne
-partagent aucun paramètre : l'ajustement conjoint se sépare en deux. Observable : wₚ·p + w_q·q.
+par canal (A_B et A_J indépendants absorbent g). μ = a_d·b_diffusion + a₁·b_rapide +
+a₂·b_lente + fond : la diffusion (copie de l'IRF, τ_diff figé, base normalisée à un photon)
+a son amplitude libre, comme dans le générateur. La fraction d'amplitude p = a₁/(a₁ + a₂)
+(bleu), q de même (jaune), exclut la diffusion. Les deux canaux ne partagent aucun
+paramètre : l'ajustement conjoint se sépare en deux. Observable : wₚ·p + w_q·q.
+Sans `diffusion_5a`, la colonne de diffusion disparaît (le modèle à 4 paramètres d'avant).
 """
 struct Cfg5a
     p::Params
@@ -36,8 +39,9 @@ end
 function Cfg5a(p::Params, w = (1.0, 0.0))
     W = p.fenetre
     base(τ, irf, t0) = convoluer([(1.0, τ)], irf, t0, p)[W]
-    return Cfg5a(p, hcat(base(p.τ.τ2, p.irf_b, p.t0[1]), base(p.τ.τ3, p.irf_b, p.t0[1])),
-                 hcat(base(p.τ.τJ, p.irf_j, p.t0[2]), base(p.τ.τA, p.irf_j, p.t0[2])), w)
+    dif(irf, t0) = reglage(p, "lectures", "diffusion_5a") ? (b = base(p.τ.diff, irf, t0); b ./ sum(b)) : zeros(length(W), 0)
+    return Cfg5a(p, hcat(dif(p.irf_b, p.t0[1]), base(p.τ.τ2, p.irf_b, p.t0[1]), base(p.τ.τ3, p.irf_b, p.t0[1])),
+                 hcat(dif(p.irf_j, p.t0[2]), base(p.τ.τJ, p.irf_j, p.t0[2]), base(p.τ.τA, p.irf_j, p.t0[2])), w)
 end
 
 function estimer(hb, hj, cfg::CfgJB)
@@ -58,9 +62,10 @@ tant que la vraisemblance ne monte pas). Rend (a, information de Fisher, μ, con
 """
 function ajuster_canal(n, X, f, itmax)
     logL(μ) = sum(n .* log.(μ) .- μ)
-    a = fill(max(sum(n) - sum(f), 1.0) / 2, 2) ./ vec(sum(X; dims = 1))
+    k = size(X, 2)
+    a = fill(max(sum(n) - sum(f), 1.0) / k, k) ./ vec(sum(X; dims = 1))
     μ = X * a .+ f
-    F = zeros(2, 2)
+    F = zeros(k, k)
     for _ in 1:itmax
         s = X' * (n ./ μ .- 1)
         F = X' * (X ./ μ)
@@ -80,14 +85,21 @@ function ajuster_canal(n, X, f, itmax)
     return a, F, μ, false
 end
 
-"""Fraction d'amplitude a₁/(a₁ + a₂) d'un canal et sa linéarisation ∂/∂nₖ = ∇ᵀF⁻¹Xₖ/μₖ."""
+"""
+Fraction d'amplitude a₁/(a₁ + a₂) d'un canal (les deux dernières colonnes de X) et sa
+linéarisation ∂/∂nₖ = ∇ᵀF⁻¹Xₖ/μₖ. F est l'information de Fisher complète, amplitude de la
+diffusion comprise : la nuisance est inversée avec le reste, pas ignorée.
+"""
 function fraction(n, X, f, cfg::Cfg5a)
     a, F, μ, ok = ajuster_canal(n, X, f, reglage(cfg.p, "lectures", "iterations_max"))
-    s = a[1] + a[2]
-    x = a[1] / s
+    k = length(a)
+    a1, a2 = a[k-1], a[k]
+    s = a1 + a2
+    x = a1 / s
     lo, hi = reglage(cfg.p, "lectures", "bornes_fraction")
     ok = ok && s > 0 && lo < x < hi
-    ∇ = [a[2], -a[1]] ./ s^2
+    ∇ = zeros(k)
+    ∇[k-1], ∇[k] = a2 / s^2, -a1 / s^2
     return x, (X * (F \ ∇)) ./ μ, μ, ok
 end
 

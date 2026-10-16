@@ -10,12 +10,19 @@ Révisé le même jour d'après « Simulateur Kalman — corrections de l'étape
 origine du biais de 5a et de l'écart sur les amplitudes, critères de sortie vers l'étape 2. La section
 « Corrections » ci-dessous en rend compte ; les résultats de la première course y sont rappelés quand ils changent.
 
+Révisé une seconde fois d'après « Simulateur Kalman — corrections, deuxième passe.pdf » : diffusion dans le modèle
+de 5a (correctif A), Ornstein-Uhlenbeck sur ġ comme filtre de référence et table de σ_w,g par budget (correctif B),
+verdict de comparaison réécrit condition par condition, figure de la courbure d'inversion, seuils de la relance
+évalués automatiquement. **Les chiffres, figures et vidéos actuels sont ceux de cette deuxième passe** (section
+« Deuxième passe ») ; les tableaux de la section « Première passe des corrections » sont ceux de la course précédente,
+avec 5a sans diffusion.
+
 ## Lancer
 
 ```bash
 # une seule fois : extraire la titration dans params.toml (environnement du simulateur précédent, lecteur .sdt)
 julia --project=../FLIM-FRET_2-channels step0_params.jl
-# les tests (7 groupes, 32 vérifications)
+# les tests (7 groupes, 43 vérifications ; 3 échouent dans le groupe 4, voir « Deuxième passe »)
 julia --project=. -t auto test/runtests.jl
 # la course complète (~4 min avec 8 fils d'exécution, vidéos comprises)
 julia --project=. -t auto run.jl            # --rapide : 2 répétitions, sans vidéo
@@ -29,22 +36,25 @@ julia --project=. -t auto run.jl            # --rapide : 2 répétitions, sans v
 | `step0_params.jl` | le pont unique avec la titration : ajustement global → Langmuir, IRF, fond | 90 |
 | `src/params.jl` | lecture de `params.toml`, Langmuir, courbe monotone (valeur, dérivée, inverse) | 107 |
 | `src/generate.jl` | trajectoire, dérive, histogrammes (six étapes, mode sans bruit, graine par pas) | 94 |
-| `src/estimate.jl` | J/B, 5a, calibrations, covariance de Fisher, R attendu | 158 |
+| `src/estimate.jl` | J/B, 5a (diffusion comprise), calibrations, covariance de Fisher, R attendu | 170 |
 | `src/kalman.jl` | prédiction, mise à jour (forme de Joseph), diagnostics ; état (C, g) ou (C, g, ġ) ; aucune photophysique | 74 |
-| `run.jl` | les courses (tous les réglages du filtre sur les mêmes lectures), les CSV, les vérifications, les critères | 276 |
-| `src/figures.jl` | rendu après simulation : vidéos, résumé, réglage, Fisher, amplitudes | 186 |
-| `test/runtests.jl` | les quatre tests du document, deux tests du filtre seul, le test d'amplitudes | 117 |
+| `run.jl` | les courses (tous les réglages du filtre sur les mêmes lectures), les CSV, les vérifications, les critères, les seuils de la relance | 329 |
+| `src/figures.jl` | rendu après simulation : vidéos, résumé, réglage, Fisher, amplitudes, courbure d'inversion | 238 |
+| `test/runtests.jl` | les quatre tests du document, deux tests du filtre seul, le test d'amplitudes | 119 |
 
-Les cinq fichiers du document font 709 lignes (plafond fixé à 800), 895 avec le rendu.
+Les cinq fichiers du document font 774 lignes (plafond fixé à 800 : il est presque atteint), 1 012 avec le rendu.
 
 Sorties dans `sorties/` :
 
 - `courses.csv` : le fichier plat, une ligne par pas (répétition 1 de chaque scénario, aux trois budgets, N = 300
-  compris comme borne basse), pour le filtre de référence et le modèle (g, ġ) à σ_ġ = 10⁻⁴ ;
+  compris comme borne basse), pour le filtre de référence (OU) et la marche aléatoire au σ_w,g de la table ;
 - `resume.csv` : un résumé par budget, scénario et lecture ou réglage du filtre, moyenne sur 8 répétitions ;
-- `criteres.csv` : les critères de sortie, pour chaque réglage du filtre ;
+- `criteres.csv` : les critères de sortie, pour chaque réglage du filtre, et la comparaison à la référence, une colonne
+  par condition ;
+- `seuils_relance.csv` : les seuils de la deuxième passe, fixés avant la relance, avec leur verdict ;
+- `reglage_par_budget.csv` : σ_w,g de la table contre celui que désigne la course ;
 - `verification_R.csv`, `biais_lectures.csv`, `amplitudes.csv`, `coherence.csv` : les vérifications ;
-- `fig_resume.png`, `fig_reglage.png`, `fig_fisher.png`, `fig_amplitudes.png`, et trois vidéos au réglage de
+- `fig_resume.png`, `fig_reglage.png`, `fig_fisher.png`, `fig_amplitudes.png`, `fig_courbure.png`, et trois vidéos au filtre de
   référence (`video_sans_derive`, `video_rampe`, `video_saut`) avec leur dernière image en PNG. Les `.mp4` ne sont
   pas versionnés (`.gitignore`) ; `run.jl` les régénère à l'identique.
 
@@ -82,11 +92,10 @@ Trois remarques sur ces valeurs.
    convolution circulaire sur les 256 canaux replierait donc à 16,4 ns, pas à la période. Le déclin est périodisé
    analytiquement (série géométrique), y compris pour les retards négatifs (la fin de l'impulsion précédente). La
    convolution linéaire sur 512 points est alors exacte, sans bord, ce qui est le but de l'étape 4.
-2. **5a n'a que ses 4 paramètres et ne modélise pas la diffusion**, que le générateur contient. La calibration,
-   construite avec le même générateur, absorbe l'écart qui en résulte sur p et q (voir correctif 3), et
-   l'aller-retour est exact. L'invariance à g est exacte au bruit numérique près sur un histogramme que 5a décrit
-   exactement ; sur le générateur complet, il reste un déplacement d'environ 0,002 mM-équivalent pour g = 1,2, soit
-   10⁻⁴ du bruit d'un pas (test 2, en deux volets).
+2. **5a modélise maintenant la diffusion** (deuxième passe, correctif A) : 6 paramètres libres au lieu de 4, une
+   amplitude de diffusion par canal, τ_diff figé, comme dans le générateur. Le modèle à 4 paramètres de la
+   première passe reste disponible (`diffusion_5a = false` dans `params.toml`). Dans les deux cas l'aller-retour
+   est exact et l'invariance à g aussi, au bruit numérique près (test 2).
 3. **L'observable de 5a est une combinaison de p et q.** Les deux canaux ne partagent aucun paramètre, donc 5a se
    sépare en un ajustement par canal. Règle écrite d'avance : le jaune entre dans l'observable s'il réduit σ_C d'au
    moins 10 % à 20 mM. Il la réduit de 16 % (p seul : 15,8 mM, q seul : 24,5 mM, combinaison : 13,3 mM à 1 000
@@ -128,7 +137,11 @@ statistique (dérivées, convolution, vraisemblance de Poisson).
 
 **Cohérence des calibrations** : à 20 mM, sans bruit, J/B et 5a retrouvent tous deux 20 mM (`coherence.csv`).
 
-## Corrections du 2026-10-16
+## Première passe des corrections (2026-10-16)
+
+Tableaux et chiffres de cette section : la course de la première passe (5a sans diffusion, référence MA
+σ_w,g = 3·10⁻³). Les figures du dossier ont été refaites à la deuxième passe ; leurs chiffres diffèrent donc un peu
+des tableaux ci-dessous, sans changer les conclusions de cette section.
 
 ### Correctif 1 — le réglage de σ_w,g
 
@@ -246,23 +259,129 @@ exemple sur un étalon).
   mais σ_w,C = 1,2 mM par pas : trop large hors de la montée, il gonfle la covariance prédite du rapport. Même
   remède qu'au point précédent.
 
+## Deuxième passe (2026-10-16)
+
+Une seule relance, avec quatre changements : diffusion dans 5a, OU par défaut et table de σ_w,g par budget, deux
+figures, R diagonal retiré. Les seuils étaient fixés avant la relance (`params.toml`, `[seuils_relance]`) ; ils
+sont évalués par `run.jl` dans `seuils_relance.csv`.
+
+| Quantité | Avant | Après | Seuil | Tenu |
+| --- | --- | --- | --- | --- |
+| écart relatif max sur p, avec diffusion | 10,4 % | 1,3·10⁻¹³ % | < 0,5 % | oui |
+| écart relatif max sur q, avec diffusion | 14,2 % | 4,2·10⁻¹² % | < 0,5 % | oui |
+| non-régression sans diffusion | 1,3·10⁻¹⁵ | 8·10⁻¹⁵ | < 10⁻¹² | oui |
+| biais d'observable 5a, C = 20, N = 1 000 | +0,26 mM | +0,44 mM | < 0,10 | **non** |
+| biais d'observable 5a, C = 20, N = 300 | +1,30 mM | +1,54 mM | < 0,40 | **non** |
+| σ de 5a, C = 20, N = 1 000 | 13,2 mM | 18,0 mM (+36 %) | hausse ≤ 10 % | **non** |
+| biais d'inversion 5a, C = 20, N = 1 000 | +2,81 mM | +5,78 mM | 2,8 ± 0,3 | **non** |
+| biais du Kalman de référence, 5 phases, N = 1 000 | +0,28 / +0,15 / −0,03 / −0,31 / +0,21 | +0,51 / +0,32 / +0,13 / −0,37 / +0,39 | tous < ±0,30 | **non** |
+| P₁₁/err², 5 phases, N = 1 000 | 1,78 … 1,61 | 1,56 / 1,59 / 1,70 / 1,51 / 1,48 | 0,5 – 2,0 | oui |
+| accord Fisher / Monte-Carlo (var J/B, var 5a, cov) | 0,6 / 3,2 / 0,8 % | 0,6 / 0,4 / 5,8 % | < 5 % | non, mais voir ci-dessous |
+| échecs de 5a, C = 20, N = 300 | 17,8 % | 30,1 % | à rapporter | — |
+| biais du Kalman à N = 300, dérive 0 / 5 / 10 / 20 % | +1,19 / +0,77 / +0,48 / −0,11 | +2,41 / +1,78 / +1,42 / +0,42 | monotone | oui |
+
+### Correctif A : la diffusion dans 5a corrige les amplitudes et dégrade la concentration
+
+- **Les amplitudes sont exactes.** Avec la diffusion dans 5a, p et q retrouvés sans bruit tombent sur les valeurs
+  injectées à 10⁻¹³ près, sur toute la plage (test 7, `fig_amplitudes.png`). La diffusion du générateur et celle de
+  l'ajustement sont bien la même. p̂ et q̂ peuvent maintenant se lire comme des fractions d'amplitude des deux
+  populations.
+- **Le biais d'observable de 5a ne venait pas de la diffusion.** Il monte au lieu de tomber : +0,26 → +0,44 mM à
+  1 000 photons, +1,30 → +1,54 mM à 300. C'est donc bien le biais du maximum de vraisemblance à faible comptage,
+  et un paramètre libre de plus l'aggrave. L'hypothèse du document (« le biais d'observable vient en partie de la
+  diffusion non modélisée ») est réfutée.
+- **Le prix est la précision.** L'amplitude de la diffusion, une copie de l'IRF, est très corrélée à celle de la
+  composante rapide (τ₂ = 0,72 ns, τ_J = 1,06 ns). L'inverser comme nuisance (information de Fisher complète,
+  comme demandé) élargit σ de 5a de 36 % à 1 000 photons (13,2 → 18,0 mM). Les échecs montent aussi (17,8 → 30 %
+  à 300 photons, 1,3 → 7,2 % à 1 000).
+- **Le biais d'inversion reste de la courbure.** Il passe de +2,81 à +5,78 mM parce que σ² a doublé : le seuil
+  « reste à 2,8 ± 0,3 » supposait σ inchangé. Le rapport biais/σ² vaut maintenant 0,0128 / 0,0178 / 0,0136 aux trois
+  budgets (0,0166 / 0,0161 / 0,0176 avant) : proportionnel à σ² à ±16 % près, moins net qu'avant, la troncature à
+  N = 300 (30 % d'échecs) s'y mêlant. La courbure explique l'ordre de grandeur, pas chaque décimale.
+- **Le filtre en pâtit, sans casser les critères de sortie.** Sur les mêmes histogrammes, avec OU : RMSE +5 à
+  +11 %, biais déplacé de 0 à +0,25 mM selon la phase (le plus sans dérive, rien sous la rampe de 20 %). Le biais sans dérive passe à +0,51 mM (N = 1 000) et dépasse le
+  seuil de la relance. Les trois critères de sortie tiennent encore (tableau suivant).
+- **Le test 4 échoue désormais** : sur 8 courses sans dérive, le Kalman s'écarte de J/B de 5,3 à 6,8 % sur les 30
+  dernières secondes (seuil 5 %), pour les trois filtres testés. C'est la même cause. Je n'ai pas relâché le seuil.
+- **Recommandation, à trancher par toi** : garder les deux modèles de 5a, chacun pour ce qu'il sait faire. Le
+  modèle à 6 paramètres pour rapporter des fractions d'amplitude (hors ligne, à fort comptage) ; le modèle à 4
+  paramètres pour l'observable transmise au filtre, plus précise et moins biaisée, dont la calibration absorbe déjà
+  la diffusion. Le commutateur `diffusion_5a` le permet ; je ne l'ai pas rebasculé, puisque les seuils étaient
+  fixés avant la relance.
+
+### L'accord Fisher / Monte-Carlo tient, le seuil était mal posé pour la covariance
+
+L'information de Fisher est maintenant la matrice complète, amplitude de diffusion comprise. Les variances
+s'accordent mieux qu'avant (var 5a : 0,4 % contre 3,2 %). La covariance s'écarte de 5,8 % à N = 1 000, soit 0,3 σ
+de Monte-Carlo (−0,231 prédit contre −0,245 ± 0,042 mesuré) ; à 300 et 3 000 photons, 1,2 et 0,8 σ. Un seuil
+relatif n'a pas de sens pour une quantité presque nulle mesurée sur 4 000 tirages : l'écart est dans le bruit de la
+mesure. `fig_fisher.png` porte les barres d'erreur.
+
+### Correctif B : OU par défaut, verdict lisible
+
+- **OU est la référence** (σ_ġ = 10⁻⁴, τ = 30 s, σ_w,g = 10⁻⁴ sur g). Il bat la marche aléatoire réglée en RMSE sur
+  toutes les rampes, aux deux budgets (1,37 contre 1,43 à 1 000 photons, rampe 10 % ; 0,97 contre 1,05 à 3 000), et
+  il est mieux calibré (P₁₁/err² de 1,48 à 1,70 contre 1,77 à 1,92). Son coût : il rattrape un saut de 5 % en
+  4,3 s au lieu de 1,8 s à 1 000 photons (3,9 s au lieu de 1,9 s à 3 000).
+- **Le verdict « non » de la première passe n'était pas un bogue.** La règle comparait aussi le biais sur le saut, à
+  0,1 mM près ; à 3 000 photons, OU était à +0,29 mM contre +0,13 pour la marche, d'où « non ». Le temps de
+  rattrapage n'en faisait pas partie. `criteres.csv` écrit maintenant chaque condition dans sa colonne
+  (`vs_ref_rmse_rampes_le`, `vs_ref_rmse_saut_dans_10pct`, `vs_ref_biais_saut_dans_0p1mM`,
+  `vs_ref_rmse_sans_derive_dans_10pct`, puis `vs_ref_bat_les_4_conditions`), avec le biais, la RMSE et le temps de
+  rattrapage du saut à côté. Aucun autre réglage ne bat OU sur les quatre conditions.
+- **La table de σ_w,g par budget** (10⁻³ à 300 photons, 3·10⁻³ au-dessus) est figée dans `params.toml` et sert à la
+  marche aléatoire de comparaison. Le critère du correctif 4, recalculé sur cette course, désigne d'autres valeurs
+  (3·10⁻⁴ à 300, 3·10⁻² à 1 000, 3·10⁻³ à 3 000, `reglage_par_budget.csv`) : avec 5a plus bruité, P₁₁/err² sous la
+  rampe de 20 % dépasse 1 dès les petits σ_w,g et le critère ne discrimine plus. La table n'a pas été retouchée.
+  En boucle fermée, ce réglage devra suivre le budget réellement collecté.
+
+### Correctif C : N = 300 et la compensation
+
+Le biais du Kalman à N = 300 est maintenant monotone en dérive (+2,41 / +1,78 / +1,42 / +0,42 mM), comme le test le
+demandait. Mais il n'est pas tombé : il a doublé. La monotonie ne prouve d'ailleurs pas qu'il ne reste qu'un
+mécanisme. À 1 000 photons, le biais de la référence passe aussi de +0,51 à −0,37 mM entre 0 et 20 % de dérive, en
+traversant zéro : un biais positif hérité de 5a, indépendant de la dérive, s'y ajoute à un retard de poursuite
+négatif qui grandit avec elle. Les deux mécanismes existent à tous les budgets ; à N = 300 le premier domine.
+
+**N = 300 est hors du domaine de validité** : biais de +2,4 mM sans dérive, 5a en échec 30 % du temps à 20 mM et
+42 % à 5 mM, inutilisable comme ancre indépendante. Il reste dans `courses.csv` et `resume.csv` comme borne basse
+du régime utilisable, et hors des figures de conclusion.
+
+### La courbure d'inversion
+
+![Courbure d'inversion](sorties/fig_courbure.png)
+
+Fig. 6 : (1) biais de la concentration inversée contre σ² de l'observable, 5a et J/B, trois budgets, C = 20 mM,
+avec la droite par l'origine ajustée sur 5a ; (2) à C = 20 mM, biais de l'observable contre biais après
+inversion ; (3) sur la course sans dérive (30 dernières secondes), biais du Kalman, de l'observable de 5a et de 5a
+inversé.
+
+- **Où naît le biais** : l'observable de 5a est biaisée de +0,44 mM à 1 000 photons, la concentration inversée de
+  +5,8 mM, treize fois plus. À 300 photons : +1,5 contre +18 mM.
+- **Ce que le filtre hérite** : +0,51 mM à 1 000 photons, quand 5a inversé est à +7,6 mM sur la même fenêtre. Il
+  n'hérite pas du biais d'inversion. Il ne suit pas non plus exactement le biais local de l'observable (+0,04 mM
+  sur cette fenêtre, où C ≈ 7–10 mM) : ĝ, qui a une longue mémoire, garde le biais accumulé quand la concentration
+  était plus haute.
+- **La recommandation de conception tient** : transmettre au filtre l'observable brute plutôt que la concentration
+  inversée évite un biais dix fois plus grand que celui qu'il garde, à bas photons. Elle vaut pour tout capteur à
+  calibration non linéaire.
+
 ## Critères de sortie vers l'étape 2
 
 Chiffrés d'avance (`params.toml`, section `[criteres]`), vérifiés automatiquement (`criteres.csv`) aux deux budgets
-de fonctionnement. N = 300 n'est pas un régime de fonctionnement (5a y échoue 25 % du temps, J/B jusqu'à 10 %) : il
-reste dans les CSV comme borne basse et sort des figures de conclusion.
+de fonctionnement, sur la course de la deuxième passe (5a avec diffusion, référence OU).
 
 | Critère | 1 000 photons | 3 000 photons |
 | --- | --- | --- |
-| 1. biais du Kalman sous rampe de 10 % sous 0,3 mM | **oui** (−0,03) | **oui** (−0,04) |
-| 2. P₁₁/err² entre 0,8 et 2 sous toutes les dérives | **oui** (1,61 à 1,80) | **oui** (1,63 à 1,77) |
-| 3. RMSE du Kalman sous celle de J/B partout | **oui** (au plus 0,69 × J/B) | **oui** (au plus 0,90 × J/B) |
-| 4. écart sur les amplitudes de 5a expliqué | **oui** : la diffusion, que 5a ne modélise pas (test 7) | idem |
+| 1. biais du Kalman sous rampe de 10 % sous 0,3 mM | **oui** (+0,13) | **oui** (+0,12) |
+| 2. P₁₁/err² entre 0,8 et 2 sous toutes les dérives | **oui** (1,48 à 1,70) | **oui** (1,29 à 1,58) |
+| 3. RMSE du Kalman sous celle de J/B partout | **oui** (au plus 0,73 × J/B) | **oui** (au plus 0,92 × J/B) |
+| 4. écart sur les amplitudes de 5a expliqué | **oui**, et corrigé : la diffusion, maintenant modélisée (test 7) | idem |
 
-**Les quatre critères tiennent au réglage de référence.** Parmi les autres marches aléatoires, seul σ_w,g = 10⁻²
-passe aussi les trois premiers à 1 000 photons, avec une RMSE 36 % plus forte sans dérive ; aucun réglage à 10⁻³ ou
-moins ne passe le critère 2. Les modèles à vitesse (σ_ġ = 10⁻⁵ et 10⁻⁴) et la variante OU les passent aussi aux deux
-budgets (`criteres.csv`) : le choix entre eux et la référence se fait sur la règle du correctif 2.
+**Les quatre critères tiennent avec OU.** La marche aléatoire à 3·10⁻³ les passe aussi (biais +0,16 et +0,10 mM).
+Aucun autre réglage ne passe le critère 1 aux deux budgets ; les modèles (g, ġ) passent les critères 2 et 3 mais
+gardent un biais de +0,35 à +0,70 mM sous rampe. Les seuils plus fins de la relance (biais sous ±0,3 mM dans les
+cinq phases) ne tiennent plus, à cause du correctif A.
 
 ## Résultats
 
@@ -277,39 +396,38 @@ courses, pour chaque modèle de g. 1 000 photons sauf en (c).
 Fig. 5 : dernière image de `video_rampe.mp4` (rampe de 10 %, référence, 1 000 photons). Les deux autres vidéos :
 `video_sans_derive.mp4` et `video_saut.mp4`.
 
-### La prédiction du document, au réglage de référence (1 000 photons, 8 répétitions)
+### La prédiction du document, au filtre de référence (1 000 photons, 8 répétitions)
 
-| | J/B | 5a | Kalman, σ_w,g = 3·10⁻³ | Kalman, ancien défaut 10⁻⁴ |
-| --- | --- | --- | --- | --- |
-| **Sans dérive** : RMSE | 2,00 mM | 12,5 mM | 1,38 mM | **1,19 mM** |
-| biais, 30 dernières s | −0,01 | +3,3 (inversion) | +0,28 ± 0,30 | +0,22 ± 0,32 |
-| **Rampe 10 %** : RMSE | 3,07 | 12,5 | **1,36** | 1,55 |
-| biais, 30 dernières s | −3,23 | +3,2 | **−0,03 ± 0,29** | −1,45 ± 0,28 |
-| **Rampe 20 %** : biais | −5,62 | +3,2 | **−0,31** | −2,89 |
-| **Saut 5 %** : biais | −2,03 | +3,3 | **+0,21**, rattrapé à moitié en 1,6 s | −0,99, en 23 s |
-| erreur max pendant la montée | 7,7 | 71 | 4,1 | 3,6 |
+| | J/B | 5a | Kalman OU (référence) | Kalman, marche σ_w,g = 3·10⁻³ | Kalman, premier défaut 10⁻⁴ |
+| --- | --- | --- | --- | --- | --- |
+| **Sans dérive** : RMSE | 2,00 mM | 17,7 mM | 1,46 mM | 1,53 mM | **1,30 mM** |
+| biais, 30 dernières s | −0,01 | +7,6 (inversion) | +0,51 ± 0,54 | +0,53 ± 0,57 | +0,41 ± 0,45 |
+| **Rampe 10 %** : RMSE | 3,07 | 17,6 | **1,37** | 1,43 | 1,49 |
+| biais, 30 dernières s | −3,23 | +7,4 | **+0,13 ± 0,39** | +0,16 ± 0,43 | −1,32 ± 0,35 |
+| **Rampe 20 %** : biais | −5,62 | +7,0 | −0,37 | −0,32 | −2,90 |
+| **Saut 5 %** : biais | −2,03 | +7,4 | +0,39, rattrapé à moitié en 4,3 s | +0,42, en 1,8 s | −0,87 |
+| erreur max pendant la montée | 7,7 | 80 | 3,7 | 4,0 | 3,5 |
+
+(± : écart-type entre les 8 courses ; l'erreur-type du biais moyen est 2,8 fois plus petite.)
 
 ### Ce que disent les résultats
 
-**1. Les deux volets de la prédiction tiennent au réglage de référence.** Sans dérive, la fusion fait mieux que J/B
-(RMSE 1,38 contre 2,00 mM). Sous dérive, elle reste non biaisée : −0,03 mM sous une rampe de 10 %, contre −3,23 pour
-J/B, et elle rattrape un saut de 5 % en 1,6 s. À 3 000 photons, même tableau : −0,04 contre −3,23 mM.
+**1. Les deux volets de la prédiction tiennent.** Sans dérive, la fusion fait mieux que J/B (RMSE 1,46 contre
+2,00 mM). Sous dérive, elle retire l'essentiel du biais : +0,13 mM sous une rampe de 10 % contre −3,23 pour J/B,
+−0,37 contre −5,62 sous une rampe de 20 %. À 3 000 photons, même tableau.
 
-**2. La seule différence avec la première course est Q.** Le mécanisme était juste, le réglage de σ_w,g non : à 10⁻⁴,
-une marche aléatoire ne peut pas suivre une rampe de 1,1·10⁻⁴ par pas et la dérive passe dans Ĉ. À 3·10⁻³ elle suit,
-au prix de 16 % de RMSE sans dérive.
+**2. Le réglage de g compte plus que tout le reste.** Une marche aléatoire raide (10⁻⁴) ne suit pas une rampe et
+devient fausse et confiante (P₁₁/err² = 0,18 à 3 000 photons, rampe de 20 %). Un OU sur ġ suit la rampe sans
+desserrer g et donne la meilleure RMSE sous dérive ; la marche desserrée rattrape plus vite un saut.
 
-**3. Le filtre ne ment pas sur sa précision à la référence.** P₁₁/err² est entre 1,6 et 1,8 dans toutes les
-conditions, aux deux budgets : légèrement sous-confiant. À l'ancien défaut, il tombait à 0,15.
+**3. Le filtre ne ment pas sur sa précision.** P₁₁/err² est entre 1,3 et 1,7 dans toutes les conditions, avec OU :
+légèrement sous-confiant (barres d'erreur annoncées environ 20 % trop larges).
 
-**4. Il n'y a pas de retard de poursuite.** L'erreur maximale pendant la montée vaut 4,1 mM pour le Kalman contre
-7,7 pour J/B à 1 000 photons : le filtre est meilleur pendant la transitoire, pas pire. Desserrer σ_w,g la fait
-passer de 3,6 à 4,1 mM, sans changer la conclusion.
+**4. Il n'y a pas de retard de poursuite pendant la montée** : erreur max 3,7 mM pour le Kalman contre 7,7 pour J/B.
 
-**5. 5a seul reste inutilisable à ces budgets, mais c'est une bonne ancre.** Il est 5,6 à 5,9 fois plus bruité que
-J/B, et sa concentration inversée est biaisée de +3 mM par l'inversion elle-même. Son observable brute, celle que
-reçoit le filtre, n'est biaisée que de +0,1 à +0,3 mM-équivalent, et elle est rigoureusement insensible à g (biais
-de 3,31 / 3,30 / 3,23 / 3,16 mM pour 0 / 5 / 10 / 20 % de dérive).
+**5. 5a est une ancre, pas une lecture.** Seul, il est 7,8 fois plus bruité que J/B avec la diffusion (5,8 fois
+sans), et sa concentration inversée est biaisée de +6 à +8 mM par la courbure. Son observable brute, celle que
+reçoit le filtre, est rigoureusement insensible à g et biaisée de +0,3 à +0,5 mM-équivalent.
 
 ### Réserves
 
@@ -325,8 +443,24 @@ de 3,31 / 3,30 / 3,23 / 3,16 mM pour 0 / 5 / 10 / 20 % de dérive).
 
 ## Pour l'étape 2
 
-Le générateur et les lectures ne bougent pas, et le filtre garde la marche aléatoire à σ_w,g = 3·10⁻³ (10⁻³ si le
-budget descend vers 300 photons). Deux points restent ouverts, tous deux du côté de σ_w,C : l'excursion des
-innovations pendant la montée et leur variance trop faible au repos (0,72). Un Q sur C qui dépend de la commande u,
-large pendant la stimulation et étroit au repos, répond aux deux. Le modèle (g, ġ) est prêt dans `kalman.jl` si
-les dérives mesurées en profondeur s'avèrent plus rapides que celles simulées ici.
+Le générateur et les lectures ne bougent pas, à une décision près : quel modèle de 5a transmet l'observable au
+filtre (voir la recommandation du correctif A). Le filtre de référence est OU sur ġ ; la marche aléatoire et sa
+table de σ_w,g par budget restent disponibles.
+
+Ce qui passe tel quel, volontairement, parce que la boucle ouverte ne permet pas de le régler correctement :
+
+- **Les innovations ne sont pas blanches** (autocorrélation −0,21, excursion −0,26σ pendant la montée, variance
+  0,72 au repos). Le modèle de C ne sait pas qu'un flux est en cours. C'est la motivation du Q qui dépend de la
+  commande u : quand eNpHR est pilotée, Q doit le savoir. Un Q global plus large dégraderait les plateaux.
+- **σ_w,g dépend du budget**, et le budget variera en boucle fermée (profondeur, blanchiment, mouvement) : ce
+  réglage devra s'adapter en ligne. La table reste figée pour l'instant.
+- **Le plancher photonique est posé** : 5a échoue 30 % du temps à 20 mM et 300 photons (42 % à 5 mM), 7 % à
+  1 000 photons. La boucle ne doit pas se fermer sous le millier de photons bleus par acquisition à 10 Hz.
+- **Le filtre est sous-confiant** (P₁₁/err² ≈ 1,5). Prudent en boucle ouverte ; en boucle fermée, si le
+  régulateur règle son gain sur P, il deviendra mou. À revoir avec le critère de performance de la boucle.
+
+Ce qui ne bouge plus : l'architecture de fusion (deux lectures dans l'espace des observables, état augmenté (C, g),
+le zéro de H qui rend g observable) et R complet, validé et gratuit.
+
+Hors périmètre du simulateur, côté banc : la dérive de τ₂ avec la longueur d'onde d'excitation (artéfact
+d'ajustement à diagnostiquer en liant τ₂ entre longueurs d'onde) et le contrôle de force ionique, jamais fait.

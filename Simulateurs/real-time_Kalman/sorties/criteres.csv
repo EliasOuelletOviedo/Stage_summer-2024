@@ -1,21 +1,21 @@
-N_photons_bleus,filtre,biais_rampe10_mM,P11_sur_err2_min,P11_sur_err2_max,rmse_kalman_sur_JB_max,c1_biais,c2_calibration,c3_rmse,bat_la_reference
-1000,MA σg=1e-04,-1.44741,0.326355,1.51831,0.596391,non,non,oui,—
-1000,MA σg=3e-04,-1.31004,0.36631,1.53375,0.596467,non,non,oui,—
-1000,MA σg=1e-03,-0.643557,0.724129,1.64373,0.608213,non,non,oui,—
-1000,MA σg=3e-03,-0.0307311,1.61062,1.79951,0.689555,oui,oui,oui,—
-1000,MA σg=1e-02,0.290205,1.79166,1.85212,0.941474,oui,oui,oui,—
-1000,MA σg=3e-02,0.459112,1.71149,1.74336,1.20978,non,oui,non,—
-1000,vitesse σġ=1e-05,0.144032,1.39765,1.56654,0.678787,oui,oui,oui,oui
-1000,vitesse σġ=1e-04,0.298128,1.45338,1.56825,0.705942,oui,oui,oui,non
-1000,vitesse σġ=1e-03,0.350583,1.50453,1.54644,0.931865,non,oui,oui,non
-1000,OU σġ=1e-04 τ=30s,-0.0589326,1.399,1.61317,0.656574,oui,oui,oui,oui
-3000,MA σg=1e-04,-1.45455,0.15188,1.34038,0.761086,non,non,oui,—
-3000,MA σg=3e-04,-1.1313,0.206575,1.37355,0.761466,non,non,oui,—
-3000,MA σg=1e-03,-0.377306,0.655929,1.52116,0.784704,non,non,oui,—
-3000,MA σg=3e-03,-0.0415011,1.62819,1.76795,0.899904,oui,oui,oui,—
-3000,MA σg=1e-02,0.113742,1.87104,1.96004,1.2149,oui,oui,non,—
-3000,MA σg=3e-02,0.183694,1.84103,1.90932,1.56404,oui,oui,non,—
-3000,vitesse σġ=1e-05,0.146678,1.06311,1.44241,0.852597,oui,oui,oui,non
-3000,vitesse σġ=1e-04,0.141115,1.1764,1.4693,0.884121,oui,oui,oui,non
-3000,vitesse σġ=1e-03,0.123362,1.3985,1.56549,1.11649,oui,oui,non,non
-3000,OU σġ=1e-04 τ=30s,-0.0334204,1.17475,1.48014,0.840072,oui,oui,oui,non
+N_photons_bleus,filtre,reference,biais_rampe10_mM,P11_sur_err2_min,P11_sur_err2_max,rmse_kalman_sur_JB_max,c1_biais,c2_calibration,c3_rmse,rmse_saut_mM,biais_saut_mM,rattrapage_saut_s,vs_ref_rmse_rampes_le,vs_ref_rmse_saut_dans_10pct,vs_ref_biais_saut_dans_0p1mM,vs_ref_rmse_sans_derive_dans_10pct,vs_ref_bat_les_4_conditions
+1000,MA σg=1e-04,non,-1.32314,0.398171,1.5652,0.650699,non,non,oui,1.4898,-0.87087,NaN,non,oui,non,oui,non
+1000,MA σg=3e-04,non,-1.23745,0.428862,1.59271,0.651775,non,non,oui,1.47381,-0.796522,NaN,non,oui,non,oui,non
+1000,MA σg=1e-03,non,-0.663255,0.75177,1.7396,0.665793,non,non,oui,1.39769,-0.295184,7.275,non,oui,oui,oui,non
+1000,MA σg=3e-03,non,0.15844,1.76571,1.92346,0.764548,oui,oui,oui,1.49348,0.423022,1.8375,non,oui,oui,oui,non
+1000,MA σg=1e-02,non,0.54683,1.76722,1.84512,1.08843,non,oui,non,2.12963,0.623504,0.325,non,non,non,non,non
+1000,MA σg=3e-02,non,0.724022,1.65885,1.70517,1.44604,non,oui,non,2.85726,0.696694,0.425,non,non,non,non,non
+1000,vitesse σġ=1e-05,non,0.459609,1.40784,1.56845,0.764179,non,oui,oui,1.57975,0.526451,5.0125,non,oui,non,oui,non
+1000,vitesse σġ=1e-04,non,0.695496,1.39818,1.51577,0.810195,non,oui,oui,1.6679,0.920883,3.1125,non,non,non,non,non
+1000,vitesse σġ=1e-03,non,0.650895,1.43518,1.49613,1.12245,non,oui,non,2.23217,0.67145,0.7,non,non,non,non,non
+1000,OU σġ=1e-04 τ=30s,oui,0.126084,1.48139,1.70487,0.730515,oui,oui,oui,1.48483,0.389301,4.2875,—,—,—,—,—
+3000,MA σg=1e-04,non,-1.41961,0.183466,1.32043,0.846271,non,non,oui,1.27781,-0.992206,NaN,non,non,non,oui,non
+3000,MA σg=3e-04,non,-1.21093,0.223144,1.34379,0.847012,non,non,oui,1.21762,-0.801298,19.3625,non,non,non,oui,non
+3000,MA σg=1e-03,non,-0.417815,0.626495,1.59492,0.866808,non,non,oui,1.04288,-0.0808832,5.5125,non,oui,oui,oui,non
+3000,MA σg=3e-03,non,0.103007,1.73037,1.87326,0.998731,oui,oui,oui,1.08721,0.301256,1.85,non,oui,oui,oui,non
+3000,MA σg=1e-02,non,0.310459,1.86942,2.0377,1.4173,non,non,non,1.53212,0.337218,0.175,non,non,oui,non,non
+3000,MA σg=3e-02,non,0.384282,1.78446,1.95176,1.87956,non,oui,non,2.0447,0.348431,0.05,non,non,oui,non,non
+3000,vitesse σġ=1e-05,non,0.35085,1.21493,1.50426,0.929673,non,oui,oui,1.09987,0.50901,4.5875,non,oui,oui,oui,non
+3000,vitesse σġ=1e-04,non,0.414864,1.27403,1.47658,0.978946,non,oui,oui,1.15027,0.721786,3.1625,non,oui,non,oui,non
+3000,vitesse σġ=1e-03,non,0.350541,1.39736,1.55183,1.3507,non,oui,non,1.49458,0.316659,0.7125,non,non,oui,non,non
+3000,OU σġ=1e-04 τ=30s,oui,0.119868,1.29267,1.57704,0.919082,oui,oui,oui,1.06728,0.441017,3.9,—,—,—,—,—

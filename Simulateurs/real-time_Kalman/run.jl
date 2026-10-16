@@ -17,7 +17,11 @@ const COLONNES = [:t, :C_vrai, :g_vrai, :C_ratio, :C_5a, :C_kalman, :g_chapeau, 
                   :innov_ratio, :innov_5a, :N_bleu, :N_jaune, :gp_chapeau, :z_ratio, :z_5a]
 
 nom_ma(σ) = @sprintf("MA σg=%.0e", σ)
-reference(p::Params) = nom_ma(p.toml["kalman"]["sigma_wg"])
+nom_ou(v) = @sprintf("OU σġ=%.0e τ=%gs", v["sigma_wgp_rappel"], v["tau_rappel_s"])
+"""Le filtre de référence : OU (deuxième passe) ou la marche aléatoire au σ_w,g par défaut."""
+reference(p::Params) = p.toml["kalman"]["reference"] == "OU" ? nom_ou(p.toml["kalman"]["vitesse"]) : nom_ma(p.toml["kalman"]["sigma_wg"])
+"""La marche aléatoire au σ_w,g de la table par budget."""
+ma_reglee(p::Params, N) = nom_ma(Dict(Tuple.(p.toml["kalman"]["sigma_wg_par_budget"]))[N])
 
 """Les réglages du filtre comparés sur les mêmes lectures."""
 function configurations(p::Params)
@@ -26,7 +30,7 @@ function configurations(p::Params)
     for σ in v["balayage_sigma_wgp"]
         push!(c, (nom = @sprintf("vitesse σġ=%.0e", σ), modele = :vitesse, σwg = v["sigma_wg"], σwgp = σ, τgp = Inf))
     end
-    push!(c, (nom = @sprintf("OU σġ=%.0e τ=%gs", v["sigma_wgp_rappel"], v["tau_rappel_s"]), modele = :vitesse,
+    push!(c, (nom = nom_ou(v), modele = :vitesse,
               σwg = v["sigma_wg"], σwgp = v["sigma_wgp_rappel"], τgp = v["tau_rappel_s"]))
     return c
 end
@@ -167,11 +171,16 @@ end
 
 ligne(resume, N, der, filtre) = resume[findfirst(r -> r.N_photons_bleus == N && r.derive == der && r.filtre == filtre, resume)]
 
-"""Critères de sortie vers l'étape 2 (chiffrés d'avance dans params.toml), pour chaque réglage du filtre."""
+"""
+Critères de sortie vers l'étape 2 (chiffrés d'avance dans params.toml), pour chaque réglage
+du filtre ; puis la comparaison à la référence, condition par condition (une colonne chacune,
+pour que le verdict se relise contre ses propres chiffres).
+"""
 function criteres(resume, p::Params)
     c, ref = p.toml["criteres"], reference(p)
     ders = unique(r.derive for r in resume)
     out = []
+    oui(b) = b ? "oui" : "non"
     for N in c["budgets"], cf in configurations(p)
         K = [ligne(resume, N, d, cf.nom) for d in ders]
         J = [ligne(resume, N, d, "J/B") for d in ders]
@@ -179,15 +188,21 @@ function criteres(resume, p::Params)
         b10 = ligne(resume, N, "rampe 10 %", cf.nom).biais_30s
         P = [k.P11_sur_err2 for k in K]
         q = maximum(k.rmse / j.rmse for (k, j) in zip(K, J))
-        bat = cf.modele === :marche ? "—" : all(begin
-            r = Rf[i]; k = K[i]
-            startswith(d, "rampe") ? k.rmse <= r.rmse :
-            startswith(d, "saut") ? k.rmse <= (1 + c["tolerance_saut"]) * r.rmse && abs(k.biais_30s) <= abs(r.biais_30s) + c["tolerance_biais_saut_mM"] :
-            k.rmse <= (1 + c["tolerance_saut"]) * r.rmse end for (i, d) in enumerate(ders)) ? "oui" : "non"
-        push!(out, (N_photons_bleus = N, filtre = cf.nom, biais_rampe10_mM = b10, P11_sur_err2_min = minimum(P), P11_sur_err2_max = maximum(P),
-            rmse_kalman_sur_JB_max = q, c1_biais = abs(b10) < c["biais_rampe10_max_mM"] ? "oui" : "non",
-            c2_calibration = all(c["P11_sur_err2"][1] .<= P .<= c["P11_sur_err2"][2]) ? "oui" : "non",
-            c3_rmse = q < 1 ? "oui" : "non", bat_la_reference = bat))
+        rp = [startswith(d, "rampe") for d in ders]
+        sa = findfirst(d -> startswith(d, "saut"), ders)
+        au = findfirst(==("aucune"), ders)
+        c1 = all(K[i].rmse <= Rf[i].rmse for i in findall(rp))
+        c2 = K[sa].rmse <= (1 + c["tolerance_saut"]) * Rf[sa].rmse
+        c3 = abs(K[sa].biais_30s) <= abs(Rf[sa].biais_30s) + c["tolerance_biais_saut_mM"]
+        c4 = K[au].rmse <= (1 + c["tolerance_saut"]) * Rf[au].rmse
+        est_ref = cf.nom == ref
+        push!(out, (N_photons_bleus = N, filtre = cf.nom, reference = oui(est_ref), biais_rampe10_mM = b10,
+            P11_sur_err2_min = minimum(P), P11_sur_err2_max = maximum(P), rmse_kalman_sur_JB_max = q,
+            c1_biais = oui(abs(b10) < c["biais_rampe10_max_mM"]), c2_calibration = oui(all(c["P11_sur_err2"][1] .<= P .<= c["P11_sur_err2"][2])),
+            c3_rmse = oui(q < 1), rmse_saut_mM = K[sa].rmse, biais_saut_mM = K[sa].biais_30s, rattrapage_saut_s = K[sa].t_recup_g,
+            vs_ref_rmse_rampes_le = est_ref ? "—" : oui(c1), vs_ref_rmse_saut_dans_10pct = est_ref ? "—" : oui(c2),
+            vs_ref_biais_saut_dans_0p1mM = est_ref ? "—" : oui(c3), vs_ref_rmse_sans_derive_dans_10pct = est_ref ? "—" : oui(c4),
+            vs_ref_bat_les_4_conditions = est_ref ? "—" : oui(c1 && c2 && c3 && c4)))
     end
     return out
 end
@@ -200,6 +215,42 @@ function sigma_recommande(resume, p::Params, N)
     return isempty(c) ? NaN : c[argmin(last.(c))][1]
 end
 
+"""
+La relance de vérification (deuxième passe) : chaque quantité contre son seuil fixé d'avance
+dans params.toml [seuils_relance], plus la monotonie en dérive du biais du Kalman à N = 300.
+"""
+function seuils(resume, amp, biais5a, verif, p::Params)
+    s, ref = p.toml["seuils_relance"], reference(p)
+    ecart(av, inj) = 100 * maximum(abs(getfield(a, av) / getfield(a, inj) - 1) for a in amp)
+    bl(N, lect) = biais5a[findfirst(b -> b.N_photons_bleus == N && b.C_mM == 20.0 && b.lecture == lect, biais5a)]
+    v = verif[findfirst(x -> x.N_photons_bleus == 1000.0, verif)]
+    ders = [[nom_derive("rampe", α, p) for α in p.toml["derive"]["balayage_alpha"]]; nom_derive("saut", 0, p)]
+    K = [ligne(resume, 1000.0, d, ref) for d in ders]
+    bk = [k.biais_30s for k in K]
+    P = [k.P11_sur_err2 for k in K]
+    fis = 100 .* [abs(v.var_ratio_fisher / v.var_ratio_reelle - 1), abs(v.var_5a_fisher / v.var_5a_reelle - 1), abs(v.cov_fisher / v.cov_reelle - 1)]
+    b300 = [ligne(resume, 300.0, d, ref).biais_30s for d in ders[1:end-1]]
+    mono = all(diff(b300) .<= 0) || all(diff(b300) .>= 0)
+    nul = maximum(abs(getfield(a, k) - getfield(a, i)) for a in amp for (k, i) in ((:p_sans_diffusion, :p_injecte), (:q_sans_diffusion, :q_injecte)))
+    o(b) = b ? "oui" : "non"
+    fmt(x) = join((@sprintf("%+.2f", y) for y in x), " / ")
+    σ5 = bl(1000.0, "5a").sigma_mM
+    return [
+        (quantite = "écart relatif max sur p, avec diffusion (%)", apres = @sprintf("%.2g", ecart(:p_avec_diffusion, :p_injecte)), seuil = "< $(s["ecart_p_avec_diffusion_pct"])", tenu = o(ecart(:p_avec_diffusion, :p_injecte) < s["ecart_p_avec_diffusion_pct"])),
+        (quantite = "écart relatif max sur q, avec diffusion (%)", apres = @sprintf("%.2g", ecart(:q_avec_diffusion, :q_injecte)), seuil = "< $(s["ecart_q_avec_diffusion_pct"])", tenu = o(ecart(:q_avec_diffusion, :q_injecte) < s["ecart_q_avec_diffusion_pct"])),
+        (quantite = "non-régression sans diffusion, max |p̂ − p|, |q̂ − q|", apres = @sprintf("%.1e", nul), seuil = "< $(s["non_regression_sans_diffusion"])", tenu = o(nul < s["non_regression_sans_diffusion"])),
+        (quantite = "biais d'observable 5a, C = 20, N = 1000 (mM)", apres = @sprintf("%+.3f", bl(1000.0, "5a").biais_observable_mM), seuil = "< $(s["biais_observable_N1000_mM"])", tenu = o(abs(bl(1000.0, "5a").biais_observable_mM) < s["biais_observable_N1000_mM"])),
+        (quantite = "biais d'observable 5a, C = 20, N = 300 (mM)", apres = @sprintf("%+.3f", bl(300.0, "5a").biais_observable_mM), seuil = "< $(s["biais_observable_N300_mM"])", tenu = o(abs(bl(300.0, "5a").biais_observable_mM) < s["biais_observable_N300_mM"])),
+        (quantite = "σ de 5a, C = 20, N = 1000 (mM)", apres = @sprintf("%.2f (%+.0f %%)", σ5, 100 * (σ5 / s["sigma_5a_N1000_avant_mM"] - 1)), seuil = "hausse ≤ $(Int(100s["sigma_5a_hausse_max"])) %", tenu = o(σ5 <= (1 + s["sigma_5a_hausse_max"]) * s["sigma_5a_N1000_avant_mM"])),
+        (quantite = "biais d'inversion 5a, C = 20, N = 1000 (mM)", apres = @sprintf("%+.2f", bl(1000.0, "5a").biais_inverse_mM), seuil = "dans $(s["biais_inversion_N1000_mM"])", tenu = o(s["biais_inversion_N1000_mM"][1] <= bl(1000.0, "5a").biais_inverse_mM <= s["biais_inversion_N1000_mM"][2])),
+        (quantite = "biais du Kalman de référence, 5 phases, N = 1000 (mM)", apres = fmt(bk), seuil = "tous sous ±$(s["biais_kalman_N1000_mM"])", tenu = o(all(abs.(bk) .< s["biais_kalman_N1000_mM"]))),
+        (quantite = "P₁₁/err², 5 phases, N = 1000", apres = join((@sprintf("%.2f", x) for x in P), " / "), seuil = "dans $(s["P11_sur_err2_N1000"])", tenu = o(all(s["P11_sur_err2_N1000"][1] .<= P .<= s["P11_sur_err2_N1000"][2]))),
+        (quantite = "accord Fisher / Monte-Carlo, var J/B, var 5a, cov (%)", apres = join((@sprintf("%.1f", x) for x in fis), " / "), seuil = "< $(s["accord_fisher_pct"])", tenu = o(all(fis .< s["accord_fisher_pct"]))),
+        (quantite = "échecs de 5a, C = 20, N = 300 (%)", apres = @sprintf("%.1f", bl(300.0, "5a").echecs_pct), seuil = "à rapporter", tenu = "—"),
+        (quantite = "biais du Kalman à N = 300, dérive 0 / 5 / 10 / 20 % (mM)", apres = fmt(b300), seuil = "monotone", tenu = o(mono)),
+    ]
+end
+
 include(joinpath(@__DIR__, "src", "figures.jl"))
 
 function main(; rapide = "--rapide" in ARGS)
@@ -208,7 +259,6 @@ function main(; rapide = "--rapide" in ARGS)
     nrep = rapide ? 2 : p0.toml["course"]["repetitions"]
     vid, ref = p0.toml["video"], reference(p0)
     configs = configurations(p0)
-    plat = [ref; [c.nom for c in configs if c.modele === :vitesse && c.τgp == Inf && c.σwgp == p0.toml["kalman"]["vitesse"]["sigma_wgp_rappel"]]]
     lignes_pas, resume, coherence, verif, biais5a, saut, videos = [], [], [], [], [], Dict(), Dict()
     for N in p0.toml["photons"]["balayage"]
         pN = avec(p0; N)
@@ -236,7 +286,7 @@ function main(; rapide = "--rapide" in ARGS)
             nv === nothing || rapide || (videos[nv] = (T1[ref], res[1][2], p))
             forme == "saut" && N == vid["N_bleu"] && (saut = Dict(c.nom => (t = T1[ref][:t], g = T1[ref][:g_vrai],
                 gm = mean(res[r][1][c.nom][:g_chapeau] for r in 1:nrep)) for c in configs))
-            for f in plat, k in eachindex(T1[f][:t])
+            for f in unique([ref, ma_reglee(p0, N)]), k in eachindex(T1[f][:t])
                 push!(lignes_pas, merge((N_photons_bleus = N, derive = nom, filtre = f), NamedTuple{Tuple(COLONNES)}(Tuple(T1[f][c][k] for c in COLONNES))))
             end
             moy(M) = merge(NamedTuple{keys(M[1])}(Tuple(mean(getfield(x, k) for x in M) for k in keys(M[1]))),
@@ -254,20 +304,23 @@ function main(; rapide = "--rapide" in ARGS)
     end
     amp = amplitudes(avec(p0; N = vid["N_bleu"]))
     crit = criteres(resume, p0)
-    for N in p0.toml["photons"]["balayage"]
-        @printf("σ_w,g recommandé (P11/err² ≥ 1 et le plus proche de 1 sous la dérive la plus forte), N = %g : %.0e\n",
-                N, sigma_recommande(resume, p0, N))
-    end
+    seu = seuils(resume, amp, biais5a, verif, p0)
+    regl = [(N_photons_bleus = N, sigma_wg_table = Dict(Tuple.(p0.toml["kalman"]["sigma_wg_par_budget"]))[N],
+             sigma_wg_recommande_cette_course = sigma_recommande(resume, p0, N)) for N in p0.toml["photons"]["balayage"]]
+    foreach(r -> @printf("N = %g : σ_w,g de la table %.0e, recommandé par cette course %.0e\n", r...), regl)
+    foreach(r -> @printf("%-58s %-28s %-16s %s\n", r...), seu)
     @printf("amplitudes sans diffusion : max |p̂ − p| = %.1e, max |q̂ − q| = %.1e\n",
             maximum(abs(a.p_sans_diffusion - a.p_injecte) for a in amp), maximum(abs(a.q_sans_diffusion - a.q_injecte) for a in amp))
     for (nom, l) in (("courses", lignes_pas), ("resume", resume), ("coherence", coherence), ("verification_R", verif),
-                     ("biais_lectures", biais5a), ("amplitudes", amp), ("criteres", crit))
+                     ("biais_lectures", biais5a), ("amplitudes", amp), ("criteres", crit), ("seuils_relance", seu),
+                     ("reglage_par_budget", regl))
         ecrire_csv(joinpath(SORTIES, nom * ".csv"), l)
     end
     figure_resume(resume, saut, p0, joinpath(SORTIES, "fig_resume.png"))
     figure_reglage(resume, p0, joinpath(SORTIES, "fig_reglage.png"))
     figure_fisher(verif, joinpath(SORTIES, "fig_fisher.png"))
     figure_amplitudes(amp, joinpath(SORTIES, "fig_amplitudes.png"))
+    figure_courbure(biais5a, resume, p0, joinpath(SORTIES, "fig_courbure.png"))
     for (nom, (T, H, p)) in videos
         video(T, H, p, joinpath(SORTIES, nom))
     end

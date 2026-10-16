@@ -1,11 +1,14 @@
 # Les quatre tests à faire passer avant le reste, plus deux tests du filtre seul sur des mesures
-# fabriquées à la main (sans histogramme) et le test d'amplitudes sans diffusion. Lancer : julia --project=. test/runtests.jl
+# fabriquées à la main (sans histogramme) et le test d'amplitudes avec et sans diffusion. Lancer : julia --project=. test/runtests.jl
 
 using Test, Statistics, StableRNGs
 include(joinpath(@__DIR__, "..", "run.jl"))
 
 const p = charger_params()
 const lec = lecteurs(p)
+
+# un ensemble englobant : un groupe qui échoue n'empêche pas les suivants de tourner
+@testset "simulateur Kalman temps réel" begin
 
 @testset "1. aller-retour sans bruit : J/B et 5a retrouvent C" begin
     for C in (20.0, 23.7)        # 20 mM est un nœud de la grille de calibration, 23,7 mM non
@@ -20,14 +23,15 @@ end
 
 @testset "2. invariance de 5a : jaune × 1,2" begin
     # (a) l'hypothèse structurelle : sur un histogramme que le modèle de 5a décrit exactement
-    # (deux exponentielles + fond, sans diffusion), A_J absorbe g au bruit numérique près
+    # (les colonnes de 5a + fond), A_J absorbe g au bruit numérique près
     c = Cfg5a(p, (0.0, 1.0))
     W = p.fenetre
-    μb = zeros(p.n); μb[W] .= 300 .* c.Xb * [0.6, 0.4]; μb .+= p.fond_b
-    jaune(g) = (μ = zeros(p.n); μ[W] .= g .* 300 .* c.Xj * [0.12, 0.88]; μ .+ p.fond_j)
+    poids(X, x) = size(X, 2) == 3 ? [5.0 / 300; x] : x       # 5 photons de diffusion si 5a la modélise
+    μb = zeros(p.n); μb[W] .= 300 .* c.Xb * poids(c.Xb, [0.6, 0.4]); μb .+= p.fond_b
+    jaune(g) = (μ = zeros(p.n); μ[W] .= g .* 300 .* c.Xj * poids(c.Xj, [0.12, 0.88]); μ .+ p.fond_j)
     @test abs(estimer(μb, jaune(1.0), c).z - estimer(μb, jaune(1.2), c).z) < 1e-8
-    # (b) le générateur complet ajoute la diffusion, que 5a ne modélise pas : le reste est
-    # mesuré et doit rester négligeable devant le bruit d'un pas (moins de 1/1000 de σ)
+    # (b) le générateur complet : avec la diffusion dans 5a, l'invariance y est aussi exacte ;
+    # sans elle, le reste doit rester négligeable devant le bruit d'un pas (moins de 1/1000 de σ)
     μ1, μ2 = histogrammes_c(20.0, 1.0, p), histogrammes_c(20.0, 1.2, p)
     for w in ((1.0, 0.0), (0.0, 1.0), lec.w)                          # p, q et l'observable transmise
         c = Cfg5a(p, w)
@@ -48,7 +52,7 @@ end
     Threads.@threads for r in 1:8
         res[r] = course(avec(p; alpha = 0.0), lec, r)[1]
     end
-    for m in (reference(p), nom_ma(1e-4))            # la référence et l'ancien défaut
+    for m in (reference(p), ma_reglee(p, p.N), nom_ma(1e-4))   # la référence OU, la marche réglée, le premier défaut
         ecart(sel) = mean(begin
             T = x[m]; t, K, R = T[:t], T[:C_kalman], T[:C_ratio]
             v = .!isnan.(R) .& sel(t)
@@ -107,11 +111,14 @@ end
     @test abs(fm.x[2] - g) > 5 * abs(fv.x[2] - g)             # la marche aléatoire raide traîne
 end
 
-@testset "7. amplitudes : sans diffusion, 5a retrouve exactement p et q injectés" begin
-    q0 = sans_diffusion(p)
-    for C in (0.0, 20.0, 80.0, 131.0)
+@testset "7. amplitudes : 5a retrouve exactement p et q injectés, avec et sans diffusion" begin
+    # avec la diffusion dans 5a (correctif A), l'écart doit tomber au niveau machine dans les
+    # deux cas ; sans elle, seul le générateur sans diffusion est décrit exactement
+    for q0 in (p, sans_diffusion(p)), C in (0.0, 20.0, 80.0, 131.0)
         μ = histogrammes_c(C, 1.0, q0)
-        @test estimer(μ..., Cfg5a(p, (1.0, 0.0))).z ≈ p.lang["p_bleu"](C) atol = 1e-6
-        @test estimer(μ..., Cfg5a(p, (0.0, 1.0))).z ≈ p.lang["q_jaune"](C) atol = 1e-6
+        @test estimer(μ..., Cfg5a(p, (1.0, 0.0))).z ≈ p.lang["p_bleu"](C) atol = 1e-9
+        @test estimer(μ..., Cfg5a(p, (0.0, 1.0))).z ≈ p.lang["q_jaune"](C) atol = 1e-9
     end
+end
+
 end

@@ -34,11 +34,16 @@ gain_minimal_jaune = 0.10       # q entre dans l'observable de 5a s'il réduit �
 grille_calibration_mM = [0.0, 131.0, 0.25]   # début, fin, pas ; hors de cette plage, la lecture échoue
 bornes_fraction = [-0.5, 1.5]   # p ou q hors de ces bornes : échec de 5a
 iterations_max = 60
+diffusion_5a = true             # composante de diffusion (τ_diff figé, amplitude libre) dans 5a ; false : le modèle à 4 paramètres d'avant
 
 [kalman]
 # Tous les filtres ci-dessous tournent sur les mêmes histogrammes, aux trois budgets (comparaisons appariées).
 sigma_wC_mM = 1.2     # saut de Cl⁻ non prévu en 0,1 s : la pente max de la montée (25 mM / 2 s × 0,1 s)
-sigma_wg = 3e-3       # référence (corrections de l'étape 1, correctif 1) : marche aléatoire du gain, par pas
+reference = "OU"      # filtre de référence (deuxième passe, correctif B) : modèle (C, g, ġ) avec rappel de ġ, voir [kalman.vitesse]
+sigma_wg = 3e-3       # marche aléatoire (MA) : σ_w,g par défaut, par pas
+# σ_w,g de la marche aléatoire selon le budget (critère P₁₁/err² ≥ 1 et le plus proche de 1 sous la rampe de 20 %,
+# première passe). Table figée : en boucle fermée, le budget varie et ce réglage devra s'adapter en ligne.
+sigma_wg_par_budget = [[300.0, 1e-3], [1000.0, 3e-3], [3000.0, 3e-3]]
 balayage_sigma_wg = [1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2]   # 1e-4 : l'ancien défaut ; 1e-2 et 3e-2 : le sur-desserrage
 C0_mM = 5.0
 sigma_C0_mM = 2.0
@@ -59,10 +64,25 @@ sigma_wgp_rappel = 1e-4
 budgets = [1000.0, 3000.0]     # 300 photons n'est pas un régime de fonctionnement : borne basse, fichier plat seulement
 biais_rampe10_max_mM = 0.3
 P11_sur_err2 = [0.8, 2.0]
-# le modèle (g, ġ) est retenu s'il bat la marche de référence sur les rampes (RMSE) sans perdre sur le
-# saut (RMSE au plus 10 % au-dessus, |biais| au plus 0,1 mM au-dessus) ni sans dérive (RMSE au plus 10 % au-dessus)
+# Comparaison d'un réglage à la référence, en quatre conditions écrites séparément dans criteres.csv :
+# RMSE sur toutes les rampes au plus égale ; RMSE sur le saut au plus 10 % au-dessus ; |biais| sur le saut au plus
+# 0,1 mM au-dessus ; RMSE sans dérive au plus 10 % au-dessus. Le temps de rattrapage du saut n'en fait pas partie.
 tolerance_saut = 0.10
 tolerance_biais_saut_mM = 0.1
+
+[seuils_relance]
+# Deuxième passe, « la relance de vérification » : seuils fixés avant la relance ; « avant » = première passe.
+ecart_p_avec_diffusion_pct = 0.5          # avant : 10,4 %
+ecart_q_avec_diffusion_pct = 0.5          # avant : 14,2 % à 0 mM, 5,9 % à 130 mM
+non_regression_sans_diffusion = 1e-12     # avant : 1,3e-15
+biais_observable_N1000_mM = 0.10          # C = 20 mM ; avant : +0,26
+biais_observable_N300_mM = 0.40           # C = 20 mM ; avant : +1,30
+sigma_5a_N1000_avant_mM = 13.2165         # C = 20 mM ; ne doit pas monter de plus de 10 %
+sigma_5a_hausse_max = 0.10
+biais_inversion_N1000_mM = [2.5, 3.1]     # C = 20 mM ; avant : +2,81 ; doit rester (la courbure l'explique)
+biais_kalman_N1000_mM = 0.30              # les cinq phases (aucune, rampes 5/10/20 %, saut) ; avant : +0,28 … +0,21 (MA 3e-3)
+P11_sur_err2_N1000 = [0.5, 2.0]           # avant : 1,61 … 1,80
+accord_fisher_pct = 5.0                   # var J/B, var 5a, covariance à N = 1000 ; avant : 0,6 / 3,2 / 0,8 %
 
 [course]
 repetitions = 8        # courses indépendantes par scénario pour le résumé
@@ -74,7 +94,7 @@ pas_amplitudes_mM = 5.0          # test d'amplitudes sans bruit sur toute la pla
 
 [video]
 ips = 30               # 900 images à 30 ips : 30 s de vidéo pour 90 s simulées (×3)
-N_bleu = 1000.0        # trois vidéos au réglage de référence : sans dérive, rampe, saut
+N_bleu = 1000.0        # trois vidéos au filtre de référence : sans dérive, rampe, saut
 alpha = 0.10
 
 # >>> step0 : écrit par step0_params.jl, ne pas éditer
