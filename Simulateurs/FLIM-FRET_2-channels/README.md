@@ -15,7 +15,7 @@ et la concentration vraie, avec la borne de Cramér-Rao comme référence absolu
 cd Simulateurs/FLIM-FRET_2-channels
 julia --project=. step0_spectres.jl             # spectres FPbase et matrice η (télécharge une fois)
 julia --project=. step1_titration.jl            # ta titration → paramètres, et le test de M2 lent (20 s)
-julia --project=. -t 8 step2_validation.jl      # 28 tests internes (40 s)
+julia --project=. -t 8 step2_validation.jl      # 29 tests internes (40 s)
 julia --project=. step3_calibration.jl          # calibrations, K apparents, identifiabilité, bornes (1 min)
 julia --project=. -t 8 step4_monte_carlo.jl     # grille principale : 351 000 réalisations (≈ 10 min sur le M1)
 julia --project=. -t 8 step5_nuisances.jl       # balayages de nuisance (≈ 45 min)
@@ -28,6 +28,8 @@ julia --project=. -t 8 step10_facteur8.jl       # le facteur 8 sur tes données 
 julia --project=. -t 8 step11_incertitude.jl    # incertitude des paramètres : bandes, variance paramétrique, classement (≈ 12 min)
 julia --project=. step12_canal_jaune.jl         # canal jaune : η_YD depuis tes TIFF, ingestion testée, prédictions (1 min)
 julia --project=. -t 8 step13_fusion.jl         # fusion ratio + forme sous dérive de gain (2 min)
+# banc du 2026-10-16 : une autre version de SCLM, traitée seule (voir la section du même nom)
+julia --project=. -t 8 step14_banc.jl           # sommes des 10 acquisitions, stabilité des techniques à bas photons (3 min)
 ```
 
 L'étape 5 compte désormais aussi Φ_A effectif, τ_A ±20 %, le retard du jaune, le blanchiment et un
@@ -474,6 +476,313 @@ Biais ajouté à 20 mM et 10⁴ photons (mM) :
 | — | une deuxième inversion de η_YD, par la plage dynamique du TIFF | indépendante de la première, elle la confirme |
 | — | des signatures en plus du χ²ᵣ dans la batterie (τ mono, phasors) | le χ²ᵣ seul ne distingue pas l'IRF d'un état intermédiaire |
 
+## Banc du 2026-10-16 : une autre version de SCLM (`step14_banc.jl`, fig. 15 et 16)
+
+Ces mesures viennent d'une autre version de SCLM et sont traitées seules : rien ici n'est comparé à
+la titration du 2026-07-20 ni aux paramètres du simulateur. Seules les méthodes sont reprises : les
+estimateurs, l'amincissement, le jumeau simulé et la borne de Fisher. Pour la précision, chaque
+échantillon est représenté par la somme de ses 10 acquisitions. Cette somme est ensuite amincie
+pour comparer la stabilité des techniques à bas photons.
+
+```bash
+julia --project=. -t 8 step14_banc.jl            # ≈ 3 min ; sorties dans sorties/banc_2026-10-16/
+```
+
+### Les données
+
+- **Échantillons.** `Data/2026-10-16` contient `test_0` et `test_131` : 0 et 131 mM de Cl⁻, d'après
+  les noms de dossiers. Chacun est excité à 750, 800 et 850 nm.
+- **Acquisitions.** 10 acquisitions de 1 s par échantillon et par longueur d'onde, à temps fixé
+  (`col_t` = 1 s, arrêt sur temps). Les deux canaux sont dans le même .sdt : voie 1 bleu (donneur),
+  voie 2 jaune (accepteur), voie 3 vide.
+- **IRF.** Une IRF par longueur d'onde (`IRF_<λ>_16X.sdt`, 30 s), vue par les deux détecteurs à la
+  fois. Chaque canal a donc sa propre IRF, et le retard entre détecteurs est dans ces IRF.
+- **TAC.** 16,4 ns sur 256 canaux, soit un pas de 64,0 ps. Seuls les canaux 14 à 196 reçoivent des
+  photons, et le canal 196 est partiel. La fenêtre d'analyse est 14–195 : 11,6 ns d'une période
+  laser de 12,5 ns (195,3 canaux).
+- **J/B** est le rapport brut des photons des deux canaux dans la fenêtre, sans retrait du fond.
+
+### Méthode
+
+1. **Les 10 acquisitions.** Photons de chaque canal, J/B, dispersion d'une acquisition à l'autre
+   comparée à Poisson, et dérive.
+2. **Les IRF.** Fond retiré (moyenne avant le pic), largeur à mi-hauteur, queue lente, et retard du
+   jaune sur le bleu (front montant à 50 %).
+3. **La somme des 10 acquisitions de chaque échantillon.** Elle couvre 10 s, avec 0,9 à 2,0·10⁶
+   photons bleus et 2,6 à 7,3·10⁶ photons jaunes. On en tire :
+   - trois exponentielles libres par canal : τ et t₀ communs aux deux échantillons, amplitudes et
+     fond par échantillon, montée libre pour le jaune ;
+   - les phasors, avec l'IRF de chaque détecteur corrigée ;
+   - J/B ;
+   - la lecture de chaque technique à pleins photons, qui sert de référence.
+4. **La stabilité des techniques quand les photons manquent.**
+   - Chaque somme est amincie par tirage binomial à N = 10², 3·10², …, 10⁵ photons bleus. Le jaune
+     est aminci avec la même probabilité, ce qui conserve J/B.
+   - On fait 400 tirages par point, et chaque technique lit chaque tirage.
+   - Chaque lecture o est ramenée sur l'écart entre les deux échantillons :
+     f = (o − o₀)/(o₁₃₁ − o₀), où o₀ et o₁₃₁ sont les lectures des sommes.
+   - On en tire σ, le biais, le taux d'échec et la discriminabilité d' = |Δf moyen|/σ, tous en
+     fraction de l'écart 0 → 131 mM.
+5. **Contrôles.**
+   - Un jumeau simulé : les mêmes lectures, sur des tirages de Poisson du lissage à trois
+     exponentielles.
+   - La borne de Fisher (bruit de Poisson seul, fonds connus), pour 1, 5a et 5d.
+
+**Pourquoi sommer, puis amincir.**
+- La somme donne à chaque technique une référence à environ 10⁶ photons. Son bruit propre vaut au
+  plus 2 à 3 % de l'écart, pour les techniques les plus bruitées.
+- Amincir une somme réelle garde tout ce que contiennent les données : IRF, fond, composantes et
+  détecteurs. Aucun modèle n'est nécessaire.
+- L'amincissement ne voit pas la variation d'une acquisition à l'autre. Elle est mesurée à part
+  (étape 1).
+
+**Pourquoi des fractions de l'écart.** C'est la seule échelle commune à des lectures en ns, en
+rapport ou en fraction. Avec deux concentrations, on ne peut pas convertir en mM (voir les réserves).
+
+**Les techniques** sont celles du simulateur.
+
+| | Technique | Ce qu'elle lit |
+| --- | --- | --- |
+| 1 | rapport J/B | photons jaunes / photons bleus dans la fenêtre |
+| 2 | ton mono, bleu | τ de ton `vec_to_lifetime` (inchangé) sur le bleu, avec l'IRF du bleu sur une période (195 canaux, gating 14–195) |
+| 2J | ton mono, jaune | la même chose sur le jaune, avec l'IRF du jaune |
+| 3 | bi-exp. à τ libres, bleu | fraction d'amplitude de la composante courte ; fond et t₀ fixés |
+| 4 | bi-exp. à τ figés, bleu | la même fraction, τ figés à ceux de la bi-exponentielle des sommes (0,52–0,58 et 1,47–1,71 ns selon λ) |
+| 5a | forme des deux canaux, échelles séparées | f dans μ = A·[(1 − f)·état₀ + f·état₁] + fond, avec un A libre par canal |
+| 5d | forme des deux canaux, échelle commune | la même chose avec un seul A : J/B entre dans la lecture |
+| 6 | phasor, bleu | projection du phasor brut sur l'axe état₀ → état₁ |
+
+- **Les états.** Les états₀ et ₁ de 5a, 5d et 6 sont les sommes lissées par les trois exponentielles,
+  fond retiré, et normalisées par le même total bleu.
+- **Les fonds** sont supposés connus et remis à l'échelle de N.
+- **Pourquoi des états mesurés plutôt que M2.** Le modèle à deux états du simulateur ne décrit pas
+  le bleu de cette version (voir le point 3 ci-dessous). Un mélange des deux états mesurés, lui, est
+  exact aux deux bouts sans rien supposer sur les durées de vie, et c'est tout ce que demande une
+  comparaison de stabilité.
+
+### Ce que montrent les données
+
+![Fig. 15](sorties/figures/fig15_banc_2026-10-16_declins.png)
+
+Fig. 15 : sommes à 800 nm et leurs trois exponentielles (bleu, jaune), fractions d'intensité, IRF des
+deux détecteurs aux trois longueurs d'onde, J/B et photons bleus d'une acquisition à l'autre,
+phasors des sommes.
+
+**1. Le Cl⁻ divise J/B par 4 à 4,4, et J/B est limité par Poisson d'une acquisition à l'autre.**
+
+| λ | J/B, 0 mM | J/B, 131 mM | plage | σ(J/B) / Poisson | σ(photons bleus) / Poisson | σ(photons jaunes) / Poisson |
+| --- | --- | --- | --- | --- | --- | --- |
+| 750 nm | 6,92 | 1,73 | ×3,99 | 0,95 ; 1,04 | 1,9 ; 3,3 | 4,3 ; 3,6 |
+| 800 nm | 7,03 | 1,60 | ×4,39 | 1,06 ; 1,37 | 1,5 ; 2,4 | 2,3 ; 2,2 |
+| 850 nm | 7,12 | 1,66 | ×4,28 | 1,33 ; 1,19 | 1,9 ; 2,0 | 3,9 ; 2,7 |
+
+Les paires se lisent « 0 mM ; 131 mM » (10 acquisitions de 1 s).
+
+- **σ(J/B) est compatible avec Poisson partout.** Avec 10 acquisitions, un σ ne s'estime qu'à
+  ±24 % près.
+- **Les intensités fluctuent 1,5 à 4,3 fois plus que Poisson.** La puissance d'excitation ou la mise
+  au point varient d'une seconde à l'autre, et le rapport annule ces variations.
+- **J/B ne dérive pas** : au plus 0,08 % par acquisition, soit moins de 1 % sur les dix secondes.
+
+**2. Les IRF font 140 à 160 ps, avec une queue lente, et le jaune est en retard de 26 à 40 ps.**
+
+| λ | largeur à mi-hauteur, bleu / jaune | aire au-delà de 1 ns | aire au-delà de 4 ns | retard du jaune |
+| --- | --- | --- | --- | --- |
+| 750 nm | 151 / 138 ps | 9,2 / 6,5 % | 3,5 / 2,4 % | +26 ps |
+| 800 nm | 146 / 158 ps | 11,1 / 6,1 % | 3,8 / 2,3 % | +40 ps |
+| 850 nm | 143 / 159 ps | 11,4 / 6,2 % | 4,3 / 2,4 % | +39 ps |
+
+- **La queue lente.** Une queue qui garde 2 à 4 % de l'aire au-delà de 4 ns n'est pas celle d'un
+  diffuseur pur. Il faut en trouver l'origine (fluorescence de l'échantillon d'IRF, détecteur ou
+  fond) avant de citer des durées de vie absolues.
+- **Ici, elle est gardée telle quelle.** La comparaison des techniques en dépend peu, parce que
+  chaque lecture est normalisée par sa propre valeur à pleins photons.
+- **Le retard du jaune** est déjà dans les modèles, puisque chaque canal est ajusté avec l'IRF de son
+  détecteur.
+
+**3. Le bleu des sommes a au moins trois composantes, et sa durée de vie répond peu.**
+
+Trois exponentielles à 800 nm (τ communs aux deux échantillons ; fractions d'intensité) :
+
+| canal | τ (ns) | 0 mM | 131 mM | χ²ᵣ (0 / 131 mM) |
+| --- | --- | --- | --- | --- |
+| bleu | 0,02 / 0,76 / 2,32 | 0,09 / 0,54 / 0,37 | 0,05 / 0,72 / 0,24 | 10 / 14 |
+| jaune | 0,07 / 0,86 / 3,26 | 0,00 / 0,03 / 0,97 | 0,01 / 0,17 / 0,82 | 2,7 / 2,0 |
+
+À 750 et 850 nm, on retrouve les mêmes composantes : 0,05–0,10, 0,72–0,86 et 2,04–2,31 ns pour le
+bleu ; 0,82–0,84 et 3,17–3,25 ns pour le jaune.
+
+Lectures des sommes, de 0 à 131 mM :
+
+| | 750 nm | 800 nm | 850 nm |
+| --- | --- | --- | --- |
+| τ mono du bleu (ton code) | 1,073 → 0,987 ns (−8,0 %) | 1,022 → 0,941 ns (−7,9 %) | 1,083 → 0,999 ns (−7,7 %) |
+| τ_φ du bleu | 1,10 → 1,00 ns (−9,4 %) | 1,07 → 0,97 ns (−9,3 %) | 1,13 → 1,02 ns (−10,1 %) |
+| τ mono du jaune (ton code) | 3,020 → 2,380 ns (−21,2 %) | 3,061 → 2,358 ns (−23,0 %) | 3,068 → 2,407 ns (−21,6 %) |
+| τ_φ du jaune | 3,18 → 2,43 ns (−23,7 %) | 3,20 → 2,37 ns (−25,7 %) | 3,23 → 2,45 ns (−24,2 %) |
+
+- **Le bleu.** Une bi-exponentielle ne suffit pas (χ²ᵣ de 17 à 58). Trois exponentielles laissent
+  encore un χ²ᵣ de 5 à 15 à 10⁶ photons ; une part de cet excès vient probablement de la forme de
+  l'IRF. Le jaune est bien mieux décrit (χ²ᵣ de 2 à 4).
+- **La composante la plus courte du bleu** (0,02 à 0,10 ns, 3 à 9 % de l'intensité) est sous la
+  résolution. Elle ne se sépare pas d'une erreur de forme de l'IRF.
+- **L'effet du Cl⁻ sur le bleu.** Le Cl⁻ déplace l'intensité de la composante à 2,3 ns vers celle à
+  0,76 ns, d'où un τ qui ne baisse que de 8 à 10 %. En photons, à 800 nm, la composante à 0,76 ns
+  est multipliée par 2,6 et celle à 2,3 ns par 1,2 ; la plus courte ne change pas, et le bleu gagne
+  ×1,9 au total.
+- **Ce que cela suggère, sans le montrer.** Ce gain de photons ne vaut que si les deux échantillons
+  ont la même quantité de capteur et la même puissance. Dans ce cas, l'intensité gagnée viendrait
+  d'un état plus court que la moyenne. C'est l'inverse d'un donneur qui se libère simplement du FRET,
+  dont le τ monterait avec l'intensité. Un état quasi éteint qui deviendrait l'état à 0,76 ns
+  l'expliquerait, mais deux concentrations ne suffisent pas pour le montrer.
+- **Le jaune.** Sa composante à 0,82–0,86 ns passe de 3 % à 15–17 % de l'intensité. Sa durée de vie
+  est proche de celle de la composante moyenne du bleu. Le rapport de leurs photons est à peu près
+  le même dans les deux échantillons : 0,44 et 0,38 à 800 nm, 0,31 et 0,34 à 750 nm, 0,50 et 0,42 à
+  850 nm.
+- **Ce que cela indique.** C'est ce qu'on attend de la fuite du donneur dans le canal jaune, à
+  coefficient fixe. Quand l'émission de l'accepteur baisse, la fuite pèse plus, et la durée de vie
+  apparente du jaune baisse avec elle. La baisse de 21 à 26 % du τ du jaune lit donc surtout J/B,
+  par un détour.
+
+**4. La stabilité des techniques quand les photons manquent (800 nm).**
+
+![Fig. 16](sorties/figures/fig16_banc_2026-10-16_stabilite.png)
+
+Fig. 16 : σ selon N (réel, jumeau, Fisher), biais, échecs, et d' à 10⁴ photons selon la longueur
+d'onde.
+
+Bruit σ en fraction de l'écart 0 → 131 mM (sommes réelles amincies, 400 tirages par point et par
+échantillon) :
+
+| Technique | 10² | 10³ | 10⁴ | 10⁵ | photons pour σ = 0,1 | photons pour égaler le rapport |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 rapport J/B | 0,099 | 0,031 | 0,010 | 0,0030 | ≈ 100 | ×1 |
+| 5d forme, échelle commune | 0,097 | 0,031 | 0,010 | 0,0029 | ≈ 100 | ×1 |
+| 5a forme, échelles séparées | 0,34 | 0,14 | 0,048 | 0,015 | ≈ 2 000 | ×23 |
+| 2J ton mono, jaune | 0,65 | 0,35 | 0,073 | 0,019 | ≈ 6 600 | ×53 |
+| 6 phasor, bleu | 0,78 | 0,24 | 0,081 | 0,024 | ≈ 6 400 | ×66 |
+| 2 ton mono, bleu | 3,7 | 0,98 | 0,25 | 0,071 | ≈ 55 000 | ×630 |
+| 4 bi-exp. τ figés, bleu | 2,9 | 0,80 | 0,25 | 0,074 | ≈ 59 000 | ×630 |
+| 3 bi-exp. τ libres, bleu | 1,1 | 0,85 | 0,31 | 0,098 | ≈ 95 000 | ×950 |
+
+La dernière colonne est (σ/σ du rapport)² à 10⁴ photons.
+
+Biais moyen en % de l'écart, « 0 mM / 131 mM ». Un biais négatif tire la lecture vers 0 mM (ou
+au-delà), un biais positif vers 131 mM :
+
+| Technique | 10² | 3·10² | 10³ | 3·10³ | échecs |
+| --- | --- | --- | --- | --- | --- |
+| 1 rapport J/B | −1,0 / −0,3 | −0,6 / −0,2 | 0,0 / −0,1 | 0,0 / 0,0 | 0 |
+| 5d | −1,1 / −0,2 | −0,8 / −0,1 | +0,1 / −0,1 | 0,0 / 0,0 | 0 |
+| 5a | −1,8 / −7,2 | −4,3 / −2,6 | +0,9 / −0,8 | +0,5 / −0,2 | ≤ 0,4 % |
+| 2J | −47 / −45 | −31 / −39 | −4 / −17 | 0 / −4 | ≤ 0,1 % |
+| 6 | −9,6 / +2,8 | −4,2 / −2,2 | +0,4 / −0,1 | +0,2 / 0,0 | 0 |
+| 2 | −137 / −144 | −60 / −130 | −4 / −22 | +3 / 0 | ≤ 0,5 % |
+| 4 | −67 / −27 | −20 / −22 | −6 / −6 | +1 / −1 | 0 |
+| 3 | +67 / −43 | +43 / −47 | +12 / −21 | +6 / −11 | 17 % à 10², 6 % à 3·10², 1 % à 10³ |
+
+Discriminabilité d' à 10⁴ photons bleus (réel) selon la longueur d'onde :
+
+| | 1 | 5d | 5a | 2J | 6 | 2 | 4 | 3 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 750 nm | 99 | 99 | 20 | 17 | 13 | 4,5 | 3,1 | 0,8 |
+| 800 nm | 100 | 102 | 21 | 14 | 12 | 3,9 | 4,0 | 3,1 |
+| 850 nm | 98 | 99 | 20 | 14 | 12 | 3,7 | 3,9 | 2,0 |
+
+**Contrôles.**
+- **Le rapport et 5d sont sur la borne de Fisher** à tout N, entre −8 et +3 %. C'est le bruit d'un σ
+  estimé sur 400 tirages (±3,5 %), plus l'effet du tirage sans remise à 10⁵ photons. Celui-ci prend
+  alors 5 à 10 % de la somme, et sous-estime le bruit de 3 à 5 %.
+- **5a rejoint la borne vers 3·10³ photons.** En dessous, il passe sous la borne (−27 % à 100
+  photons), ce qu'un estimateur biaisé peut faire.
+- **Le jumeau rend les mêmes σ** à ±12 % près pour 1, 5d, 5a, 6, 2 et 4, à toutes les longueurs
+  d'onde. Pour 2J et 3, le réel est jusqu'à 18 et 25 % plus bruité que son jumeau.
+- **Ce que disent ces contrôles.** Le bruit des données est celui de Poisson. Seuls les ajustements
+  les plus fragiles sentent ce que le lissage à trois exponentielles ne capture pas, et rien ne
+  change le classement.
+
+### Conclusions
+
+1. **Lire ce capteur par le rapport J/B, ou par 5d, qui lui est équivalent.**
+   - Le rapport est limité par Poisson d'une acquisition à l'autre, et il est sur la borne de Fisher à
+     tout N.
+   - Il n'a pas de biais mesurable dès 100 photons bleus (≤ 1 % de l'écart), et il n'échoue jamais.
+   - Il annule les fluctuations d'intensité, qui valent 1,5 à 4,3 fois Poisson.
+   - Son bruit vaut 10 % de l'écart 0 → 131 mM à 100 photons bleus, 3 % à 10³ et 1 % à 10⁴ (d' ≈ 100).
+2. **La forme n'ajoute rien au rapport.** 5d fait comme le rapport, à 2 % près. Sans le rapport, la
+   forme seule (5a, échelles séparées) a un σ 4,8 fois plus grand : il lui faut 23 fois plus de
+   photons.
+3. **La durée de vie du bleu porte peu d'information dans cette version.**
+   - Elle ne baisse que de 8 à 10 % entre 0 et 131 mM.
+   - Ton mono sur le bleu a un σ 25 fois plus grand que le rapport : il lui faut environ 630 fois plus
+     de photons pour la même précision.
+   - Il est biaisé sous 3·10³ photons : −140 % de l'écart à 100 photons, et encore −22 % à 131 mM pour
+     10³ photons.
+   - Les bi-exponentielles du bleu ne font pas mieux. À τ figés (4), le σ est celui du mono. À τ libres
+     (3), c'est pire : la plage est écrasée, et 17 % des lectures échouent à 100 photons.
+4. **Pour une lecture de durée de vie, prendre le phasor du bleu ou le mono du jaune.**
+   - Leur σ est 3 à 3,5 fois plus petit que celui du mono du bleu, mais encore 7 à 8 fois plus grand
+     que celui du rapport.
+   - Le phasor n'a plus de biais dès 10³ photons. Le mono du jaune reste biaisé jusque vers 3·10³
+     photons (−46 % à 100 photons).
+   - La baisse du τ du jaune vient surtout de la fuite du donneur (point 3) : c'est J/B, lu moins bien.
+5. **Les trois longueurs d'onde se valent par photon** (d' du rapport : 98 à 100).
+   - 800 nm donne la plus grande plage de J/B : ×4,39, contre ×3,99 à 750 nm et ×4,28 à 850 nm.
+   - 800 nm donne aussi le plus de photons bleus par seconde (+13 à +32 %). La puissance laser à
+     chaque longueur d'onde n'est toutefois pas connue : c'est à vérifier à puissance égale.
+6. **À l'échelle du pixel (10² à 10³ photons), seuls le rapport et 5d sont utilisables** : σ de 3 à
+   10 % de l'écart, et biais ≤ 1 %.
+   - Les lectures de durée de vie demandent de regrouper au moins 3·10³ photons pour perdre leur biais.
+   - Pour un σ de 10 % de l'écart, il faut environ 6·10³ photons au phasor et au mono du jaune, et 5 à
+     6·10⁴ au mono et à la bi-exponentielle à τ figés du bleu.
+
+### Réserves
+
+- **Deux concentrations seulement.** Les résultats sont en fraction de l'écart 0 → 131 mM, pas en mM.
+  Il faudrait une titration d'au moins 6 concentrations pour convertir. 1 % de l'écart ne vaut
+  1,3 mM que si la réponse est linéaire, ce qu'une isotherme n'est pas.
+- **Les intensités absolues** (le bleu ×1,9 avec le Cl⁻) supposent la même quantité de capteur et la
+  même puissance dans les deux échantillons. J/B, les fractions et les durées de vie n'en dépendent
+  pas.
+- **Le bleu n'est pas à deux états.** Les techniques de forme sont donc lues sur des états mesurés,
+  pas sur M2. Le simulateur ne prédira ce capteur qu'avec un modèle propre (au moins trois
+  composantes), ajusté sur une titration.
+- **La queue lente des IRF** est à expliquer avant de citer des durées de vie absolues.
+- **Le retard du jaune (26 à 40 ps) dépend de la longueur d'onde.** Toute lecture de forme à deux
+  canaux doit utiliser l'IRF de chaque détecteur, mesurée à la même longueur d'onde, comme ici.
+- **L'amincissement ne voit que le bruit de Poisson.** La variation d'une acquisition à l'autre est
+  mesurée à part (point 1). Elle n'ajoute rien au rapport, mais elle s'ajouterait à toute lecture
+  d'intensité seule.
+- **Protéine en solution, un seul banc.** Ces données ne disent rien des tranches (autofluorescence,
+  diffusion, pH).
+
+### Ce que l'étape a ajouté au simulateur
+
+- **Un champ `pas` dans `InstrumentParams`.** C'est le pas du TAC, T_rep/n_bins par défaut.
+  - Quand n·pas ≠ T_rep, comme ici (16,4 ns de TAC pour une période de 12,5 ns), la convolution
+    devient linéaire : FFT de longueur 2n, noyau périodisé sur la période, retards négatifs en fin de
+    tableau.
+  - Quand n·pas = T_rep, comme dans les étapes 1 à 13, rien ne change.
+  - Le test 20 le vérifie.
+- **`src/Banc.jl`** : lecture des .sdt à trois voies, IRF par détecteur, instrument du banc, trois
+  exponentielles à τ communs, gabarits, et lectures des huit techniques.
+- **`ajuster_bleu_jaune` (`src/Jaune.jl`)** accepte une IRF par détecteur, des τ de départ et une
+  montée libre. L'étape 14 ne s'en sert pas, puisque le bleu n'est pas à deux états.
+- **Validation : 29 tests sur 29.**
+
+### Sorties (`sorties/banc_2026-10-16/`)
+
+| Fichier | Contenu |
+| --- | --- |
+| `acquisitions.csv` | les 10 acquisitions : photons, J/B, dispersion contre Poisson, pente |
+| `irf.csv` | IRF des deux détecteurs à chaque longueur d'onde : fond, largeur, queue, retard |
+| `sommes_trois_exponentielles.csv` | trois exponentielles par canal et par longueur d'onde, τ communs aux deux échantillons |
+| `sommes_phasors.csv` | phasors des sommes (IRF corrigée) et τ_φ |
+| `references_pleins_photons.csv` | lecture de chaque technique sur les sommes |
+| `stabilite.csv` | σ, σ robuste, biais, échecs et d' par technique, N et longueur d'onde ; réel, jumeau, Fisher |
+| `tirages_amincis.csv` | toutes les lectures des tirages (6 Mo, ignoré par git) |
+| `resume.toml` | J/B des sommes |
+| `sorties/figures/fig15_banc_2026-10-16_declins.png`, `fig16_banc_2026-10-16_stabilite.png` | figures 15 et 16 |
 
 ## 1. Ta titration et le test de M2 lent (`step1_titration.jl`)
 
@@ -634,9 +943,9 @@ Les modèles non linéaires (3, 5c) passent par un Levenberg-Marquardt avec born
 
 ## 5. Validation interne (`step2_validation.jl`)
 
-**28 tests sur 28 réussis** (`sorties/validation/rapport_validation.md`) : les huit du plan, plus le
+**29 tests sur 29 réussis** (`sorties/validation/rapport_validation.md`) : les huit du plan, plus le
 noyau contre l'intégrale double exacte, la FFT contre la convolution directe, l'adaptateur contre
-tes résultats, et huit tests des modules de la révision (tableau du bas).
+tes résultats, huit tests des modules de la révision et un test de l'instrument du banc (tableau du bas).
 
 | Test du plan | Résultat |
 | --- | --- |
@@ -658,8 +967,9 @@ tes résultats, et huit tests des modules de la révision (tableau du bas).
 | 15. Blanchiment : β = 0 ≡ M2, β → 0 continu, populations conservées | 3·10⁻¹⁶ ; 4·10⁻¹⁰ ; 1·10⁻¹⁶ |
 | 16. Blanchiment du donneur : survie moyenne (1 − e^{−κ})/κ | 1·10⁻¹⁶ |
 | 17. Ingestion d'une titration synthétique sans bruit (t₀ commun ou par histogramme) | τ à 2·10⁻⁹, x à 5·10⁻¹⁰, t₀ à 4·10⁻¹⁰ ns |
-| 18. Ajustement conjoint bleu + jaune d'un banc simulé sans bruit | 8·10⁻⁸ |
+| 18. Ajustement conjoint bleu + jaune d'un banc simulé sans bruit | 1·10⁻⁹ |
 | 19. Dérive de gain : écart-type de log g après τ_g | 0,049 contre 0,050 |
+| 20. TAC plus long que la période (banc du 2026-10-16) : convolution linéaire contre somme directe, dérivées | 6·10⁻¹⁶ ; 2·10⁻⁹ (FFT de 512 points) |
 
 Le 0,06 % du test 4 n'est pas une erreur du simulateur. Ton `vec_to_lifetime` place les canaux au pas
 du TAC (0,048861 ns), alors que la période et l'IRF sont au pas de 12,5/256 (0,048828 ns), d'où
@@ -917,16 +1227,17 @@ Il est mesuré par rapport au monde nominal tiré avec les mêmes germes. En mM,
 | `parametres.toml` | tous les paramètres, leur statut (ajusté, supposé, mesuré) et leur provenance |
 | `sorties/spectres/` | spectres et filtres FPbase (cache), `eta.toml` |
 | `sorties/titration/` | ajustement global par protéine : paramètres (`parametres_*.toml`), un histogramme par ligne (`titration_*.csv`), courbes (`ajustement_global_*.csv`) |
-| `sorties/validation/rapport_validation.md` | les 28 tests |
+| `sorties/validation/rapport_validation.md` | les 29 tests |
 | `sorties/calibration/` | courbes de calibration, K apparents, identifiabilité, bornes (par C, N et normalisation) |
 | `sorties/resultats/resultats_principaux.csv` | grille principale (fichier plat du plan) |
 | `sorties/resultats/nuisances.csv` | balayages de nuisance |
 | `sorties/resultats/resume.md` | tableaux chiffrés |
-| `sorties/figures/` | figures 1 à 14 et 7b, carte, titrations, deux synthèses (`synthese_{FR,EN}{,_dark}.png`, `synthese_revision_*`, étape 8) |
+| `sorties/figures/` | figures 1 à 16 et 7b (15 et 16 : banc du 2026-10-16), carte, titrations, deux synthèses (`synthese_{FR,EN}{,_dark}.png`, `synthese_revision_*`, étape 8) |
 | `sorties/batterie/` | batterie H1–H5 (`batterie.csv`), tes données réajustées sous IRF et t₀ perturbés (`reel_perturbations.csv`), profil de χ²ᵣ en τ_DA, t₀ par histogramme, chiffres clés (`batterie_resume.toml`) |
 | `sorties/reel/` | le facteur 8 : résumé (`facteur8.csv`), calibrations, toutes les lectures (`amincis_tirages.csv`, ignoré par git) |
 | `sorties/incertitude/` | mondes IRF/t₀ (`mondes_grille.csv`, `mondes_K_apparents.csv`), variance paramétrique, décomposition par Monte-Carlo, survie du classement (`classement.csv`) |
 | `sorties/canal_jaune/` | inversions de η_YD, aller-retour de l'ingestion du jaune, prédictions de J/B, observabilité de la montée, exemple de bloc « mesuré » |
 | `sorties/calibration/eta_YD_inverse.toml` | η_YD tiré du K apparent et de la plage dynamique de tes images TIFF |
 | `sorties/resultats/fusion_*.csv` | fusion ratio + forme : résumé, trajectoire, réponse à un saut de gain |
-| `src/` | le simulateur : `Types`, `Photophysics`, `Instrument`, `Spectra`, `Generate`, `Fisher`, `Ajustement`, `Utilisateur`, `Ingest`, `Parametres`, `Estimators`, `Calibrate`, `Experiments`, et pour la révision `Batterie`, `Reel`, `Incertitude`, `Jaune`, `Fusion` ; `Figures`, `Resume` |
+| `sorties/banc_2026-10-16/` | banc du 2026-10-16 (étape 14) : acquisitions, IRF, sommes, références, stabilité des techniques (détail dans la section du banc) |
+| `src/` | le simulateur : `Types`, `Photophysics`, `Instrument`, `Spectra`, `Generate`, `Fisher`, `Ajustement`, `Utilisateur`, `Ingest`, `Parametres`, `Estimators`, `Calibrate`, `Experiments`, pour la révision `Batterie`, `Reel`, `Incertitude`, `Jaune`, `Fusion`, et pour le banc `Banc` ; `Figures`, `Resume` |

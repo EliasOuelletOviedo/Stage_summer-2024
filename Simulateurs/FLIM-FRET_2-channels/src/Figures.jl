@@ -1219,4 +1219,190 @@ function figure11(df, nu, chemin; N = 1e4, norm = "A", C = 20.0)
     save(chemin, fig; px_per_unit = 2)
 end
 
+
+# -----------------------------------------------------------------------------
+# Banc à deux canaux du 2026-10-16 (autre version de SCLM, traitée seule)
+# -----------------------------------------------------------------------------
+
+"""Lecture tolérante d'un CSV : en-têtes et valeurs éventuellement alignés par un éditeur (espaces)."""
+function lire_csv(f)
+    df = CSV.read(f, DataFrame; stripwhitespace = true)
+    rename!(df, [strip(n) for n in names(df)])
+    return df
+end
+
+const TECH_BANC = ["1", "5d", "5a", "6", "2J", "4", "2", "3"]
+const NOM_BANC = Dict("1" => "1 rapport J/B", "2" => "2 mono, bleu (ton code)", "2J" => "2J mono, jaune (ton code)",
+    "3" => "3 bi-exp. τ libres (bleu)", "4" => "4 bi-exp. τ figés (bleu)", "5a" => "5a forme 2 canaux, échelles séparées",
+    "5d" => "5d forme 2 canaux, échelle commune", "6" => "6 phasor (bleu)")
+couleur_banc(k) = k == "2J" ? COULEUR["2"] : COULEUR[k]
+marqueur_banc(k) = k == "2J" ? :star5 : MARQUEUR[k]
+style_banc(k) = k == "2J" ? :dash : :solid
+
+function figure_banc_declins(dossier, dossier_donnees, chemin; λ = 800)
+    mexp = lire_csv(joinpath(dossier, "sommes_trois_exponentielles.csv"))
+    irf = lire_csv(joinpath(dossier, "irf.csv"))
+    acq = lire_csv(joinpath(dossier, "acquisitions.csv"))
+    ph = lire_csv(joinpath(dossier, "sommes_phasors.csv"))
+    S_ = Main.SimFLIMFRET
+    hs = S_.lire_banc(dossier_donnees)
+    pas = 0.06400390634153652
+    W = S_.FENETRE_BANC
+    fig = Figure(size = (1500, 960))
+    cols = Dict(0.0 => RAMPE[2], 131.0 => RAMPE[8])
+    for (j, (voie, nomv)) in enumerate(((1, "bleu"), (2, "jaune")))
+        ax = Axis(fig[1, j]; yscale = log10, yticks = graduations_log(1, 1e6), xlabel = "temps depuis le pic de l'IRF (ns)",
+            ylabel = j == 1 ? "photons par canal (somme des 10 acquisitions)" : "",
+            title = virg(@sprintf("Canal %s, %d nm : sommes et trois exponentielles", nomv, λ)))
+        irfv, _, _ = S_.irf_banc(joinpath(dossier_donnees, "IRF_$(λ)_16X.sdt"), voie)
+        inst = S_.instrument_banc(irfv, pas)
+        H = [sum(voie == 1 ? h.bleu : h.jaune for h in hs if h.C == C && h.λ == λ) for C in (0.0, 131.0)]
+        r = S_.ajuster_multiexp(H, inst; τ_init = (0.1, 0.9, 3.0), montee = voie == 2)
+        t = ((W) .- argmax(irfv)) .* pas
+        for (s, C) in enumerate((0.0, 131.0))
+            scatter!(ax, t, max.(H[s][W], 0.5); color = (cols[C], 0.45), markersize = 4, strokewidth = 0)
+            lines!(ax, t, r.μ[s]; color = cols[C], linewidth = 2, label = virg(@sprintf("%g mM", C)))
+        end
+        lines!(ax, t, max.(irfv[W] .* maximum(H[1][W]) ./ maximum(irfv), 0.5); color = MUET, linewidth = 1, label = "IRF (même pic)")
+        ylims!(ax, 10, 3 * maximum(maximum.(H)))
+        axislegend(ax; position = :rt)
+    end
+    # fractions d'intensité des trois composantes
+    ax3 = Axis(fig[1, 3]; xticks = (1:4, ["bleu 0 mM", "bleu 131 mM", "jaune 0 mM", "jaune 131 mM"]), ylabel = "fraction de l'intensité",
+        title = virg(@sprintf("Trois composantes, %d nm", λ)), xgridvisible = false)
+    d = mexp[mexp.lambda_nm.==λ, :]
+    vals = [d[(d.canal.==c).&(d.C_mM.==C), [:fraction_1, :fraction_2, :fraction_3]] for (c, C) in (("bleu", 0.0), ("bleu", 131.0), ("jaune", 0.0), ("jaune", 131.0))]
+    τs = [d[d.canal.==c, [:tau_1, :tau_2, :tau_3]][1, :] for c in ("bleu", "jaune")]
+    tons = (RAMPE[2], RAMPE[5], RAMPE[9])
+    for (i, v) in enumerate(vals)
+        base = 0.0
+        for c in 1:3
+            f = max(v[1, c], 0.0)
+            poly!(ax3, Rect(i - 0.35, base, 0.7, f); color = tons[c], strokecolor = SURFACE, strokewidth = 1)
+            f > 0.06 && text!(ax3, i, base + f / 2; text = virg(@sprintf("%.2f ns", (i <= 2 ? τs[1] : τs[2])[c])), align = (:center, :center),
+                fontsize = 10, color = c == 1 ? ENCRE : SURFACE)
+            base += f
+        end
+    end
+    ylims!(ax3, 0, 1.02)
+    # IRF des deux détecteurs
+    ax4 = Axis(fig[2, 1]; yscale = log10, yticks = graduations_log(1e-4, 1), xlabel = "temps depuis le pic (ns)", ylabel = "IRF normalisée au pic",
+        title = "IRF des deux détecteurs : queue lente, retard du jaune")
+    for (λx, st) in ((750, :dot), (800, :solid), (850, :dash)), (voie, col) in ((1, RAMPE[5]), (2, COULEUR["4"]))
+        irfv, _, _ = S_.irf_banc(joinpath(dossier_donnees, "IRF_$(λx)_16X.sdt"), voie)
+        k = argmax(irfv)
+        lines!(ax4, ((W) .- k) .* pas, max.(irfv[W] ./ irfv[k], 1e-5); color = col, linestyle = st, linewidth = λx == 800 ? 2 : 1.2,
+            label = (voie == 1 ? "bleu " : "jaune ") * string(λx) * " nm")
+    end
+    xlims!(ax4, -1, 8)
+    ylims!(ax4, 1e-4, 1.5)
+    r8 = irf[(irf.lambda_nm.==800), :]
+    text!(ax4, 0.97, 0.97; space = :relative, align = (:right, :top), fontsize = 11, color = ENCRE2,
+        text = virg(@sprintf("800 nm : largeur %.0f ps (bleu), %.0f ps (jaune)\nqueue au-delà de 1 ns : %.0f %% (bleu), %.0f %% (jaune)\nretard du jaune : %+.0f ps",
+            r8.largeur_mi_hauteur_ps[1], r8.largeur_mi_hauteur_ps[2], 100r8.queue_apres_1ns[1], 100r8.queue_apres_1ns[2], r8.retard_sur_bleu_ps[2])))
+    axislegend(ax4; position = :rc, labelsize = 10, nbanks = 2)
+    # stabilité d'une acquisition à l'autre
+    g5 = fig[2, 2] = GridLayout()
+    ax5 = Axis(g5[1, 1]; xlabel = "acquisition (1 s chacune)", ylabel = "écart à la moyenne de l'échantillon (%)",
+        title = "J/B d'une acquisition à l'autre, contre les intensités")
+    hspan!(ax5, -0.4, 0.4; color = (ZONE, 1.0))
+    for (C, col) in ((0.0, cols[0.0]), (131.0, cols[131.0]))
+        g = [h for h in hs if h.C == C && h.λ == λ]
+        sort!(g; by = h -> h.cycle)
+        JB = [sum(h.jaune[W]) / sum(h.bleu[W]) for h in g]
+        NB = [sum(h.bleu[W]) for h in g]
+        lines!(ax5, 1:length(g), 100 .* (JB ./ mean(JB) .- 1); color = col, linewidth = 2, label = virg(@sprintf("J/B, %g mM", C)))
+        scatter!(ax5, 1:length(g), 100 .* (JB ./ mean(JB) .- 1); color = col, markersize = 8)
+        lines!(ax5, 1:length(g), 100 .* (NB ./ mean(NB) .- 1); color = col, linewidth = 1.2, linestyle = :dash, label = virg(@sprintf("photons bleus, %g mM", C)))
+    end
+    a8 = acq[acq.lambda_nm.==λ, :]
+    text!(ax5, 0.03, 0.04; space = :relative, align = (:left, :bottom), fontsize = 10, color = ENCRE2,
+        text = virg(@sprintf("σ(J/B) = %.1f et %.1f × Poisson ; σ(photons bleus) = %.1f et %.1f × Poisson",
+            a8.sigma_JB[1] / a8.sigma_poisson_JB[1], a8.sigma_JB[2] / a8.sigma_poisson_JB[2],
+            a8.sigma_N_bleu[1] / a8.sigma_poisson_bleu[1], a8.sigma_N_bleu[2] / a8.sigma_poisson_bleu[2])))
+    Legend(g5[2, 1], ax5; orientation = :horizontal, nbanks = 2, labelsize = 10, tellwidth = false)
+    rowgap!(g5, 4)
+    # phasors
+    ax6 = Axis(fig[2, 3]; xlabel = "g", ylabel = "s", title = "Phasors des sommes (IRF de chaque détecteur corrigée)", aspect = DataAspect())
+    θc = range(0, π; length = 200)
+    lines!(ax6, 0.5 .+ 0.5 .* cos.(θc), 0.5 .* sin.(θc); color = AXE, linewidth = 1)
+    for (c, mk) in (("bleu", :circle), ("jaune", :diamond)), λx in (750, 800, 850)
+        d = ph[(ph.canal.==c).&(ph.lambda_nm.==λx), :]
+        lines!(ax6, d.g, d.s; color = MUET, linewidth = 1)
+        for r in eachrow(d)
+            scatter!(ax6, [r.g], [r.s]; color = cols[r.C_mM], marker = mk, markersize = λx == 800 ? 12 : 8)
+        end
+    end
+    for (c, x, y) in (("bleu", 0.73, 0.33), ("jaune", 0.25, 0.40))
+        text!(ax6, x, y; text = c, fontsize = 11, color = ENCRE2, align = (:center, :top))
+    end
+    limits!(ax6, 0, 1, 0, 0.55)
+    entete!(fig, "Fig. 15 — Banc du 2026-10-16 (autre version de SCLM) : sommes des 10 acquisitions",
+        "Deux échantillons (0 et 131 mM de Cl⁻), excitation à 750, 800 et 850 nm, 10 acquisitions de 1 s, deux canaux ensemble (voie 1 bleu, voie 2 jaune), " *
+        "TAC de 16,4 ns : canaux de 64 ps, fenêtre 14–195. Les durées de vie sont communes aux deux échantillons ; les fractions d'intensité changent."; largeur = 3)
+    save(chemin, fig; px_per_unit = 2)
+end
+
+function figure_banc_stabilite(dossier, chemin; λ = 800)
+    st = lire_csv(joinpath(dossier, "stabilite.csv"))
+    st.technique = string.(st.technique)
+    fig = Figure(size = (1550, 1000))
+    Ns = sort(unique(st.N_bleu))
+    tN = (Ns, fmtN.(Ns))
+    d = st[st.lambda_nm.==λ, :]
+    ax1 = Axis(fig[1, 1:2]; xscale = log10, yscale = log10, xticks = tN, yticks = graduations_log(0.001, 10),
+        xlabel = "photons bleus par lecture", ylabel = "σ, en fraction de l'écart 0 → 131 mM",
+        title = virg(@sprintf("Bruit de chaque lecture, %d nm : sommes réelles amincies (plein), jumeau (tireté), borne de Fisher (fin)", λ)))
+    for k in TECH_BANC
+        r = sort(d[(d.source.=="reel").&(d.technique.==k), :], :N_bleu)
+        j = sort(d[(d.source.=="jumeau").&(d.technique.==k), :], :N_bleu)
+        f = sort(d[(d.source.=="Fisher").&(d.technique.==k), :], :N_bleu)
+        lines!(ax1, r.N_bleu, r.sigma; color = couleur_banc(k), linestyle = style_banc(k), linewidth = 2.2, label = NOM_BANC[k])
+        scatter!(ax1, r.N_bleu, r.sigma; color = r.echec .> 0.05, colormap = [couleur_banc(k), SURFACE], strokecolor = couleur_banc(k),
+            strokewidth = 1.5, marker = marqueur_banc(k), markersize = 10)
+        lines!(ax1, j.N_bleu, j.sigma; color = (couleur_banc(k), 0.55), linestyle = :dash, linewidth = 1.2)
+        nrow(f) > 0 && lines!(ax1, f.N_bleu, f.sigma; color = ENCRE, linewidth = 0.8)
+    end
+    lines!(ax1, [3e3, 1e5], [1.6, 1.6 / sqrt(1e5 / 3e3)]; color = MUET, linewidth = 1)
+    text!(ax1, 3e3, 1.6; text = "pente −½", align = (:right, :center), offset = (-4, 0), fontsize = 10, color = MUET)
+    Legend(fig[1, 3], ax1; merge = true, unique = true, title = "technique")
+    # biais
+    ax2 = Axis(fig[2, 1]; xscale = log10, xticks = tN, yscale = Makie.Symlog10(0.01),
+        yticks = ([-1, -0.1, -0.01, 0, 0.01, 0.1, 1], ["−1", "−0,1", "−0,01", "0", "0,01", "0,1", "1"]),
+        xlabel = "photons bleus par lecture", ylabel = "biais moyen (fraction de l'écart)", title = "Biais quand les photons manquent")
+    hspan!(ax2, -0.02, 0.02; color = (ZONE, 1.0))
+    hlines!(ax2, [0.0]; color = AXE, linewidth = 1)
+    for k in TECH_BANC
+        r = sort(d[(d.source.=="reel").&(d.technique.==k), :], :N_bleu)
+        b = (r.biais_0mM .+ r.biais_131mM) ./ 2
+        lines!(ax2, r.N_bleu, b; color = couleur_banc(k), linestyle = style_banc(k), linewidth = 2)
+        scatter!(ax2, r.N_bleu, b; color = couleur_banc(k), marker = marqueur_banc(k), markersize = 9)
+    end
+    # échecs
+    ax3 = Axis(fig[2, 2]; xscale = log10, xticks = tN, xlabel = "photons bleus par lecture", ylabel = "lectures en échec (%)",
+        title = "Ajustements qui échouent")
+    for k in TECH_BANC
+        r = sort(d[(d.source.=="reel").&(d.technique.==k), :], :N_bleu)
+        lines!(ax3, r.N_bleu, 100 .* r.echec; color = couleur_banc(k), linestyle = style_banc(k), linewidth = 2)
+        scatter!(ax3, r.N_bleu, 100 .* r.echec; color = couleur_banc(k), marker = marqueur_banc(k), markersize = 9)
+    end
+    ylims!(ax3, -1, max(5, 100 * maximum(filter(isfinite, d.echec)) + 2))
+    # discriminabilité à 10⁴ photons, trois longueurs d'onde
+    ax4 = Axis(fig[2, 3]; xscale = log10, xticks = ([0.5, 1, 3, 10, 30, 100], ["0,5", "1", "3", "10", "30", "100"]), yticks = (1:length(TECH_BANC), [NOM_BANC[k] for k in TECH_BANC]),
+        yreversed = true, xlabel = "discriminabilité d' à 10⁴ photons bleus", title = "Selon la longueur d'onde (réel)", ygridvisible = false,
+        yticklabelsize = 11)
+    for (i, k) in enumerate(TECH_BANC), (λx, col, dy) in ((750, RAMPE[2], -0.22), (800, RAMPE[5], 0.0), (850, RAMPE[9], 0.22))
+        r = st[(st.source.=="reel").&(st.lambda_nm.==λx).&(st.N_bleu.==1e4).&(st.technique.==k), :]
+        nrow(r) == 1 && scatter!(ax4, [max(r.d_prime[1], 0.4)], [i + dy]; color = col, marker = marqueur_banc(k), markersize = 11)
+    end
+    xlims!(ax4, 0.35, 200)
+    axislegend(ax4, [MarkerElement(color = c, marker = :circle, markersize = 10) for c in (RAMPE[2], RAMPE[5], RAMPE[9])],
+        ["750 nm", "800 nm", "850 nm"]; position = :rb)
+    entete!(fig, "Fig. 16 — Banc du 2026-10-16 : quelle lecture reste stable quand les photons manquent ?",
+        "Sommes des 10 acquisitions amincies par tirage binomial (400 tirages par point) ; chaque lecture est ramenée sur l'écart entre les deux échantillons " *
+        "(0 à 0 mM, 1 à 131 mM, valeurs des sommes à pleins photons). Marqueur vide : plus de 5 % d'échecs. Le jumeau tire ses photons du lissage à trois " *
+        "exponentielles ; la borne de Fisher suppose les fonds connus."; largeur = 3)
+    save(chemin, fig; px_per_unit = 2)
+end
+
 end

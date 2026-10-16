@@ -3,3 +3,4 @@
 sorties/journaux/
 sorties/resultats/cible_mobile.csv
 sorties/reel/amincis_tirages.csv
+sorties/banc_*/tirages_amincis.csv

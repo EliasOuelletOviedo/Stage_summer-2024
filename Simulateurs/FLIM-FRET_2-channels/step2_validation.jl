@@ -372,6 +372,23 @@ let
     fin = [log(S.derive_gain(rng, 3001, 0.1; τ_g = 300.0)[end]) for _ in 1:4000]
     e = abs(std(fin) / 0.05 - 1)
     verdict!("19 dérive de gain : écart-type de log g après τ_g", "à 5 % près (4 000 marches)", @sprintf("%.3f contre 0.050", std(fin)), e < 0.05)
+
+    # 20. TAC plus long que la période (banc du 2026-10-16 : 256 canaux de 64 ps, période de 195,3 canaux) :
+    #     convolution linéaire par FFT contre somme directe, et dérivées contre différences finies
+    irfL = zeros(256)
+    irfL[28:60] .= exp.(-0.5 .* (((28:60) .- 30.5) ./ 1.1) .^ 2) .+ 0.01 .* exp.(-((28:60) .- 30) ./ 12)
+    irfL ./= sum(irfL)
+    instL = S.InstrumentParams(n_bins = 256, T_rep = 12.5, pas = 16.385 / 256, irf = irfL, fenetre = 14:195, t₀ = 0.021)
+    wsL = S.EspaceTravail(instL)
+    esL = S.ExpSum([1.0, -0.4, 0.7], [0.15, 3.69, 3.0])
+    e_c = relerr(S.forward(esL, instL, wsL), S.forward_direct(esL, instL))
+    BL, dτL, dtL = zeros(256), zeros(256), zeros(256)
+    S.bases_derivees!(BL, dτL, dtL, wsL, 2.5, 0.021)
+    Bp, Bm = zeros(256), zeros(256)
+    S.base!(Bp, wsL, 2.5 + 1e-6, 0.021); S.base!(Bm, wsL, 2.5 - 1e-6, 0.021)
+    e_d = relerr((Bp .- Bm) ./ 2e-6, dτL)
+    verdict!("20 TAC plus long que la période : convolution linéaire, dérivées", "1e-12 ; 1e-6", @sprintf("%.1e ; %.1e (L = %d)", e_c, e_d, wsL.L),
+        e_c < 1e-12 && e_d < 1e-6 && wsL.L == 512)
 end
 
 # -----------------------------------------------------------------------------

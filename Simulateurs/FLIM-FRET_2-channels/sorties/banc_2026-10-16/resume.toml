@@ -1,0 +1,5 @@
+JB_750nm = [6.918668045964157, 1.733975321120347]
+JB_800nm = [7.029951341273396, 1.6019052397842375]
+JB_850nm = [7.117280914100291, 1.6613789424666439]
+date = "2026-10-16"
+donnees = "/Users/eliasouellet-oviedo/Documents/Stages/Stage2/Codes/Stage_summer-2024/Simulateurs/FLIM-FRET_2-channels/Data/2026-10-16"
