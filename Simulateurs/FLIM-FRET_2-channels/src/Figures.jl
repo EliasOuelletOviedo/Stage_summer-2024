@@ -1405,4 +1405,6 @@ function figure_banc_stabilite(dossier, chemin; λ = 800)
     save(chemin, fig; px_per_unit = 2)
 end
 
+include(joinpath(@__DIR__, "deux_canaux", "Dessins.jl"))   # étape 15
+
 end

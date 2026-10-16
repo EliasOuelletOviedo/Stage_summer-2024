@@ -4,3 +4,8 @@ sorties/journaux/
 sorties/resultats/cible_mobile.csv
 sorties/reel/amincis_tirages.csv
 sorties/banc_*/tirages_amincis.csv
+# étape 15 : estimations par tirage et objets Julia sérialisés (régénérables), sorties d'essai
+sorties/deux_canaux_*/estimations_*.csv
+sorties/deux_canaux_*/*.jls
+sorties/deux_canaux_*_essai/
+sorties/figures/essai_*

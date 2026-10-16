@@ -30,6 +30,9 @@ julia --project=. step12_canal_jaune.jl         # canal jaune : η_YD depuis tes
 julia --project=. -t 8 step13_fusion.jl         # fusion ratio + forme sous dérive de gain (2 min)
 # banc du 2026-10-16 : une autre version de SCLM, traitée seule (voir la section du même nom)
 julia --project=. -t 8 step14_banc.jl           # sommes des 10 acquisitions, stabilité des techniques à bas photons (3 min)
+# titration à deux canaux du 2026-10-16 (8 concentrations × 3 λ) : document « modifications du code »
+julia --project=. -t 8 step15_analyse_deux_canaux.jl   # SCLM : règles de lecture et de longueur d'onde, blanchiment, carte, inconnu (15 min)
+julia --project=. -t 8 step15_analyse_deux_canaux.jl --donnees Data/2026-10-16/KIRIN charger global calibrer amincir blanchir agreger   # KIRIN (13 min)
 ```
 
 L'étape 5 compte désormais aussi Φ_A effectif, τ_A ±20 %, le retard du jaune, le blanchiment et un
@@ -784,6 +787,423 @@ Discriminabilité d' à 10⁴ photons bleus (réel) selon la longueur d'onde :
 | `resume.toml` | J/B des sommes |
 | `sorties/figures/fig15_banc_2026-10-16_declins.png`, `fig16_banc_2026-10-16_stabilite.png` | figures 15 et 16 |
 
+## Étape 15 — analyse FLIM à deux canaux de la titration du 2026-10-16 (`step15_analyse_deux_canaux.jl`, fig. 17 à 23)
+
+Ce script applique le document « Analyse FLIM à deux canaux : modifications du code » (2026-10-16).
+- **Données.** La titration SCLM `Data/2026-10-16/SCLM` (l'ancien dossier `calib`) compte 24 cellules : 8 concentrations (0, 2,5, 5,
+  10, 20, 40, 80 et 131 mM) × 3 longueurs d'onde (750, 800 et 850 nm). Chaque cellule a 10
+  acquisitions de 1 s, avec les deux canaux.
+- **L'échantillon inconnu.** Le dossier `unknown` est traité à part, à la dernière étape (`inconnue`,
+  point 9). Comme à l'étape 14, ces données sont traitées seules.
+- **Ce que le script rend.** Deux réponses, chacune avec une règle de décision écrite dans le code avant
+  de voir les courbes : la meilleure lecture (RMSE en mM) et la meilleure longueur d'onde.
+
+```bash
+julia --project=. -t 8 step15_analyse_deux_canaux.jl              # tout, échantillon inconnu compris (15 min sur le M1)
+julia --project=. -t 8 step15_analyse_deux_canaux.jl inconnue     # l'inconnu seul, à partir des sorties persistées (2 min)
+julia --project=. -t 8 step15_analyse_deux_canaux.jl --essai      # 800 nm, 3 concentrations, peu de tirages (2 min)
+julia --project=. -t 8 step15_analyse_deux_canaux.jl --donnees Data/2026-10-16/KIRIN charger global calibrer amincir blanchir agreger   # un autre capteur
+julia --project=. -t 8 step15_analyse_deux_canaux.jl agreger      # une étape, à partir des sorties persistées
+julia --project=. step15_analyse_deux_canaux.jl rejouer 800 20 1000 17 [jumeau] [A 0.05]   # un tirage seul
+```
+
+**Le mode essai.** Il suit le conseil du document : faire tourner toute la chaîne sur une longueur
+d'onde et trois concentrations. Ses sorties vont dans `sorties/deux_canaux_2026-10-16_SCLM_essai/` et
+`sorties/figures/essai_*` (ignorés par git).
+
+**La puissance laser.** `parametres_deux_canaux.toml` attend la puissance mesurée au wattmètre à chaque
+longueur d'onde. Tant qu'elle manque, la comparaison à temps égal reste conditionnelle.
+
+### Sept modules, une sortie persistée après chaque étape
+
+| Module (`src/deux_canaux/`) | Entrée | Sortie (`sorties/deux_canaux_2026-10-16_SCLM/`) |
+| --- | --- | --- |
+| `Charger.jl` | .sdt bruts, IRF, fond | 24 `Cellule`, les 10 acquisitions gardées séparées ; `controles_cellules.csv`, `acquisitions.csv` |
+| `Global.jl` | cellules d'une longueur d'onde | durées de vie liées, amplitudes, et par point χ²ᵣ, t₀, mélange à deux états, résidus : `global_*.csv` |
+| `Lectures.jl` | couple d'histogrammes + modèle global | les neuf observables et leurs codes d'échec |
+| `Calibrer.jl` | observables aux 8 concentrations | courbes, monotonie, K apparents, borne de Fisher : `lectures_pleins_photons.csv`, `calibration.csv`, `fisher.csv`, `kalman_R.csv` |
+| `Amincir.jl` | cellule + budget + graine | tirages amincis et jumeau : `estimations_tirages.csv` (ignoré par git) |
+| `Blanchir.jl` | cellule + scénario + taux | signature mesurée `tendances_blanchiment.csv` ; tirages blanchis `estimations_blanchiment.csv` (ignoré par git) |
+| `Agreger.jl` | toutes les estimations | le fichier plat `resultats_deux_canaux.csv`, les règles, la carte finale ; figures 17 à 22 par `Dessins.jl` (dans le module `Figures`) |
+
+- **Reprise.** Chaque étape se relance seule. Les objets Julia intermédiaires (`modeles_globaux.jls`,
+  `courbes.jls`) sont ignorés par git : un clone neuf repart de l'étape `global`.
+- **Graines.** Elles sont dérivées de (λ, concentration, budget, n° de tirage, source, scénario, taux),
+  jamais d'un compteur global. Deux exécutions donnent les mêmes tirages, et `rejouer` reconstruit un
+  tirage seul.
+
+### Les règles, écrites dans le code avant de voir les courbes
+
+**La meilleure lecture** (`regle_lecture`, `Agreger.jl`). La règle s'applique à chaque longueur
+d'onde et à chaque budget. Elle enchaîne trois critères, dans l'ordre ; chacun est éliminatoire.
+1. Le taux d'échec reste sous 1 % à chaque concentration jugée. Un échec est une non-convergence, un
+   paramètre sur une borne ou une observable hors de la plage calibrée.
+2. Le |biais| reste sous 1 mM à chaque concentration jugée.
+3. Parmi les survivantes, la gagnante a la plus petite RMSE médiane sur la fenêtre de clamping
+   (5–35 mM). Le pire cas est rapporté à côté.
+
+- **RMSE retenue.** C'est la RMSE vraie : √(biais² + σ² + σ_calibration²). σ est corrigé de
+  l'amincissement (σ_tirages/√(1 − p)), et σ_calibration propage l'incertitude des 8 points.
+- **Second classement.** Le même, avec le biais qu'ajoute le blanchiment au taux mesuré.
+
+**La meilleure longueur d'onde** (`regle_longueur_onde`). Trois quantités par longueur d'onde :
+- la plage de J/B ;
+- la RMSE médiane 5–35 mM de la gagnante, de deux façons :
+  - à photons bleus égaux (10⁴) : la comparaison ne dépend d'aucune hypothèse ;
+  - à temps égal : la durée qui donne 10⁴ photons au débit bleu médian de la titration ; chaque cellule
+    reçoit alors son débit × cette durée. La comparaison mélange rendement et puissance laser ;
+- les photons bleus par seconde (et par milliwatt une fois la puissance mesurée).
+
+### Ce que disent les données
+
+#### 1. Les sommes sont légitimes, et J/B est poissonien
+
+- **J/B suit Poisson.** Sa dispersion d'une acquisition à l'autre vaut 0,60 à 2,30 × Poisson. Une seule
+  cellule dépasse 2 × Poisson (750 nm, 20 mM, 2,30) ; elle est marquée dans le fichier plat.
+- **Les intensités ne le suivent pas.** Elles fluctuent 1,1 à 4,6 × Poisson (bleu) et 1,4 à 8,2 ×
+  Poisson (jaune) : l'excitation varie d'une seconde à l'autre, et le rapport l'annule.
+- **Les tendances.** 13 cellules sur 24 en montrent une, presque toujours sur les deux intensités à la
+  fois. J/B dérive dans 4 cellules seulement, de 0,06 à 0,17 % par acquisition.
+
+#### 2. L'ajustement global : la composante rapide du jaune n'est pas de la fuite pure (fig. 21)
+
+Le modèle, par longueur d'onde : bleu = diffusion + τ₂ + τ₃ ; jaune = diffusion + τ_J + τ_A. Les
+durées de vie sont communes aux 8 concentrations et aux deux canaux, les amplitudes libres par point,
+le t₀ propre à chaque canal, le fond figé.
+
+| | 750 nm | 800 nm | 850 nm |
+| --- | --- | --- | --- |
+| τ₂ (bleu) | 0,755 ns | 0,721 ns | 0,655 ns |
+| τ₃ (bleu) | 2,74 ns | 2,72 ns | 2,57 ns |
+| τ_J (jaune, libre) | 1,10 ns | 1,06 ns | 1,02 ns |
+| τ_A (jaune) | 3,24 ns | 3,25 ns | 3,22 ns |
+| χ²ᵣ global, lié / libre | 3,64 / 3,32 | 4,61 / 4,11 | 4,82 / 4,34 |
+| Δdéviance / χ²ᵣ (seuil 3,84) | 276 | 347 | 315 |
+| λ_fuite, 0 → 131 mM | 0,54 → 0,83 | 0,44 → 0,72 | 0,40 → 0,86 |
+| diffusion bleue (photons/s, 8 points) | 5 550–6 495 | 7 759–8 791 | 6 405–7 007 |
+
+- **La composante « 0,02 ns » est de la diffusion.** Laissée libre, elle part vers τ → 0, et son
+  intensité absolue ne dépend pas de [Cl⁻] (variation de 3,5 à 4,8 % entre les 8 points). Elle est
+  modélisée comme une IRF décalée et exclue des fractions d'amplitude. Le document y voyait déjà de la
+  diffusion ou un résidu de déconvolution.
+- **Le lien τ_J = τ₂ force, aux trois longueurs d'onde.** Il augmente la déviance de 276 à 347 fois
+  le χ²ᵣ (seuil : 3,84). Laissée libre, la composante rapide du jaune vaut 1,02 à 1,10 ns, contre
+  0,65 à 0,76 ns pour τ₂. Le modèle retenu en aval est donc le modèle libre.
+- **Le coefficient de fuite dérive avec le Cl⁻**, d'un facteur 1,5 à 2,2. L'interprétation « fuite
+  pure » tombe : la composante rapide du jaune contient autre chose, et η_YD ne peut pas en être tiré.
+- **Les populations.** La fraction d'amplitude de τ₂ (l'état FRET du bleu) baisse avec le Cl⁻ : de 0,70
+  à 0,54 (750 nm), de 0,71 à 0,58 (800 nm), de 0,65 à 0,50 (850 nm). En intensité, la même composante
+  passe de 0,30–0,37 à 0,20–0,26. Les deux représentations sont dans `global_cellules.csv`.
+- **Le défaut de forme est le même à toutes les concentrations.** Les χ²ᵣ par point (bleu 2,8 à 6,3,
+  jaune 2,5 à 4,0) ne dessinent ni cloche ni pente. Le premier vecteur singulier des résidus porte 61 à
+  73 % de leur somme des carrés, avec le même poids à toutes les concentrations : c'est l'IRF (front
+  montant, fin de fenêtre), pas le modèle de capteur.
+- **Le mélange statique à deux états ne décrit pas 5 et 10 mM.** On ajuste chaque point comme un
+  mélange des deux états extrêmes. L'excès de χ²ᵣ sur le modèle global vaut 5,4 à 5,7 à 5 mM et 7,7 à
+  8,3 à 10 mM, aux trois longueurs d'onde, contre 0,8 à 2,5 ailleurs. Ce n'est pas la cloche centrée
+  sur K_D (28 à 33 mM) qu'attendait le document : c'est un écart localisé à ces deux échantillons.
+- **Le t₀ saute d'une cellule à l'autre, sans dérive monotone.** Ajusté par point (durées de vie
+  figées), il varie de 8 à 11 ps (bleu) et jusqu'à 30–32 ps (jaune, 800 et 850 nm). Le front montant
+  brut le confirme :
+  - dans une cellule, il ne bouge pas (1 à 2 ps d'une acquisition à l'autre, pente < 0,3 ps par
+    acquisition) ;
+  - entre cellules, il est décalé de +3 à +6 ps à 5 et 10 mM, et de −3 ps à 20 mM, aux trois
+    longueurs d'onde.
+  Ces sauts sont invisibles au Monte-Carlo, puisque chaque tirage hérite du t₀ de sa référence.
+
+#### 3. Les courbes de calibration et les K apparents (fig. 22)
+
+| Lecture | 750 nm | 800 nm | 850 nm | σ_calibration à 20 mM |
+| --- | --- | --- | --- | --- |
+| 1 rapport J/B | K 33 mM | K 28 | K 29 | 0,06–0,16 mM |
+| 5d forme, échelle commune | 33 | 28 | 29 | 0,06–0,15 |
+| 1c J/B corrigé de la fuite | 41 | 33 | 36 | 0,10–0,16 |
+| 5a forme, échelles séparées | 41 | 34 | 33 | 0,20–0,43 |
+| 6 phasor, bleu | 41 | 38 | 35 | 0,27–0,72 |
+| 2 mono-exp., bleu (ton code) | 41 | 35 | 38 | 0,53–0,73 |
+| 3 bi-exp. τ libres | 46 | non monotone | non monotone | — |
+| 4 bi-exp. τ figés | non monotone | non monotone | 59 | — |
+| 2J mono-exp., jaune (ton code) | non monotone | 237 | 275 | 1,16 |
+
+- **Les lectures non monotones sont marquées, pas inversées.** C'est la règle du document, appliquée
+  strictement.
+  - 2J à 750 nm : de 0 à 2,5 mM, la violation reste dans le bruit des points (0,3 σ).
+  - 3 à 800 et 850 nm : de 2,5 à 5 mM, à la limite du bruit (1,1 à 1,4 σ).
+  - 4 à 750 et 800 nm : de 2,5 à 5 mM, hors du bruit (2,6 à 2,8 σ). Ces deux lectures figent t₀, et
+    c'est le point où il saute.
+- **Les K apparents divergent d'une lecture à l'autre**, comme le document l'annonçait :
+  - 28 à 33 mM pour J/B et 5d ;
+  - 33 à 41 mM pour 1c, 5a, le phasor et le mono-exponentiel bleu ;
+  - 46 à 65 mM pour les lectures de population (3, 4) ;
+  - 237 à 275 mM pour le mono-exponentiel jaune, qui ne bouge presque pas sous 20 mM.
+- **La Langmuir décrit mal J/B** (χ²ᵣ de 37 à 157). La courbe est plus raide qu'une Langmuir : le K
+  apparent la résume, il n'est pas une constante du capteur.
+
+#### 4. La meilleure lecture (fig. 17, 18 et 20)
+
+Au budget visé (10⁴ photons bleus), la règle donne :
+
+| Lecture | 750 nm | 800 nm | 850 nm |
+| --- | --- | --- | --- |
+| 1 rapport J/B | **0,56 mM** (pire 2,0 à 80 mM) — gagnante | 0,49 (2,1) — 2ᵉ | 0,52 (2,2) — 2ᵉ |
+| 5d forme, échelle commune | 0,57 (1,9) — 2ᵉ | **0,48** (2,1) — gagnante | **0,51** (2,1) — gagnante |
+| 1c J/B corrigé de la fuite | 1,11 (5,1) — 3ᵉ | 0,87 (5,6) — 3ᵉ | éliminée : 1,0 % d'échecs à 2,5 mM |
+| 5a forme, échelles séparées | éliminée : 1,0 % d'échecs à 5 mM | éliminée : 4 % à 2,5 mM | éliminée : 8 % à 2,5 mM |
+| 6 phasor, bleu | éliminée : 10 % à 80 mM | éliminée : 25 % à 80 mM | éliminée : 32 % à 80 mM |
+| 2 mono-exp., bleu | éliminée : 14 % à 80 mM | éliminée : 24 % à 80 mM | éliminée : 30 % à 80 mM |
+| 2J mono-exp., jaune | non monotone | éliminée : 49 % à 2,5 mM | éliminée : 44 % à 2,5 mM |
+| 3 bi-exp. τ libres | éliminée : 52 % à 2,5 mM | non monotone | non monotone |
+| 4 bi-exp. τ figés | non monotone | non monotone | éliminée : 35 % à 2,5 mM |
+
+Les chiffres sont la RMSE vraie médiane sur 5–35 mM ; entre parenthèses, le pire cas sur 2,5–80 mM.
+
+- **Le verdict de la règle.** 5d à 800 et 850 nm, J/B à 750 nm.
+- **Remarque a posteriori, hors de la règle.** J/B et 5d sont à 1 à 3 % l'un de l'autre à tous les
+  budgets, sous l'incertitude des σ (5 %) : ils sont à égalité. À égalité, J/B ne demande ni modèle ni
+  ajustement.
+- **Selon le budget, pour J/B et 5d** (RMSE médiane 5–35 mM, 800 nm) : 0,9 mM à 3·10³ photons, 0,5 à
+  10⁴, 0,3 à 3·10⁴, 0,17 à 10⁵. 850 nm fait jusqu'à 7 % de plus, 750 nm jusqu'à 20 %.
+- **Sous 3·10³ photons, aucune lecture ne passe la règle.** À 10³ photons, 2 à 5 % des tirages de J/B
+  à 2,5 mM sortent déjà de la plage calibrée : le pas entre 0 et 2,5 mM est à peine plus grand que le
+  bruit.
+- **Les lectures de durée de vie tombent toutes sur les échecs, par sortie de plage.** La durée de vie
+  ne bouge presque pas entre 0 et 2,5 mM, ni entre 80 et 131 mM : un tirage à 2,5 ou 80 mM franchit
+  la borne voisine.
+  - Le mono-exponentiel bleu ne passe qu'à 750 nm et 10⁵ photons (1,8 mM).
+  - 5a passe à partir de 3·10⁴ photons (10⁵ à 850 nm), à 0,8–1,8 mM.
+  - 1c passe à partir de 10⁴ photons (3·10⁴ à 850 nm), avec une RMSE 1,7 à 2,1 fois celle de J/B.
+- **Le second classement, sous blanchiment au taux mesuré, est identique** (point 7).
+
+#### 5. Pourquoi : l'information est dans J/B (borne de Fisher, jumeau)
+
+Borne de Cramér-Rao à 20 mM et 10⁴ photons bleus, sur le modèle global (amplitudes interpolées
+entre les points, fonds figés, échelle libre) :
+
+| Information | 750 nm | 800 nm | 850 nm |
+| --- | --- | --- | --- |
+| J/B seul | 0,77 mM | 0,69 | 0,69 |
+| toute (deux canaux, une échelle) | 0,76 | 0,68 | 0,68 |
+| forme seule (une échelle par canal) | 5,5 | 4,9 | 6,0 |
+| bleu seul | 6,5 | 6,5 | 8,4 |
+| jaune seul | 10,5 | 7,5 | 8,5 |
+
+- **La forme n'ajoute presque rien au rapport.** Elle gagne au plus 1,5 % sur la borne de J/B, et le
+  déclin du bleu seul est 8 à 12 fois moins précis (70 à 150 fois moins de photons utiles).
+- **L'efficacité, (borne / σ)², tranche entre « la lecture est mauvaise » et « l'information n'existe
+  pas ».** Valeurs médianes sur 5–35 mM, à 10⁴ :
+  - **J/B et 5d sont sur leur borne** (1,04 à 1,13).
+  - **Les lectures du déclin bleu sont près de la leur** (2 : 0,66 à 1,20 ; 6 : 0,69 à 1,50 ; 4 à
+    850 nm : 1,10). Ce n'est pas l'ajustement qui manque, c'est l'information.
+  - **1c gaspille** 3 à 4 fois les photons (0,24 à 0,34), parce qu'il estime λ sur chaque mesure.
+  - **5a dépasse sa borne** (1,1 à 2,5). La borne de forme dépend de l'interpolation entre 8 points,
+    et les sauts de t₀ ajoutent aux gabarits une « forme » qui n'est pas du Cl⁻. Cette efficacité-là
+    est donc optimiste.
+- **Le jumeau reproduit le bruit des données.** σ_réel / σ_jumeau vaut 0,97 à 1,03 en médiane (0,85
+  à 1,20 sur 80 % des points), sauf pour 3 (1,13). Le bruit est poissonien, et le classement ne dépend
+  d'aucun modèle.
+- **Le R du Kalman** (`kalman_R.csv`) : la borne au nombre de photons d'une acquisition de 1 s (0,9 à
+  2,4·10⁵ photons bleus) vaut 0,11 à 0,21 mM de 0 à 20 mM, 0,25 à 0,30 mM à 40 mM et 0,46 à
+  0,51 mM à 80 mM. D'où R = 0,014 à 0,045 mM² dans la fenêtre de clamping (5, 10 et 20 mM).
+
+#### 6. La meilleure longueur d'onde
+
+| | 750 nm | 800 nm | 850 nm |
+| --- | --- | --- | --- |
+| plage de J/B (0 → 131 mM) | ×3,28 | **×3,56** | ×3,49 |
+| RMSE médiane 5–35 mM, photons bleus égaux (10⁴) | 0,56 mM (J/B) | **0,48 mM** (5d) | 0,51 mM (5d) |
+| RMSE médiane 5–35 mM, temps égal (72 ms) | 0,63 mM | **0,46 mM** | 0,52 mM |
+| photons bleus par seconde à 20 mM | 128 000 | **156 000** | 139 000 |
+| photons bleus par seconde et par mW | — | — | — |
+| jaune : composante rapide, 0 → 131 mM | 3,3 → 11,0 % | 2,7 → 11,2 % | 1,9 → 9,8 % |
+
+- **À photons égaux, 800 nm gagne,** de 7 % sur 850 nm et de 17 % sur 750 nm. Cette comparaison ne
+  dépend d'aucune hypothèse.
+- **À temps égal, 800 nm gagne aussi** (0,46 contre 0,52 et 0,63 mM). Ce résultat reste conditionnel
+  tant que la puissance n'est pas mesurée.
+- **La prédiction du document** (plus d'excitation directe de l'accepteur à 850 nm, qui comprime J/B) :
+  - la plage de J/B va dans son sens (×3,56 à 800 nm, ×3,49 à 850 nm) ;
+  - mais la part du jaune due à l'excitation directe n'est pas séparable dans ces données : aucune
+    montée n'est visible dans le jaune, et il n'y a pas d'échantillon d'accepteur seul. Le code rend à
+    la place la décomposition du jaune (diffusion, composante rapide, accepteur).
+
+#### 7. Le photoblanchiment (fig. 19)
+
+**Mesuré sur les 10 acquisitions.**
+- Aucune cellule ne montre la signature A.
+- 3 cellules ont celle de C : les deux intensités baissent, J/B reste stable. C'est aussi la signature
+  d'une baisse d'excitation.
+- 4 cellules montrent l'inverse (les deux intensités montent : une dérive d'excitation).
+- 4 ont celle de B, avec J/B en baisse de 0,06 à 0,17 % par acquisition (t ≈ −2,4 à −2,9).
+- 11 cellules ne dérivent pas, et 2 restent indéterminées.
+- **Le taux mesuré le plus fort vaut 0,26 % par seconde.** Une mesure de 10⁴ photons dure 0,04 à
+  0,11 s : elle blanchit au plus ≈ 0,03 %, et le second classement est identique au premier.
+
+**Injecté** (0 à 10 %, décroissance exponentielle pendant l'acquisition). Le taux tolérable pour
+|biais| < 1 mM, à 10⁴ photons, sur 5–35 mM :
+
+| Lecture | A : l'accepteur n'absorbe plus | B : l'accepteur éteint encore | C : le donneur blanchit |
+| --- | --- | --- | --- |
+| 1 rapport J/B | 1,7–1,8 % | 2,9–3,2 % | 43–50 % |
+| 5d forme, échelle commune | 1,6–1,8 % | 3,0–3,2 % | 86–90 % |
+| 1c J/B corrigé de la fuite | 1,8–1,9 % | 3,2–3,5 % | 48–50 % |
+| 5a forme, échelles séparées | 1,0–1,4 % | 14–17 % | 4,4–5,8 % |
+| 6 phasor, bleu | 0,55–0,65 % | aucun biais | 8–9 % |
+| 2 mono-exp., bleu | 0,58–0,68 % | aucun biais | 5,2–5,3 % |
+| 2J mono-exp., jaune | 8–11 % | 3,4–4,5 % | 19–26 % |
+
+- **A biaise tout**, et les lectures de durée de vie plus que le rapport (jusqu'à 1,5 à 1,8 mM par %
+  blanchi, contre ≈ 0,6 mM pour J/B). C'est la signature du Cl⁻ : aucune lecture ne la distingue.
+- **B biaise les lectures qui utilisent le rapport** (0,3 mM par %), et laisse intactes celles qui ne
+  lisent que la forme du bleu (2, 6, 4). C'est le cas où la forme rattrape le rapport, comme le
+  prévoyait le document.
+- **C épargne le rapport** (≤ 0,02 mM par %). Il déplace un peu les lectures de forme (0,1 à 0,2 mM par
+  %), parce que la diffusion et le fond ne blanchissent pas.
+- **La spécification pour J/B ou 5d** : rester sous ≈ 1,7 % de molécules blanchies par acquisition si
+  le blanchiment est de type A, sous ≈ 3 % s'il est de type B.
+
+#### 8. La carte finale (fig. 20)
+
+- **Partout où une lecture passe, c'est 5d ou J/B**, à égalité statistique.
+- **Aucune lecture ne passe à 131 mM.** C'est la borne de la calibration, où le biais de troncature
+  domine.
+- **Aux faibles budgets, les cases vides se concentrent près des bornes.** À 0 et 2,5 mM, il faut 10³
+  à 3·10³ photons ; à 5 et 80 mM, 3·10² à 10³. À 20 et 40 mM, 5d ou J/B passent dès 10² photons
+  (la carte ne juge que les échecs et le biais : la RMSE y vaut alors plusieurs mM).
+- **La conclusion est simple** : une seule lecture (ou sa jumelle 5d) gagne partout, sans région où
+  une autre prendrait le relais.
+
+#### 9. L'échantillon inconnu (`SCLM/unknown`, étape `inconnue`, fig. 23)
+
+**Méthode.** La somme des 10 acquisitions de l'inconnu est lue par chaque lecture, puis inversée par la
+courbe de calibration de cette lecture. L'inconnu tombe entre les nœuds de 40 et 80 mM. Quatre sources
+d'incertitude, en mM :
+- **mesure** : la dispersion des 10 acquisitions de l'inconnu (/√10), propagée par Monte-Carlo
+  (20 000 tirages) à travers la courbe ;
+- **calibration** : le bruit des 8 points ; la courbe est reconstruite à chaque tirage ;
+- **t₀** : le changement de lecture quand les histogrammes de l'inconnu sont décalés de ± l'écart-type
+  des t₀ par point de la titration (bleu ≈ 3 ps, jaune 2 à 13 ps) ;
+- **interpolation** : la moitié de l'écart entre l'inversion monotone (Hermite) et l'inversion linéaire
+  entre 40 et 80 mM.
+
+Le total est la somme quadratique des quatre. La valeur par lecture est la moyenne des trois longueurs
+d'onde, pondérée par 1/σ², avec un σ gonflé par √χ²ᵣ quand elles ne s'accordent pas. Les lectures non
+monotones (*) ne donnent qu'une valeur indicative, exclue de la moyenne.
+
+| Lecture | 750 nm | 800 nm | 850 nm | Moyenne des λ |
+| --- | --- | --- | --- | --- |
+| 1 rapport J/B | 42,2 ± 0,5 | 43,4 ± 0,7 | 45,3 ± 0,9 | **43,1 ± 0,8** |
+| 5d forme, échelle commune | 42,0 ± 0,5 | 43,2 ± 0,7 | 45,2 ± 0,9 | **42,8 ± 0,8** |
+| 1c J/B corrigé de la fuite | 41,8 ± 0,6 | 43,4 ± 2,2 | 44,6 ± 2,8 | 42,0 ± 0,6 |
+| 2J mono-exp., jaune | 47,6 ± 1,9 * | 46,9 ± 3,1 | 47,2 ± 3,4 | 47,0 ± 2,3 (800 et 850 nm) |
+| 5a forme, échelles séparées | 34,4 ± 1,7 | 37,4 ± 4,3 | 39,9 ± 4,6 | 35,3 ± 1,5 |
+| 2 mono-exp., bleu | 28,6 ± 1,3 | 28,4 ± 1,0 | 35,2 ± 3,0 | 28,9 ± 1,2 |
+| 6 phasor, bleu | 27,2 ± 1,0 | 27,9 ± 1,3 | 33,1 ± 2,1 | 28,1 ± 1,3 |
+| 4 bi-exp. τ figés | 25,3 ± 0,8 * | 24,3 ± 1,1 * | 29,6 ± 1,9 | 29,6 ± 1,9 (850 nm) |
+| 3 bi-exp. τ libres | 16,4 ± 2,3 | 16,8 ± 2,2 * | 29,0 ± 6,5 * | 16,4 ± 2,3 (750 nm) |
+
+- **Le budget d'incertitude de J/B.** Mesure 0,07 à 0,12 mM, calibration 0,06 à 0,14 mM, t₀ 0 (le
+  rapport ignore le temps), interpolation 0,5 à 0,9 mM. C'est l'interpolation entre 40 et 80 mM qui
+  domine : un point de calibration à 60 mM la réduirait.
+- **Les trois longueurs d'onde ne s'accordent pas tout à fait** pour J/B (42,2 → 45,3 mM, χ²ᵣ = 4,3).
+  Un écart de gain relatif entre les deux détecteurs d'environ 1 % entre la calibration et la mesure de
+  l'inconnu suffit : 1 % de J/B vaut 1 à 1,3 mM ici. D'où le σ gonflé (0,8 mM).
+- **Les lectures ne s'accordent pas entre elles.** Celles qui lisent le rapport ou le jaune (1, 5d, 1c,
+  2J) donnent 42 à 47 mM ; celles qui lisent le déclin du bleu (2, 6, 4, 3) donnent 16 à 30 mM ; 5a,
+  qui mélange les deux formes, tombe entre (35 mM). L'écart (≈ 15 mM) dépasse de loin les incertitudes.
+- **L'inconnu n'est pas un point de la titration.** Ajustons-le comme un mélange des deux états
+  extrêmes. Imposer le J/B que dicte la forme dégrade l'ajustement de 44 à 62 fois le χ²ᵣ : c'est la
+  « tension rapport/forme ». Sur les 24 cellules de la titration, elle vaut 1 à 2 en médiane et 17 au
+  plus. Ce que montre le déclin de l'inconnu :
+  - la fraction de population de l'état FRET (τ₂ du bleu : 0,649 à 800 nm) le place vers 20–25 mM ;
+  - son J/B le place vers 43 mM ;
+  - sa diffusion (8 600 photons/s à 800 nm) et son t₀ restent dans les valeurs de la titration ;
+  - mesuré 3 min après le point à 131 mM, à la même cadence que la titration, il ne trahit pas de saut
+    de l'instrument.
+- **Ce qu'on peut en dire.** L'échantillon inconnu diffère des étalons par autre chose que le Cl⁻.
+  Quelque chose éteint l'accepteur sans changer le FRET vu par le donneur : pH, autre anion, accepteur
+  devenu « sombre », lot de protéine… Chaque famille de lectures est alors biaisée à sa façon.
+- **Valeur à retenir.** Pour la lecture prévue du capteur, J/B : **43 ± 1 mM**. L'incertitude réelle
+  sur [Cl⁻], tant que la cause de l'écart n'est pas connue, couvre plutôt **25 à 47 mM**. À vérifier : le
+  pH et la composition de l'inconnu, ou un étalon de composition connue mesuré comme un inconnu.
+
+### Conclusions
+
+1. **Lire ce capteur par J/B.** 5d fait aussi bien, à 1 à 3 % près, mais demande un modèle.
+   - Le rapport est sur la borne de Fisher, et la forme du déclin n'y ajoute pas plus de 1,5 %.
+   - À 800 nm, la RMSE médiane sur 5–35 mM vaut 0,9 mM à 3·10³ photons bleus, 0,5 mM à 10⁴ et
+     0,17 mM à 10⁵.
+2. **Sous 3·10³ photons, aucune lecture ne satisfait la règle.** Le pas de 0 à 2,5 mM n'est plus résolu.
+3. **Les durées de vie ne valent pas la peine dans cette version.**
+   - Le déclin du bleu porte 70 à 150 fois moins d'information par photon que J/B.
+   - Les lectures qui l'exploitent sont déjà près de leur borne.
+   - Elles ne passent la règle qu'à 10⁵ photons au mieux.
+4. **La correction de fuite (1c) n'aide pas.**
+   - λ n'est pas constant : il varie d'un facteur 1,5 à 2,2 avec le Cl⁻.
+   - L'estimer sur chaque mesure gaspille 3 à 4 fois les photons.
+   - Avec un λ constant, 1c redonne exactement J/B en mM.
+5. **800 nm est la meilleure longueur d'onde à photons égaux**, de 7 à 17 %. À temps égal, elle gagne
+   aussi, mais il faut la puissance pour le citer.
+6. **Le blanchiment est négligeable dans ces données.** Pour J/B, la spécification est de rester sous
+   ≈ 1,7 % blanchi par acquisition.
+7. **Le modèle à mélange statique est à revoir.**
+   - La composante rapide du jaune n'est pas de la fuite pure.
+   - Les points à 5 et 10 mM ne sont pas un mélange des deux extrêmes.
+   - Le t₀ saute d'une cellule à l'autre.
+
+### Réserves
+
+- **La référence est la somme des 10 acquisitions.** Elle mesure la reproductibilité, pas la justesse :
+  un biais commun à la référence et aux tirages est invisible. L'en-tête du fichier plat et de chaque
+  figure le dit.
+- **Les sauts de t₀ entre cellules échappent au Monte-Carlo.** Les lectures qui lisent la forme (3, 4,
+  5a, 6, 2) y paraissent donc plus précises qu'elles ne le seraient sur une mesure nouvelle. J/B n'en
+  dépend pas.
+- **Les points à 5 et 10 mM s'écartent du reste**, à la fois par le mélange à deux états et par le t₀.
+  Ils sont à remesurer avant toute conclusion sur le mécanisme.
+- **Le fond vient de l'IRF**, faute de tampon seul. Laissé libre et commun aux 8 points, il retombe
+  pourtant sur ce niveau (à 800 nm, en 10 s : bleu 109 contre 103, jaune 204 contre 180 photons par
+  canal). Le code prend le tampon dès qu'un dossier `tampon/` existe à côté des concentrations.
+- **Les K apparents décrivent les courbes**, ils ne sont pas des constantes : la Langmuir décrit mal
+  J/B.
+- **La puissance laser n'est pas mesurée** : la comparaison à temps égal reste conditionnelle.
+- **Les deux bornes de la calibration (0 et 131 mM) ne sont pas jugées** par les règles. La moitié des
+  tirages y sort de la plage par construction, et le biais de troncature y domine.
+
+### Écarts au document
+
+| Document | Ici | Pourquoi |
+| --- | --- | --- |
+| fond figé depuis le tampon seul | niveau plat mesuré avant le pic de l'IRF de chaque détecteur, ramené à la durée d'acquisition | pas de mesure de tampon seul (voir les réserves) |
+| trois durées de vie dans le bleu, dont « 0,02 ns » | diffusion (IRF décalée, τ figé à 1 ps) + τ₂ + τ₃ ; jaune : diffusion + τ_J + τ_A | laissée libre, la composante rapide part vers τ → 0, et son intensité ne dépend pas de [Cl⁻] |
+| 3 durées de vie liées par longueur d'onde | τ₂, τ₃, τ_A, plus τ_J quand le lien τ_J = τ₂ force | le lien est testé (Δdéviance / χ²ᵣ, seuil 3,84), et il force |
+| λ = f_J(rapide)/f_B(rapide)·J/B | photons de la composante rapide du jaune / photons de τ₂ du bleu | c'est la même quantité, sans passer par les fractions |
+| 1c, 0 paramètre libre | λ estimé sur chaque histogramme lu (4 amplitudes, durées de vie et t₀ figés) | avec un λ constant, 1c est exactement 1 en mM : soustraire une constante ne change ni le bruit ni la pente. Le gain de plage ne se traduit pas en précision |
+| 2, 2J : 2 paramètres | ton `vec_to_lifetime` (τ, décalage, fond) | c'est la lecture de ton pipeline |
+| 5a : 4 paramètres ; 5d : 3 | 5a : f + une échelle par canal ; 5d : f + une échelle ; fonds figés | mélange des deux états mesurés, comme à l'étape 14 |
+| « hors plage » = échec ; règle « sur toute la plage 0–131 mM » | règles jugées de 2,5 à 80 mM ; les bornes sont rapportées dans le fichier plat | à 0 et 131 mM, la moitié des tirages sort de l'intervalle calibré par construction |
+| RMSE médiane sur 5–35 mM | médiane des nœuds 5, 10 et 20 mM | ce sont les seuls points de la titration dans la fenêtre |
+| χ²ᵣ par point, en cloche sous mélange statique | χ²ᵣ du global, plus l'excès de χ²ᵣ d'un mélange des deux extrêmes | avec des amplitudes libres par point, le χ²ᵣ global ne teste pas le mélange ; le mélange des extrêmes le teste |
+| injecter le scénario identifié | les trois scénarios, à 1, 2, 5 et 10 % ; le second classement prend le scénario et le taux mesurés | la figure demandée est « par scénario » |
+| fraction du jaune due à l'excitation directe | non séparable ; décomposition du jaune à la place | aucune montée visible, pas d'échantillon d'accepteur seul |
+| borne de Fisher sur le modèle de chaque cellule | sur le modèle global, composantes rapportées au total bleu et interpolées entre les points | la borne demande la dérivée en concentration, que seule l'interpolation entre points fournit |
+| sept modules | les sept, plus `Dessins.jl` (les figures, dans le module `Figures`) | les figures suivent la charte des autres étapes |
+
+### Sorties (`sorties/deux_canaux_2026-10-16_SCLM/`)
+
+| Fichier | Contenu |
+| --- | --- |
+| `resultats_deux_canaux.csv` | **le fichier plat** : une ligne par (λ, concentration, lecture, budget, scénario, taux). Colonnes du document, plus σ_tirages, p, σ_calibration, RMSE vraie, échecs d'ajustement et hors plage, drapeaux des contrôles. En-tête « # » : la référence et les garde-fous |
+| `controles_cellules.csv`, `acquisitions.csv` | contrôles de Poisson et de tendance ; photons et J/B de chaque acquisition |
+| `global_parametres.csv`, `global_lien.csv`, `global_cellules.csv`, `global_residus_*.csv` | ajustement global (lié et libre), test du lien, par point (amplitudes et intensités, λ_fuite, t₀, mélange, χ²ᵣ), résidus |
+| `tendances_blanchiment.csv` | signature mesurée et taux de blanchiment par cellule |
+| `lectures_pleins_photons.csv`, `calibration.csv` | les neuf lectures à pleins photons (et leur incertitude), courbes, monotonie, K apparents |
+| `fisher.csv`, `kalman_R.csv`, `efficacites.csv`, `jumeau_contre_reel.csv` | bornes de Cramér-Rao, R du Kalman, efficacité de chaque lecture, accord réel/jumeau |
+| `regle_lecture.csv`, `regle_lecture_blanchie.csv`, `regle_longueur_onde.csv`, `carte_finale.csv` | les deux règles, le second classement, la carte finale |
+| `pentes_blanchiment.csv`, `blanchiment_tolerable.csv` | biais par point de pourcentage blanchi, taux tolérable |
+| `resume.toml` | gagnantes par longueur d'onde et budget |
+| `inconnue.csv`, `inconnue_combinee.csv`, `inconnue_diagnostics.csv` | l'échantillon inconnu : valeur et incertitudes par lecture et par longueur d'onde, moyenne des longueurs d'onde, contrôles, t₀ et tension rapport/forme |
+| `sorties/figures/fig17_deux_canaux_SCLM_…` à `fig23_…` | RMSE et concentration, RMSE et budget à 20 mM, blanchiment, carte finale, ajustement global, calibration, échantillon inconnu |
+
 ## 1. Ta titration et le test de M2 lent (`step1_titration.jl`)
 
 Ajustement global du canal bleu, sur les canaux 14–242 (ton gating ; les canaux 1–13 et 245–256 de tes .sdt
@@ -1232,7 +1652,7 @@ Il est mesuré par rapport au monde nominal tiré avec les mêmes germes. En mM,
 | `sorties/resultats/resultats_principaux.csv` | grille principale (fichier plat du plan) |
 | `sorties/resultats/nuisances.csv` | balayages de nuisance |
 | `sorties/resultats/resume.md` | tableaux chiffrés |
-| `sorties/figures/` | figures 1 à 16 et 7b (15 et 16 : banc du 2026-10-16), carte, titrations, deux synthèses (`synthese_{FR,EN}{,_dark}.png`, `synthese_revision_*`, étape 8) |
+| `sorties/figures/` | figures 1 à 23 et 7b (15 et 16 : banc du 2026-10-16 ; 17 à 23 : titration à deux canaux et inconnu, étape 15), carte, titrations, deux synthèses (`synthese_{FR,EN}{,_dark}.png`, `synthese_revision_*`, étape 8) |
 | `sorties/batterie/` | batterie H1–H5 (`batterie.csv`), tes données réajustées sous IRF et t₀ perturbés (`reel_perturbations.csv`), profil de χ²ᵣ en τ_DA, t₀ par histogramme, chiffres clés (`batterie_resume.toml`) |
 | `sorties/reel/` | le facteur 8 : résumé (`facteur8.csv`), calibrations, toutes les lectures (`amincis_tirages.csv`, ignoré par git) |
 | `sorties/incertitude/` | mondes IRF/t₀ (`mondes_grille.csv`, `mondes_K_apparents.csv`), variance paramétrique, décomposition par Monte-Carlo, survie du classement (`classement.csv`) |
@@ -1240,4 +1660,6 @@ Il est mesuré par rapport au monde nominal tiré avec les mêmes germes. En mM,
 | `sorties/calibration/eta_YD_inverse.toml` | η_YD tiré du K apparent et de la plage dynamique de tes images TIFF |
 | `sorties/resultats/fusion_*.csv` | fusion ratio + forme : résumé, trajectoire, réponse à un saut de gain |
 | `sorties/banc_2026-10-16/` | banc du 2026-10-16 (étape 14) : acquisitions, IRF, sommes, références, stabilité des techniques (détail dans la section du banc) |
-| `src/` | le simulateur : `Types`, `Photophysics`, `Instrument`, `Spectra`, `Generate`, `Fisher`, `Ajustement`, `Utilisateur`, `Ingest`, `Parametres`, `Estimators`, `Calibrate`, `Experiments`, pour la révision `Batterie`, `Reel`, `Incertitude`, `Jaune`, `Fusion`, et pour le banc `Banc` ; `Figures`, `Resume` |
+| `sorties/deux_canaux_2026-10-16_SCLM/`, `…_KIRIN/` | titrations à deux canaux SCLM et KIRIN (étape 15) : le fichier plat `resultats_deux_canaux.csv`, les règles, la carte finale (détail dans la section de l'étape 15) |
+| `parametres_deux_canaux.toml` | budget visé, tirages du blanchiment, puissance laser par longueur d'onde (à mesurer) |
+| `src/` | le simulateur : `Types`, `Photophysics`, `Instrument`, `Spectra`, `Generate`, `Fisher`, `Ajustement`, `Utilisateur`, `Ingest`, `Parametres`, `Estimators`, `Calibrate`, `Experiments`, pour la révision `Batterie`, `Reel`, `Incertitude`, `Jaune`, `Fusion`, pour le banc `Banc`, et pour l'étape 15 les sept modules de `deux_canaux/` (`Charger`, `Global`, `Lectures`, `Calibrer`, `Amincir`, `Blanchir`, `Agreger`, plus `Dessins`) ; `Figures`, `Resume` |
