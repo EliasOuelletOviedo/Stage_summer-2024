@@ -1,0 +1,13 @@
+critere,valeur,seuil,adosse,tenu
+innovation moyenne, transitoires, N = 1000 (β retenu),+0.001,< 0,05,référence : −0,274 à l'étape 1,oui
+autocorrélation d'innovation, transitoires / plateaux, N = 1000,-0.184 / -0.194,< 0,10,blancheur théorique,non
+hausse de la RMSE sur les plateaux, β retenu contre β = 0,+0.0 % / +0.0 %,≤ 5 %,référence : course 1, même budget,oui
+P₁₁/err² par phase, boucle fermée, N = 1000,2.27 / 1.49 / 2.13 / 1.99 / 1.55,dans [0,5 ; 2],conservé de l'étape 1,non
+biais du filtre, 5 phases, boucle fermée sans dérive, N = 1000 (mM),+0.51 / +1.30 / +0.31 / +0.64 / +0.59,< ±0,30,remesuré contre la bonne dynamique,non
+erreur de régulation établie, sans dérive, fusion (mM),-0.07 / +0.09,< 0,5,10 % du créneau de 20 mM,oui
+erreur réelle, rampe 20 %, fusion (mM),-0.70 / -0.27,< 1,5,la fusion doit tenir sa promesse,oui
+erreur réelle, rampe 20 %, ratio seul (mM),-7.20 / -7.12,> 4 attendu,sinon la question 2 répond non,oui
+accord Fisher / Monte-Carlo, var J/B et var 5a (%),0.7 / 0.4 ; 3.5 / 1.2,< 5,tenu à 0,6 et 0,4 % à l'étape 1,oui
+ρ₁₂ en boucle fermée contre boucle ouverte, régime établi, N = 1000,0.68 contre 0.68,≤ BO + 0,1,référence : boucle ouverte au même budget,oui
+marge de gain avant le coude (Kp coude / Kp nominal),> 10.0 (pas de coude dans le balayage),≥ 3,opinion, à réviser après la course 5,oui
+échecs de 5a, C = 5 mM, N = 1000 (%),32.8,à rapporter,32,7 % mesuré à l'étape 1,—

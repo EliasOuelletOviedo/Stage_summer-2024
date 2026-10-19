@@ -1,0 +1,9 @@
+cle,valeur,note
+beta_retenu,0.0,aucun β ne passe tout le test 1 ; plus petit β qui corrige l'innovation moyenne de transitoire
+Kp_nominal,0.01388,τ_BF = 3 s au maintien de 25 mM
+Kp_coude,aucun,β retenu
+Kp_coude_beta0,aucun,contrôle, Q constant
+Kp_tau_BF_5s,0.00735,gain nécessaire pour τ_BF = 5 s
+calibration_P11_N1000,1.467,c des variantes B et C
+sigma0_carre_variante_C,3.0046,médiane de P₁₁/c en régime établi, course 3
+issue,A — la fusion gagne,posée d'avance dans le plan

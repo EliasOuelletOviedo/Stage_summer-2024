@@ -1,0 +1,189 @@
+# params.toml — le seul endroit pour les constantes du simulateur Kalman, étape 2 (boucle fermée).
+#
+# Le bloc « step0 » (en bas) vient de l'étape 1, inchangé : titration du 2026-10-16 à 800 nm, IRF,
+# fond, Langmuir. Le reste se règle ici. Chaque seuil de [criteres] dit à quoi il est adossé.
+
+[trajectoire]
+dt_s = 0.1                 # 10 Hz
+duree_s = 90.0             # 900 pas
+
+[photons]
+N_bleu = 1000.0                    # budget des tests
+balayage = [1000.0, 3000.0]        # N = 300 abandonné (5a échoue 30 à 42 % du temps)
+
+[derive]
+# g multiplie le seul canal jaune ; aucune lecture ne le connaît (repris de l'étape 1).
+forme = "rampe"
+alpha = 0.0
+balayage_alpha = [0.0, 0.10, 0.20]     # aucune, rampe 10 %, rampe 20 % ; plus le saut ci-dessous
+saut = 0.05
+t_saut_s = 45.0
+
+[lectures]
+C_reference_mM = 20.0
+gain_minimal_jaune = 0.10
+grille_calibration_mM = [0.0, 131.0, 0.25]
+bornes_fraction = [-0.5, 1.5]
+iterations_max = 60
+diffusion_5a = true             # bloc clos de l'étape 1 (composante de diffusion dans 5a)
+
+[physiologie]
+# dC/dt = J_eNpHR(u) − k_pompe·(C − C_repos) + ξ ;  J_eNpHR(u) = J_max·u/(u + u_demi), u ∈ [0, 1]
+C_repos_mM = 5.0
+k_pompe_par_s = 0.05            # τ = 20 s ; posé, pas mesuré : balayé (robustesse)
+J_max_mM_par_s = 8.0            # 30 mM en ~2 s à pleine commande ; posé : balayé
+u_demi = 0.3
+sigma_xi_mM = 0.05              # bruit physiologique, par pas de 0,1 s (opinion : 0,5 mM d'écart-type stationnaire)
+balayage_k_pompe = [0.02, 0.05, 0.15]
+balayage_J_max = [4.0, 8.0, 16.0]
+
+[scenario]
+# consigne : [début (s), valeur (mM)] ; la boucle est inactive avant t_activation (u = 0)
+consigne = [[0.0, 5.0], [10.0, 25.0], [50.0, 10.0], [65.0, 15.0]]
+t_activation_s = 10.0
+# phases de la consigne, pour les métriques par phase
+phases = [["repos", 0.0, 10.0], ["creneau_haut", 10.0, 30.0], ["plateau", 30.0, 50.0], ["descente", 50.0, 65.0], ["creneau_bas", 65.0, 90.0]]
+# fenêtres de régime établi (erreur de régulation, signatures de couplage)
+etabli = [[30.0, 50.0], [80.0, 90.0]]
+# transitoire / plateau, pour la blancheur par phase : |dC_vrai/dt| au-dessus / en dessous de ces seuils
+seuil_transitoire_mM_par_s = 0.5
+seuil_plateau_mM_par_s = 0.1
+
+[kalman]
+# état (C, g, ġ) : C suit la physiologie (u connu), g et ġ le modèle OU de l'étape 1 (repris tel quel)
+sigma_C0_mM = 1.2               # σ_C,0 par pas : le σ_C de l'étape 1
+sigma_wg = 1e-4                 # sur g, par pas (OU de l'étape 1)
+sigma_wgp = 1e-4                # sur ġ (s⁻¹), par pas
+tau_ou_s = 30.0
+sigma_gp0 = 2e-3
+C0_mM = 5.0
+sigma_C0_init_mM = 2.0
+g0 = 1.0
+sigma_g0 = 0.05
+# Q(u) : σ_C²(u) = σ_C,0² + β·(J(u)·Δt)², β = erreur relative sur le flux, au carré
+balayage_beta = [0.0, 0.01, 0.04, 0.1, 0.25]
+# filtre « ratio seul » (course 4) : deux états (C, g), même Q sur C. Sans 5a, g n'est pas observable :
+#   :ratio        g figé à 1 (σ nuls) — la calibration unique, ce que fait la pratique ; référence de la course 4
+#   :ratio_libre  g libre (σ_g0, marche aléatoire) — sans ancre, il dérive : montré comme pathologie
+sigma_wg_ratio_libre = 1e-4
+# diagnostic de la course 2 (hors plan) : σ_C,0 plus petits, pour voir si Q(u) agit quand le modèle de C est cru
+balayage_sigma_C0_diagnostic = [1.2, 0.3, 0.1]
+# filtre à quatre états (course 7) : k_pompe dans l'état
+k_pompe_init_par_s = 0.05
+sigma_k_init_par_s = 0.03
+sigma_wk_par_s = 1e-6           # par pas, pour la santé numérique seulement
+
+[regulateur]
+# PI sur l'estimation, anti-emballement par intégration conditionnelle ; Kp en u par mM, Ki en u par mM·s
+tau_BF_cible_s = 3.0            # cible 2–5 s ; Kp = (1/τ − k_pompe)/(dJ/du au maintien de C_ref)
+C_ref_reglage_mM = 25.0
+Ki_sur_Kp_par_s = 0.3333        # Ki = Kp/τ_BF
+balayage_Kp_decades = [-0.5, 1.0]     # Kp × 10^[−0,5 … 1,0], une décade et demie
+points_par_decade = 5
+facteur_coude_beta = 0.7        # β balayé à Kp = coude − 30 %
+# variantes : A aveugle, B zone morte √(P₁₁/c), C gain × σ₀²/(P₁₁/c + σ₀²) ; c = P₁₁/err² mesuré (course 3)
+Kp_variante_C_facteur = 2.0     # gain nominal de C doublé : le facteur vaut ½ quand P₁₁/c = σ₀² (médiane de la course 3)
+
+[course]
+graine = 20261018               # graine du pas k de la répétition r : graine + 10 000·r + k (par condition, pas par course)
+repetitions_performance = 8
+repetitions_statistiques = 40   # innovations et signatures de couplage
+fin_biais_s = 30.0
+verification_R_tirages = 4000
+
+[criteres]
+# Chaque seuil est adossé à une valeur théorique, à une mesure de référence, ou marqué « opinion ».
+innovation_transitoire_max = 0.05           # référence : −0,274 à l'étape 1
+autocorr_par_phase_max = 0.10               # blancheur théorique d'un filtre bien spécifié
+hausse_rmse_plateaux_max = 0.05             # référence : course 1, même budget
+P11_sur_err2 = [0.5, 2.0]                   # conservé de l'étape 1
+biais_filtre_phases_mM = 0.30               # remesuré contre la bonne dynamique
+erreur_regulation_etablie_mM = 0.5          # 10 % du créneau de 20 mM
+erreur_reelle_fusion_rampe20_mM = 1.5       # la fusion doit tenir sa promesse
+erreur_reelle_ratio_rampe20_mM = 4.0        # attendu, sinon la question 2 répond non
+accord_fisher_pct = 5.0                     # tenu à 0,6 et 0,4 % à l'étape 1
+rho12_hausse_max = 0.1                      # référence : boucle ouverte au même budget
+marge_coude_min = 3.0                       # opinion, à réviser après la course 5
+# signatures de couplage (seuils d'alerte du plan)
+agitation_sur_A_max = 2.0
+correlation_P11_agitation_max = 0.3
+respiration_P11_max = 0.5
+coude_rapport = 1.5             # coude : agitation/Kp dépasse 1,5 × sa valeur au plus petit Kp (règle fixée d'avance)
+
+[video]
+ips = 30
+
+# >>> step0 : écrit par step0_params.jl, ne pas éditer
+
+[titration]
+date = "2026-10-16"
+longueur_onde_nm = 800
+modele_global = "libre"
+source = "FLIM-FRET_2-channels/sorties/deux_canaux_2026-10-16_SCLM (global_parametres.csv, global_cellules.csv)"
+irf = "FLIM-FRET_2-channels/Data/2026-10-16/IRF_800_16X.sdt"
+
+[instrument]
+pas_ns = 0.06400390634153652
+periode_ns = 12.5
+n_canaux = 256
+fenetre = [14, 195]   # le TAC coupe les canaux 2–13 et 196–256
+t0_bleu_ns = 0.03821636963420101
+t0_jaune_ns = 0.008105472406401956
+fond_bleu_cps_par_canal = 10.284615384615385    # niveau plat avant le pic de l'IRF, par seconde
+fond_jaune_cps_par_canal = 17.96923076923077
+irf_bleu = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8.022291273e-06, 0, 0.0001644569711, 0.000338273282, 0, 0.0003730365442, 0, 0, 7.754881564e-05, 6.016718455e-05, 0.0005816161173, 0, 0, 0.002458832275, 0.1919186112, 0.3167882489, 0.1675148011, 0.08253600672, 0.04292326946, 0.02408158135, 0.0131485354, 0.009081233721, 0.007030201253, 0.005361564668, 0.004405574958, 0.004475101482, 0.003884126025, 0.003275768937, 0.002285015964, 0.00348434851, 0.002823846528, 0.002789083266, 0.002406687382, 0.003032426101, 0.002823846528, 0.002267634333, 0.002145962916, 0.002302397595, 0.001867856818, 0.002493595537, 0.002180726178, 0.001363789516, 0.001641895614, 0.002006909867, 0.001589750721, 0.002076436391, 0.002198107809, 0.001641895614, 0.001850475187, 0.001520224196, 0.001242118099, 0.001537605827, 0.001728803769, 0.001815711925, 0.001972146605, 0.001172591574, 0.00141593441, 0.001346407885, 0.001381171148, 0.001502842565, 0.0007728140593, 0.001155209943, 0.001624513983, 0.001050920157, 0.001363789516, 0.0007380507971, 0.001294262992, 0.001398552779, 0.001329026254, 0.000529471224, 0.0005120895929, 0.0009118671081, 0.001189973206, 0.0007380507971, 0.0009813936324, 0.0005642344862, 0.0005642344862, 0.001085683419, 0.0009640120013, 0.001329026254, 0.001120446681, 0.001450697672, 0.000529471224, 0.0006163793795, 0.000703287535, 0.0006859059039, 0.0005989977484, 0.0005120895929, 0.0006685242728, 0.0008075773215, 0.0007901956904, 0.0004947079619, 0.0003904181753, 0.0007380507971, 0.0007901956904, 0.0001992202333, 0.0004077998064, 0.0003730365442, 0.0007554324282, 0.0004773263308, 0, 0, 0.0006511426417, 0.000338273282, 0.0003208916509, 0.0002166018644, 0, 0, 0.0004947079619, 0.0001123120778, 0.0005816161173, 0.0002166018644, 2.540392237e-05, 0.0006859059039, 0.0002687467577, 0.0003208916509, 0.0006337610106, 0.000338273282, 0.0001644569711, 0, 0, 0.0008771038459, 0.0005816161173, 0.0003035100198, 0.0003035100198, 0.0004251814375, 0.0004251814375, 0.0006163793795, 0.0003035100198, 0, 0.0004425630686, 0.0004947079619, 0.0001992202333, 0, 0.0004773263308, 0.0004251814375, 0.0002166018644, 0, 0, 0.001016156895, 0.0006163793795, 0.0001644569711, 0.0002513651266, 0.0008249589526, 0.0005468528551, 0.0004947079619, 0.0003208916509, 0, 9.493044673e-05, 8.022291273e-06, 2.540392237e-05, 0, 0.0004077998064, 0, 0.0004077998064, 0.0006511426417, 0.0002513651266, 0.0001644569711, 0.0001296937089, 0, 0, 9.493044673e-05, 0.0004251814375, 0.0004425630686, 9.493044673e-05, 0.0004773263308, 0.0003730365442, 0, 0.0003556549131, 0, 0.000338273282, 0.0002513651266, 4.278555346e-05, 0.0004599446997, 9.493044673e-05, 0.0007380507971, 0, 6.016718455e-05, 2.540392237e-05, 0.0002861283887, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+irf_jaune = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2.874849352e-05, 0, 2.142044615e-05, 0.0002412618672, 0, 5.8060683e-05, 0, 0.0002852301514, 0, 9.470091984e-05, 0, 1.409239879e-05, 0, 2.142044615e-05, 8.737287247e-05, 0.02921636116, 0.3131562125, 0.283983256, 0.1442813609, 0.07420324396, 0.03698409137, 0.01991706905, 0.01052251233, 0.006074387573, 0.004205735494, 0.002930655251, 0.003333697857, 0.002021977378, 0.001956024951, 0.001970681046, 0.00148702992, 0.001435733588, 0.001311156783, 0.00162626282, 0.001523670157, 0.001560310394, 0.001010706841, 0.0008568178462, 0.000893458083, 0.001355125067, 0.001105971457, 0.0008421617514, 0.001201236072, 0.001105971457, 0.0009081141777, 0.0009081141777, 0.001340468972, 0.0006956008041, 0.0008275056567, 0.000812849562, 0.0005783520462, 0.0009813946514, 0.0004391191462, 0.0006956008041, 0.0009154422251, 0.001384437257, 0.0008714739409, 0.0008421617514, 0.0006296483777, 0.000893458083, 0.0002412618672, 0.0005636959514, 0.0008568178462, 0.000673616662, 0.0006956008041, 0.0006662886146, 0.0003951508619, 0.0009227702725, 0.0008055215146, 0.0005270557146, 0.0009740666041, 0.0001240131093, 0.000614992283, 0.0005783520462, 0.0004317910988, 0.0005050715725, 0.0004391191462, 0.0005563679041, 0.0002705740567, 0.000754225183, 0.0001386692041, 0.000673616662, 0.0003731667198, 0.0002632460093, 0.0003511825777, 0.0003438545304, 0.0003218703883, 0.0003658386725, 0.0003658386725, 0.0004244630514, 0.0005563679041, 0, 0.0004391191462, 0.0002339338198, 0.0001313411567, 0.0005490398567, 0.0002779021041, 0.0003951508619, 0, 0.0002119496777, 0.0002998862462, 0.0002998862462, 0.0004098069567, 0.0002998862462, 0.0004537752409, 0.0001166850619, 0.0002339338198, 0.0001899655356, 0.0001753094409, 6.764351417e-06, 0.0002925581988, 0.0002559179619, 0.0002266057725, 8.737287247e-05, 0.0001240131093, 0.0003731667198, 0.000614992283, 0, 0, 0.0002925581988, 0.0004904154777, 0, 0.0001826374883, 0.0001313411567, 0.0002192777251, 0.0002925581988, 1.409239879e-05, 0.0001020289672, 0.0002559179619, 9.470091984e-05, 0, 0, 0.0003218703883, 0.0001606533462, 0, 0, 0.0003511825777, 0, 8.00448251e-05, 0.0002559179619, 0.0002632460093, 5.073263563e-05, 0.0003072142935, 0.0001533252988, 0.0003218703883, 0, 0.0003878228146, 8.737287247e-05, 2.874849352e-05, 0.0004684313356, 0, 0.0004904154777, 0, 0, 0.0001020289672, 0.0002119496777, 0.0001020289672, 0, 0, 0.0003291984356, 0.0001533252988, 7.271677773e-05, 0.0004317910988, 0.0002119496777, 0.0002925581988, 0.0003291984356, 0.0001679813935, 0.0003291984356, 0, 0.0002266057725, 0.0003291984356, 0.0003218703883, 4.340458826e-05, 0.0003072142935, 0, 0.0003438545304, 0.0001386692041, 0, 0.0001240131093, 8.00448251e-05, 0.0004244630514, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+
+[durees_de_vie]
+tau_diffusion_ns = 0.001   # copie de l'IRF (lumière diffusée), comme dans l'ajustement global
+tau2_ns = 0.7209208203358397
+tau3_ns = 2.7216745837614718
+tauJ_ns = 1.0593427799833393
+tauA_ns = 3.2527789923100023
+
+[points]   # les 8 concentrations de l'ajustement global, pour mémoire
+cl_mM = [0, 2.5, 5, 10, 20, 40, 80, 131]
+# JB : rapport des photons jaune/bleu (fond exclu) ; d : fraction d'intensité de la diffusion ;
+# p : fraction d'amplitude de τ₂ dans le bleu ; q : fraction d'amplitude de τ_J dans le jaune
+JB = [5.950901646, 5.547705397, 5.188342683, 4.593418129, 3.820931186, 2.8730939, 2.043965801, 1.651489645]
+d_bleu = [0.07926008226, 0.07227692471, 0.06390918585, 0.05658368704, 0.05615582834, 0.04407694239, 0.03606831908, 0.03446563244]
+p_bleu = [0.7067848217, 0.6968917951, 0.7020295919, 0.6848634699, 0.6549601764, 0.6294808179, 0.5899192718, 0.5760385779]
+d_jaune = [0.003723431904, 0.002422048294, 0.0009133212072, 0.000270905543, 0.002603150237, 0.001862808378, 0.002914938452, 0.004445012268]
+q_jaune = [0.07748828262, 0.07888820584, 0.08668905178, 0.09739505332, 0.1189875064, 0.1601713171, 0.2195460112, 0.2776404519]
+
+[langmuir.JB]
+y0 = 5.96167317068142
+yinf = 0.6674757186937521
+K_mM = 28.923443704991456
+rmse = 0.01822785526049366
+ecart_max = 0.029326853992541757
+
+[langmuir.d_bleu]
+y0 = 0.07804344138158022
+yinf = 0.029305880276886603
+K_mM = 16.358745652400533
+rmse = 0.002376116909934735
+ecart_max = 0.004921651267767384
+
+[langmuir.p_bleu]
+y0 = 0.710057165113507
+yinf = 0.5135782254299435
+K_mM = 56.396220514583426
+rmse = 0.004559299722186761
+ecart_max = 0.007973325426856026
+
+[langmuir.d_jaune]
+y0 = 0.001769156416484956
+yinf = 0.17670223837505322
+K_mM = 10000.0
+rmse = 0.001043319268808241
+ecart_max = 0.001954275487736249
+
+[langmuir.q_jaune]
+y0 = 0.07469103254724134
+yinf = 0.6167508202982158
+K_mM = 218.77616239495518
+rmse = 0.0014450435763388564
+ecart_max = 0.0027972500741959144
+# <<< step0
+

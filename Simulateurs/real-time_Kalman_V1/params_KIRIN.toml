@@ -1,0 +1,103 @@
+# params_KIRIN.toml — les constantes du simulateur Kalman temps réel (étape 1), capteur KIRIN.
+# Copie de params.toml (SCLM), mêmes réglages, sauf la plage calibrée (titration KIRIN 0–150 mM) et les bornes
+# de fraction de 5a (q ≈ −0,5 chez KIRIN : composante rapide du jaune en montée, sensibilisée).
+#
+# Le bloc entre les marqueurs « step0 » (en bas) est écrit par step0_params.jl à partir de
+# l'ajustement global de la titration ; ne pas l'éditer à la main, relancer step0. Le reste se
+# règle ici.
+
+[trajectoire]
+dt_s = 0.1                 # 10 Hz
+duree_s = 90.0             # 900 pas
+C_repos_mM = 5.0           # neurone mature
+delta_C_mM = 25.0          # sommet à 30 mM, près du K apparent de J/B
+t_debut_montee_s = 10.0    # 10 s de repos
+tau_montee_s = 2.0         # entrée forte par eNpHR
+t_fin_montee_s = 20.0      # 10 s de montée, puis 70 s de relaxation
+tau_KCC2_s = 25.0          # extrusion
+
+[photons]
+N_bleu = 1000.0                       # photons bleus attendus par acquisition de 0,1 s (10 kcps)
+balayage = [300.0, 1000.0, 3000.0]
+
+[derive]
+# g multiplie le seul canal jaune ; aucune lecture ne le connaît.
+# "rampe" : g = 1 + α·t/T, de t = 0 à T (commence avant la montée, continue après)
+# "saut"  : g = 1, puis 1 + saut à partir de t_saut
+forme = "rampe"
+alpha = 0.10
+balayage_alpha = [0.0, 0.05, 0.10, 0.20]
+saut = 0.05
+t_saut_s = 45.0
+
+[lectures]
+C_reference_mM = 20.0           # là où se choisissent les poids p/q de l'observable de 5a
+gain_minimal_jaune = 0.10       # q entre dans l'observable de 5a s'il réduit σ_C d'au moins 10 % à C_reference
+grille_calibration_mM = [0.0, 150.0, 0.25]   # début, fin, pas ; hors de cette plage, la lecture échoue
+bornes_fraction = [-1.5, 1.5]  # KIRIN : q ≈ −0,5, au bord des bornes de SCLM   # p ou q hors de ces bornes : échec de 5a
+iterations_max = 60
+diffusion_5a = true             # composante de diffusion (τ_diff figé, amplitude libre) dans 5a ; false : le modèle à 4 paramètres d'avant
+
+[kalman]
+# Tous les filtres ci-dessous tournent sur les mêmes histogrammes, aux trois budgets (comparaisons appariées).
+sigma_wC_mM = 1.2     # saut de Cl⁻ non prévu en 0,1 s : la pente max de la montée (25 mM / 2 s × 0,1 s)
+reference = "OU"      # filtre de référence (deuxième passe, correctif B) : modèle (C, g, ġ) avec rappel de ġ, voir [kalman.vitesse]
+sigma_wg = 3e-3       # marche aléatoire (MA) : σ_w,g par défaut, par pas
+# σ_w,g de la marche aléatoire selon le budget (critère P₁₁/err² ≥ 1 et le plus proche de 1 sous la rampe de 20 %,
+# première passe). Table figée : en boucle fermée, le budget varie et ce réglage devra s'adapter en ligne.
+sigma_wg_par_budget = [[300.0, 1e-3], [1000.0, 3e-3], [3000.0, 3e-3]]
+balayage_sigma_wg = [1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2]   # 1e-4 : l'ancien défaut ; 1e-2 et 3e-2 : le sur-desserrage
+C0_mM = 5.0
+sigma_C0_mM = 2.0
+g0 = 1.0
+sigma_g0 = 0.05
+
+[kalman.vitesse]
+# Modèle (C, g, ġ), correctif 2 : g_{k+1} = g_k + Δt·ġ_k + w_g ; ġ_{k+1} = ρ·ġ_k + w_ġ (ġ en s⁻¹)
+sigma_wg = 1e-4                         # Q sur g n'est pas élargi : la pente porte la dérive
+balayage_sigma_wgp = [1e-5, 1e-4, 1e-3] # s⁻¹ par pas ; une rampe de 20 % en 90 s vaut ġ = 2,2e-3 s⁻¹
+sigma_gp0 = 2e-3                        # s⁻¹ : la pente initiale est inconnue, de l'ordre des dérives envisagées
+# variante Ornstein-Uhlenbeck (rappel de ġ vers 0), à la valeur centrale du balayage
+tau_rappel_s = 30.0
+sigma_wgp_rappel = 1e-4
+
+[criteres]
+# Critères de sortie vers l'étape 2, chiffrés d'avance (corrections de l'étape 1), aux budgets de fonctionnement
+budgets = [1000.0, 3000.0]     # 300 photons n'est pas un régime de fonctionnement : borne basse, fichier plat seulement
+biais_rampe10_max_mM = 0.3
+P11_sur_err2 = [0.8, 2.0]
+# Comparaison d'un réglage à la référence, en quatre conditions écrites séparément dans criteres.csv :
+# RMSE sur toutes les rampes au plus égale ; RMSE sur le saut au plus 10 % au-dessus ; |biais| sur le saut au plus
+# 0,1 mM au-dessus ; RMSE sans dérive au plus 10 % au-dessus. Le temps de rattrapage du saut n'en fait pas partie.
+tolerance_saut = 0.10
+tolerance_biais_saut_mM = 0.1
+
+[seuils_relance]
+# Deuxième passe, « la relance de vérification » : seuils fixés avant la relance ; « avant » = première passe.
+ecart_p_avec_diffusion_pct = 0.5          # avant : 10,4 %
+ecart_q_avec_diffusion_pct = 0.5          # avant : 14,2 % à 0 mM, 5,9 % à 130 mM
+non_regression_sans_diffusion = 1e-12     # avant : 1,3e-15
+biais_observable_N1000_mM = 0.10          # C = 20 mM ; avant : +0,26
+biais_observable_N300_mM = 0.40           # C = 20 mM ; avant : +1,30
+sigma_5a_N1000_avant_mM = 13.2165         # C = 20 mM ; ne doit pas monter de plus de 10 %
+sigma_5a_hausse_max = 0.10
+biais_inversion_N1000_mM = [2.5, 3.1]     # C = 20 mM ; avant : +2,81 ; doit rester (la courbure l'explique)
+biais_kalman_N1000_mM = 0.30              # les cinq phases (aucune, rampes 5/10/20 %, saut) ; avant : +0,28 … +0,21 (MA 3e-3)
+P11_sur_err2_N1000 = [0.5, 2.0]           # avant : 1,61 … 1,80
+accord_fisher_pct = 5.0                   # var J/B, var 5a, covariance à N = 1000 ; avant : 0,6 / 3,2 / 0,8 %
+
+[course]
+repetitions = 8        # courses indépendantes par scénario pour le résumé
+graine = 20261016      # graine du pas k de la répétition r : graine + 10 000·r + k
+fin_biais_s = 30.0     # biais moyen sur les 30 dernières secondes
+verification_R_tirages = 4000   # tirages pour comparer R (Fisher) à la dispersion réelle, et le biais de 5a
+concentrations_biais_mM = [5.0, 10.0, 20.0, 30.0]
+pas_amplitudes_mM = 5.0          # test d'amplitudes sans bruit sur toute la plage
+
+[video]
+ips = 30               # 900 images à 30 ips : 30 s de vidéo pour 90 s simulées (×3)
+N_bleu = 1000.0        # trois vidéos au filtre de référence : sans dérive, rampe, saut
+alpha = 0.10
+
+# >>> step0 : écrit par step0_params.jl, ne pas éditer
+# <<< step0
