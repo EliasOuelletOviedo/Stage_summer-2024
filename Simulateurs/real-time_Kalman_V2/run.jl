@@ -214,6 +214,7 @@ function main(; rapide = "--rapide" in ARGS)
 
     # 7 — filtre à quatre états : k_pompe estimable ? (boucle fermée sur ce filtre, sans dérive)
     K7, traces7 = [], Dict()
+    fin_phase(nom) = p0.toml["scenario"]["phases"][findfirst(x -> x[1] == nom, p0.toml["scenario"]["phases"])][3]
     for k in p0.toml["physiologie"]["balayage_k_pompe"]
         ph = physio(p0; k)
         s = spec("fusion4", :fusion4, β_ret)
@@ -222,8 +223,8 @@ function main(; rapide = "--rapide" in ARGS)
         for (c, T) in res
             t = c[:t]
             push!(K7, (k_vrai = k, k_final = T["fusion4"][:k_hat][end], sigma_k_final = sqrt(T["fusion4"][:P44][end]),
-                       P44_repos_debut = T["fusion4"][:P44][findlast(<(10.0), t)], P44_fin_creneau = T["fusion4"][:P44][findlast(<(30.0), t)],
-                       P44_fin_descente = T["fusion4"][:P44][findlast(<(65.0), t)], erreur_reelle = metriques(c, T["fusion4"], p).erreur_reelle))
+                       P44_repos_debut = T["fusion4"][:P44][findlast(<(fin_phase("repos")), t)], P44_fin_creneau = T["fusion4"][:P44][findlast(<(fin_phase("creneau_haut")), t)],
+                       P44_fin_descente = T["fusion4"][:P44][findlast(<(fin_phase("descente")), t)], erreur_reelle = metriques(c, T["fusion4"], p).erreur_reelle))
         end
         @printf("course 7  k vrai %.2f : k̂ final %.3f ± %.3f\n", k, mean(x.k_final for x in K7 if x.k_vrai == k), mean(x.sigma_k_final for x in K7 if x.k_vrai == k))
     end

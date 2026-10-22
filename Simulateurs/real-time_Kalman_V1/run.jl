@@ -4,7 +4,7 @@
 # résumé par scénario et par filtre, les vérifications, les critères de sortie, trois vidéos.
 # Simule tout d'abord, rend ensuite.
 #
-# Lancer depuis ce dossier :  julia --project=. -t auto run.jl  [--rapide]
+# Lancer depuis ce dossier :  julia --project=. -t auto run.jl  [--rapide] [--params f.toml] [--sorties dossier]
 # (--rapide : 2 répétitions, sans vidéo, pour vérifier que tout tourne)
 
 using Printf, Statistics, LinearAlgebra, StableRNGs, Base.Threads
@@ -12,7 +12,10 @@ for f in ("params", "generate", "estimate", "kalman")
     include(joinpath(@__DIR__, "src", f * ".jl"))
 end
 
-const SORTIES = joinpath(@__DIR__, "sorties")
+argument(nom, defaut) = (i = findfirst(==(nom), ARGS); i === nothing ? defaut : ARGS[i+1])
+# --params : un autre fichier de paramètres (autre capteur) ; --sorties : un autre dossier de sorties
+const SORTIES = joinpath(@__DIR__, argument("--sorties", "sorties"))
+const PARAMS = joinpath(@__DIR__, argument("--params", "params.toml"))
 const COLONNES = [:t, :C_vrai, :g_vrai, :C_ratio, :C_5a, :C_kalman, :g_chapeau, :P11, :P22, :rho12,
                   :innov_ratio, :innov_5a, :N_bleu, :N_jaune, :gp_chapeau, :z_ratio, :z_5a]
 
@@ -255,7 +258,7 @@ include(joinpath(@__DIR__, "src", "figures.jl"))
 
 function main(; rapide = "--rapide" in ARGS)
     mkpath(SORTIES)
-    p0 = charger_params()
+    p0 = charger_params(PARAMS)
     nrep = rapide ? 2 : p0.toml["course"]["repetitions"]
     vid, ref = p0.toml["video"], reference(p0)
     configs = configurations(p0)

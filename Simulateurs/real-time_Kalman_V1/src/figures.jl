@@ -200,10 +200,15 @@ function figure_courbure(biais5a, resume, p::Params, chemin)
     fig = Figure(size = (1600, 560), backgroundcolor = SURFACE, fontsize = 14)
     Label(fig[0, 1:3], "Transmettre au filtre l'observable brute plutôt que la concentration inversée évite le biais de courbure de la calibration",
           fontsize = 16, font = :bold)
-    a = axe(fig[1, 1], title = "(1) biais d'inversion contre σ², C = 20 mM", xlabel = "σ² de l'observable (mM²-équivalent)",
-            ylabel = "biais de la concentration inversée (mM)", xscale = log10, yscale = log10)
     s2 = [b(N, "5a").sigma_mM^2 for N in Ns]
     bi = [b(N, "5a").biais_inverse_mM for N in Ns]
+    jb2 = [b(N, "J/B").sigma_mM^2 for N in Ns]
+    jbi = [b(N, "J/B").biais_inverse_mM for N in Ns]
+    # axe logarithmique si tous les biais sont positifs (SCLM) ; sinon linéaire (un biais négatif ne s'y place pas)
+    lg = all(>(0), bi) && all(>(0), jbi)
+    a = axe(fig[1, 1], title = "(1) biais d'inversion contre σ², C = 20 mM", xlabel = "σ² de l'observable (mM²-équivalent)",
+            ylabel = "biais de la concentration inversée (mM)", xscale = log10, yscale = lg ? log10 : identity)
+    lg || hlines!(a, [0.0], color = :black, linewidth = 0.8)
     k = sum(bi .* s2) / sum(s2 .^ 2)
     x = exp10.(range(log10(minimum(s2)) - 0.3, log10(maximum(s2)) + 0.2; length = 50))
     lines!(a, x, k .* x, color = (COULEURS["5a"], 0.6), linestyle = :dash, label = @sprintf("biais = %.4f·σ² (5a)", k))
@@ -211,9 +216,7 @@ function figure_courbure(biais5a, resume, p::Params, chemin)
     for (N, s, y) in zip(Ns, s2, bi)
         text!(a, s, y, text = @sprintf("  %g", N), align = (:left, :center), fontsize = 12)
     end
-    jb2 = [b(N, "J/B").sigma_mM^2 for N in Ns]
-    jbi = [b(N, "J/B").biais_inverse_mM for N in Ns]
-    ok = jbi .> 0
+    ok = lg ? jbi .> 0 : trues(length(jbi))
     scatter!(a, jb2[ok], jbi[ok], color = COULEURS["J/B"], markersize = 12, label = "J/B")
     axislegend(a, position = :lt, framevisible = false)
     for (j, (titre, vals, noms)) in enumerate((

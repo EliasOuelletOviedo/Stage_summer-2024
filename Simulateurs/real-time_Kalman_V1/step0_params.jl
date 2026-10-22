@@ -1,6 +1,6 @@
 # step0_params.jl — le pont unique entre la titration et le simulateur.
 #
-# Lit, une fois, l'ajustement global de la titration SCLM du 2026-10-16 à 800 nm (modèle
+# Lit, une fois, l'ajustement global d'une titration du 2026-10-16 (SCLM par défaut, ou KIRIN) à 800 nm (modèle
 # « libre » de l'étape 15 du simulateur FLIM-FRET à deux canaux), les IRF mesurées et le
 # fond avant le pic, ajuste une Langmuir sur chaque quantité qui dépend du Cl⁻, et écrit le
 # tout dans le bloc « step0 » de params.toml. Ensuite, le simulateur ne relit jamais la
@@ -8,6 +8,8 @@
 #
 # Lancer depuis ce dossier, dans l'environnement du simulateur précédent (lecteur .sdt) :
 #   julia --project=../FLIM-FRET_2-channels step0_params.jl
+# Autre titration, autre fichier de paramètres (le bloc « step0 » de ce fichier est remplacé) :
+#   julia --project=../FLIM-FRET_2-channels step0_params.jl --titration KIRIN --params params_KIRIN.toml
 
 const ANCIEN = normpath(joinpath(@__DIR__, "..", "FLIM-FRET_2-channels"))
 include(joinpath(ANCIEN, "src", "SimFLIMFRET.jl"))
@@ -16,7 +18,10 @@ const S = SimFLIMFRET
 
 const LAMBDA = 800
 const DATE = "2026-10-16"
-const SORTIES = joinpath(ANCIEN, "sorties", "deux_canaux_2026-10-16_SCLM")
+argument(nom, defaut) = (i = findfirst(==(nom), ARGS); i === nothing ? defaut : ARGS[i+1])
+const TITRATION = argument("--titration", "SCLM")
+const FICHIER_PARAMS = argument("--params", "params.toml")
+const SORTIES = joinpath(ANCIEN, "sorties", "deux_canaux_2026-10-16_$(TITRATION)")
 const IRF = joinpath(ANCIEN, "Data", DATE, "IRF_$(LAMBDA)_16X.sdt")
 
 """
@@ -54,8 +59,8 @@ vec_toml(v) = "[" * join((@sprintf("%.10g", x) for x in v), ", ") * "]"
 io = IOBuffer()
 println(io, "# >>> step0 : écrit par step0_params.jl, ne pas éditer")
 println(io, "\n[titration]")
-println(io, "date = \"$DATE\"\nlongueur_onde_nm = $LAMBDA\nmodele_global = \"libre\"")
-println(io, "source = \"FLIM-FRET_2-channels/sorties/deux_canaux_2026-10-16_SCLM (global_parametres.csv, global_cellules.csv)\"")
+println(io, "capteur = \"$TITRATION\"\ndate = \"$DATE\"\nlongueur_onde_nm = $LAMBDA\nmodele_global = \"libre\"")
+println(io, "source = \"FLIM-FRET_2-channels/sorties/deux_canaux_2026-10-16_$(TITRATION) (global_parametres.csv, global_cellules.csv)\"")
 println(io, "irf = \"FLIM-FRET_2-channels/Data/$DATE/IRF_$(LAMBDA)_16X.sdt\"")
 println(io, "\n[instrument]")
 println(io, "pas_ns = $(pas)\nperiode_ns = 12.5\nn_canaux = $(length(irf_b))\nfenetre = [14, 195]   # le TAC coupe les canaux 2–13 et 196–256")
@@ -82,9 +87,9 @@ for (nom, y) in points
 end
 println(io, "# <<< step0")
 
-chemin = joinpath(@__DIR__, "params.toml")
+chemin = joinpath(@__DIR__, FICHIER_PARAMS)
 texte = read(chemin, String)
 i, j = findfirst("# >>> step0", texte), findfirst("# <<< step0", texte)
 (i === nothing || j === nothing) && error("marqueurs step0 introuvables dans params.toml")
 write(chemin, texte[1:first(i)-1] * String(take!(io)) * texte[last(j)+1:end])
-println("params.toml mis à jour (pas = $(round(pas, digits = 5)) ns, fond = $(round(niveau_b / duree_irf, digits = 2)) et $(round(niveau_j / duree_irf, digits = 2)) cps par canal)")
+println("$(FICHIER_PARAMS) mis à jour (pas = $(round(pas, digits = 5)) ns, fond = $(round(niveau_b / duree_irf, digits = 2)) et $(round(niveau_j / duree_irf, digits = 2)) cps par canal)")

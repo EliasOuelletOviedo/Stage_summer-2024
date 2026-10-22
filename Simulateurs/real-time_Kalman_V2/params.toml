@@ -5,7 +5,7 @@
 
 [trajectoire]
 dt_s = 0.1                 # 10 Hz
-duree_s = 90.0             # 900 pas
+duree_s = 180.0            # 1 800 pas (durées doublées le 2026-10-19 : le chlore a le temps de se stabiliser)
 
 [photons]
 N_bleu = 1000.0                    # budget des tests
@@ -17,7 +17,7 @@ forme = "rampe"
 alpha = 0.0
 balayage_alpha = [0.0, 0.10, 0.20]     # aucune, rampe 10 %, rampe 20 % ; plus le saut ci-dessous
 saut = 0.05
-t_saut_s = 45.0
+t_saut_s = 90.0
 
 [lectures]
 C_reference_mM = 20.0
@@ -39,12 +39,12 @@ balayage_J_max = [4.0, 8.0, 16.0]
 
 [scenario]
 # consigne : [début (s), valeur (mM)] ; la boucle est inactive avant t_activation (u = 0)
-consigne = [[0.0, 5.0], [10.0, 25.0], [50.0, 10.0], [65.0, 15.0]]
-t_activation_s = 10.0
+consigne = [[0.0, 5.0], [20.0, 25.0], [100.0, 10.0], [130.0, 15.0]]
+t_activation_s = 20.0
 # phases de la consigne, pour les métriques par phase
-phases = [["repos", 0.0, 10.0], ["creneau_haut", 10.0, 30.0], ["plateau", 30.0, 50.0], ["descente", 50.0, 65.0], ["creneau_bas", 65.0, 90.0]]
+phases = [["repos", 0.0, 20.0], ["creneau_haut", 20.0, 60.0], ["plateau", 60.0, 100.0], ["descente", 100.0, 130.0], ["creneau_bas", 130.0, 180.0]]
 # fenêtres de régime établi (erreur de régulation, signatures de couplage)
-etabli = [[30.0, 50.0], [80.0, 90.0]]
+etabli = [[60.0, 100.0], [160.0, 180.0]]
 # transitoire / plateau, pour la blancheur par phase : |dC_vrai/dt| au-dessus / en dessous de ces seuils
 seuil_transitoire_mM_par_s = 0.5
 seuil_plateau_mM_par_s = 0.1
@@ -88,7 +88,7 @@ Kp_variante_C_facteur = 2.0     # gain nominal de C doublé : le facteur vaut ½
 graine = 20261018               # graine du pas k de la répétition r : graine + 10 000·r + k (par condition, pas par course)
 repetitions_performance = 8
 repetitions_statistiques = 40   # innovations et signatures de couplage
-fin_biais_s = 30.0
+fin_biais_s = 60.0
 verification_R_tirages = 4000
 
 [criteres]
@@ -111,7 +111,7 @@ respiration_P11_max = 0.5
 coude_rapport = 1.5             # coude : agitation/Kp dépasse 1,5 × sa valeur au plus petit Kp (règle fixée d'avance)
 
 [video]
-ips = 30
+ips = 30                        # 1 800 images : 60 s de vidéo pour 180 s simulées (×3)
 
 # >>> step0 : écrit par step0_params.jl, ne pas éditer
 

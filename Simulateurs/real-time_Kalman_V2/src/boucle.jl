@@ -1,4 +1,4 @@
-# boucle.jl — une course de 90 s : la cellule, les deux histogrammes, les lectures, les filtres,
+# boucle.jl — une course (durée dans params.toml) : la cellule, les deux histogrammes, les lectures, les filtres,
 # le régulateur. Simule tout d'abord, rend ensuite.
 #
 # Un filtre « pilote » fournit Ĉ au régulateur (boucle fermée) ; `pilote = :oracle` fait réguler
