@@ -30,7 +30,9 @@ n_eta = 61
 s = 0.04
 w = 0.03
 s_saut = 0.5
-# lisseur hors ligne : η quasi constant pour une ROI (marche aléatoire de 0,2 % par trame sur ln η)
+# lisseur hors ligne : marche aléatoire de 0,2 % par trame sur ln η, échantillonnée sur la grille de η (pas de 1,83 %) :
+# le poids vers le point voisin vaut ~ 1e-19, donc η est en pratique CONSTANT dans le filtre et le lisseur
+# (il ne peut pas suivre une dérive ; cf. sorties_exemples/, scénario de dérive)
 s_eta_lisseur = 0.002
 # section 14 : 16 portes temporelles (η n'est jamais figé : la bascule vers le ratio seul a été retirée)
 portes = 16
@@ -118,3 +120,14 @@ n_tau = 4000
 tau_min_ns = 0.5
 tau_max_ns = 6.0
 graine = 20261023
+
+[exemples]
+# exemples.py : l'exemple de la section 15 sous d'autres conditions → sorties_exemples/
+sorties = "sorties_exemples"
+facteur_trames = 10                          # 3 000 trames, même forme de courbe (montée à 601, descente à 1 401)
+photons = [1000, 3000, 10000, 30000, 100000] # par trame (bleu + jaune)
+# η vrai : constant, ou dérive linéaire de la première à la dernière trame ; inconnu du filtre dans tous les cas
+scenarios = [{ nom = "eta_1", titre = "η = 1", eta_debut = 1.0, eta_fin = 1.0 },
+             { nom = "eta_1p1", titre = "η = 1,1", eta_debut = 1.1, eta_fin = 1.1 },
+             { nom = "eta_derive_1_a_1p1", titre = "η dérive de 1 à 1,1", eta_debut = 1.0, eta_fin = 1.1 }]
+graine = 20261024

@@ -27,6 +27,9 @@ python3 run.py --params params_SCLM.toml
 python3 boxplots.py
 # la même, avec η de chaque échantillon uniforme de 0,9 à 1,1 → sorties_boxplots_eta/ (~4,5 min)
 python3 boxplots.py --eta
+
+# l'exemple de la section 15 : 5 nombres de photons × 3 scénarios de η, 3 000 trames → sorties_exemples/ (~3 min)
+python3 exemples.py
 ```
 
 Un jeu de données = un fichier de paramètres : seul le bloc `[donnees]` diffère entre `params.toml` (SCLM_mCer3) et
@@ -51,18 +54,20 @@ leurs histogrammes sommés, versionnés par `step17_bruts_mCer3.jl` (`irf_bruts_
 
 | Fichier | Rôle | lignes |
 | --- | --- | --- |
-| `params.toml` | le seul endroit pour les constantes (données, grilles, transition, scénarios, graine, boxplots) ; SCLM_mCer3 | 120 |
-| `params_SCLM.toml` | les mêmes, pour la titration SCLM régulière à 800 nm | 93 |
+| `params.toml` | le seul endroit pour les constantes (données, grilles, transition, scénarios, graine, boxplots) ; SCLM_mCer3 | 133 |
+| `params_SCLM.toml` | les mêmes, pour la titration SCLM régulière à 800 nm | 95 |
 | `step0_calibration.py` | le pont unique avec les données : appelle le `sclm_hybride.py` du jeu, écrit sa calibration (`calibrer` sert aussi à boxplots.py) | 86 |
 | `calibration.json`, `calibration_SCLM.json` | la calibration ajustée (constantes, isothermes, IRF, fonds et décalages par acquisition) ; écrites par step0 | — |
 | `src/modele.py` | modèle direct μ_B, μ_Y (sections 3 à 7) : IRF ⊗ déclins périodiques, isothermes, η, A ; perturbations | 137 |
 | `src/filtre.py` | vraisemblance découpée ratio / FLIM (section 11), grille (c, η), transition, filtre et lisseur (13), temps réel à M ROI et portes (14 ; η jamais figé), lectures de référence | 179 |
 | `src/information.py` | Fisher et Cramér-Rao, nuisances par complément de Schur (section 10) | 50 |
 | `src/simulation.py` | les deux générateurs (lit les colonnes voie1/voie2 de step17 et bleu/jaune de step16), les trajectoires des sections 14 et 15 | 97 |
-| `src/figures.py` | rendu | 163 |
+| `src/figures.py` | rendu | 174 |
 | `src/estimateurs.py` | les 4 lectures d'un échantillon (temps de vie unique, FLIM du système, ratio, hybride à η du contexte), en bloc | 98 |
 | `boxplots.py` | partage des .sdt, calibration sur une moitié, échantillons et contextes tirés de l'autre (η = 1 ou variable), boxplots | 173 |
-| `run.py` | la course en 8 parties ; un CSV par partie, `journal.txt`, 5 figures | 396 |
+| `run.py` | la course en 8 parties ; un CSV par partie, `journal.txt`, 5 figures | 357 |
+| `src/exemple.py` | une course de la section 15 (trajectoire étirée, η constant ou par trame), partagée par run.py et exemples.py | 66 |
+| `exemples.py` | l'exemple de la section 15 sous 15 conditions (photons × η) | 80 |
 | `test/run_tests.py` | 13 vérifications : calibration = annexe, découpage exact, portes (93,7 % de l'information FLIM gardée), η retrouvé, η jamais figé, couverture du lisseur, amincissement | 167 |
 
 ## Sorties (`sorties/` pour SCLM_mCer3, `sorties_SCLM/` pour SCLM régulier)
@@ -285,6 +290,42 @@ Médiane de |écart| (mM), ratio / hybride :
 3. Les deux lectures par la forme donnent, aux fluctuations de tirage près, les mêmes boîtes qu'à η = 1 (à 10 000
    photons et 10 mM : 9,8 contre 9,7 mM de demi-largeur pour le FLIM, 17,4 contre 17,1 pour le temps de vie unique) :
    elles ne voient pas η, mais restent 5 à 10 fois plus dispersées que l'hybride.
+
+## L'exemple de la section 15 sous d'autres conditions (`sorties_exemples/`)
+
+`python3 exemples.py` (~3 min). La course de la section 15 (un soma ; 8 mM, montée vers 22 mM, retour vers 10 mM ;
+A −30 %) sur **3 000 trames** au lieu de 300, même forme de courbe (montée à la trame 601, τ 40 trames ; descente à
+1 401, τ 250), pour 1 000, 3 000, 10 000, 30 000 et 100 000 photons par trame et trois η vrais, inconnus du filtre :
+1, 1,1, et une dérive linéaire de 1 à 1,1 de la première à la dernière trame. Une figure par cas
+(`fig_exemple_<scénario>_<photons>.png`, les deux panneaux de `fig_exemple.png`), la table par trame
+(`exemple_<scénario>_<photons>.csv.gz`), `resume.csv`, `fig_resume.png`, `journal.txt`.
+
+Erreur typique sur toute la course (mM), ratio lu à η = 1 / filtre temps réel / lissé :
+
+| photons par trame | η = 1 | η = 1,1 | η dérive de 1 à 1,1 |
+| --- | --- | --- | --- |
+| 1 000 | 4,8 / 3,6 / 3,1 | 6,7 / 2,4 / 2,4 | 5,3 / 5,0 / 4,0 |
+| 3 000 | 2,9 / 1,8 / 2,0 | 6,0 / 1,2 / 0,8 | 4,0 / 2,5 / 2,1 |
+| 10 000 | 1,5 / 0,7 / 0,5 | 5,6 / 1,0 / 1,0 | 3,5 / 2,0 / 1,7 |
+| 30 000 | 0,9 / 0,5 / 0,4 | 5,6 / 0,6 / 0,4 | 3,2 / 2,0 / 1,5 |
+| 100 000 | 0,5 / 0,4 / 0,3 | 5,6 / 0,4 / 0,3 | 3,2 / 1,3 / 0,5 |
+
+1. **η constant et inconnu (1,1)** : le filtre retrouve η (1,084 à 1,098 dès 3 000 photons) et lit c à 0,3–1 mM près, là
+   où le ratio calibré garde ~ 5,6 mM d'erreur quel que soit le nombre de photons. Couverture des intervalles lissés à
+   95 % : 95 à 98 %.
+2. **Peu de photons et longue ligne de base** : à 1 000 et 3 000 photons, η finit trop bas (0,951 et 0,970 pour η = 1 ;
+   1,062 pour η = 1,1) — l'effet du point 1 de « Ce que la simulation apprend », plus fort ici avec 600 trames de ligne
+   de base statique — et les intervalles lissés ne contiennent la vraie valeur que 28 à 65 % du temps : ils sont trop
+   étroits, parce qu'ils supposent η connu à la précision de sa distribution a posteriori, qui ne voit pas ce biais.
+3. **η qui dérive : ce filtre ne le suit pas.** Il suppose η constant (section 14 du document) : la marche aléatoire de
+   `s_eta_lisseur` (0,2 % par trame) est plus fine que le pas de la grille de η (1,83 %), le poids vers le point voisin
+   vaut ~ 10⁻¹⁹, et η reste en pratique constant. Le filtre choisit un η de compromis (0,98 à 1,04 dans le lisseur) :
+   trop haut au début, trop bas à la fin ; à 10 000 et 30 000 photons, l'erreur du filtre temps réel plafonne à 2,0 mM
+   (2,8 mM sur le dernier dixième), et la couverture lissée tombe à 28–77 %. Sa sd a posteriori « ± 0,0 % » veut dire
+   que toute la probabilité est sur un seul point de la grille, pas que η est connu à mieux que le pas. L'hybride
+   reste plus juste que le ratio calibré (4,7 à 5,7 mM sur le dernier dixième), mais pour suivre une dérive il faudrait
+   une vraie marche aléatoire sur η (noyau qui garde la variance sur la grille, ou grille plus fine), au prix d'un η
+   moins précis quand il ne bouge pas.
 
 ## Pas fait
 

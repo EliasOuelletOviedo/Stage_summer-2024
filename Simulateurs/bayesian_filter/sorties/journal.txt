@@ -42,7 +42,7 @@ que de repère.
   trame  70 : vrai  20.5 | filtre  19.2 [ 14.0 –  24.8] η 1.247 ±  3.3 % | lissé  18.8 [ 15.9 –  21.9]
   trame 100 : vrai  22.0 | filtre  21.5 [ 16.7 –  27.3] η 1.229 ±  2.8 % | lissé  21.2 [ 18.0 –  24.8]
   trame 240 : vrai  10.2 | filtre   8.3 [  5.6 –  11.0] η 1.218 ±  1.9 % | lissé   8.6 [  6.5 –  10.7]
-  répétition 1 (la trace ci-dessus) : η final temps réel 1.222 ± 1.7 %, lissé 1.222 (vrai 1.25) ; 3.0 ms par trame (grille complète, avec lissage)
+  répétition 1 (la trace ci-dessus) : η final temps réel 1.222 ± 1.7 %, lissé 1.222 (vrai 1.25) ; 2.2 ms par trame (grille complète, avec lissage)
   bilan, répétition 1 | moyenne ± sd sur 20 répétitions | (document)
   ratio avec la calibration (η = 1)      biais -10.83 | -10.89 ± 0.08 (-11.5) ; erreur typique 11.12 | 11.20 ± 0.09 (11.8) mM
   durée de vie seule, trame par trame    biais +12.80 | +13.55 ± 1.75 (—) ; erreur typique 43.01 | 44.59 ± 4.43 (41.0) mM
@@ -51,15 +51,15 @@ que de repère.
   η final temps réel 1.244 ± 0.021, lissé 1.244 ; couverture à 95 % : filtre 96 %, lissé 98 % (minimum 76 %)
 
 4. Version temps réel (section 14)
-    1000 photons, 1 ROI                  RMSE  3.76 mM (document 2.6) | η 1.220 ± 3.5 % | 0.65 ms/ROI/trame
-    1000 photons, 10 ROI partageant η    RMSE  2.35 mM (document 2.5) | η 1.215 ± 1.1 % | 0.58 ms/ROI/trame
+    1000 photons, 1 ROI                  RMSE  3.76 mM (document 2.6) | η 1.220 ± 3.5 % | 0.62 ms/ROI/trame
+    1000 photons, 10 ROI partageant η    RMSE  2.35 mM (document 2.5) | η 1.215 ± 1.1 % | 0.54 ms/ROI/trame
     1000 photons, η connu d'avance       RMSE  1.70 mM (document 1.7) | η 1.250 ± 0.0 % | 0.12 ms/ROI/trame
-    3000 photons, 1 ROI                  RMSE  2.26 mM (document 1.5) | η 1.228 ± 2.1 % | 0.73 ms/ROI/trame
-    3000 photons, 10 ROI partageant η    RMSE  1.51 mM (document 1.4) | η 1.226 ± 0.5 % | 0.67 ms/ROI/trame
-    3000 photons, η connu d'avance       RMSE  1.16 mM (document 1.1) | η 1.250 ± 0.0 % | 0.13 ms/ROI/trame
-   10000 photons, 1 ROI                  RMSE  1.38 mM (document 1.5) | η 1.240 ± 1.2 % | 1.00 ms/ROI/trame
-   10000 photons, 10 ROI partageant η    RMSE  0.82 mM (document 0.9) | η 1.247 ± 0.4 % | 0.91 ms/ROI/trame
-   10000 photons, η connu d'avance       RMSE  0.77 mM (document 0.8) | η 1.250 ± 0.0 % | 0.14 ms/ROI/trame
+    3000 photons, 1 ROI                  RMSE  2.26 mM (document 1.5) | η 1.228 ± 2.1 % | 0.69 ms/ROI/trame
+    3000 photons, 10 ROI partageant η    RMSE  1.51 mM (document 1.4) | η 1.226 ± 0.5 % | 0.62 ms/ROI/trame
+    3000 photons, η connu d'avance       RMSE  1.16 mM (document 1.1) | η 1.250 ± 0.0 % | 0.11 ms/ROI/trame
+   10000 photons, 1 ROI                  RMSE  1.38 mM (document 1.5) | η 1.240 ± 1.2 % | 0.90 ms/ROI/trame
+   10000 photons, 10 ROI partageant η    RMSE  0.82 mM (document 0.9) | η 1.247 ± 0.4 % | 0.85 ms/ROI/trame
+   10000 photons, η connu d'avance       RMSE  0.77 mM (document 0.8) | η 1.250 ± 0.0 % | 0.13 ms/ROI/trame
 
 5. Trames tirées des histogrammes mesurés (amincissement)
   trames tirées des histogrammes mesurés : 5000 photons, η = 1.25 inconnu, fond mesuré 2.3 % du bleu, 20 répétitions ; erreur sur la seconde moitié de chaque palier
@@ -101,4 +101,4 @@ que de repère.
   réponses (section 14)  s = 0,04 sans sauts            η final 1.283 (vrai 1.25) ; sd a posteriori 1.0 %, entre répétitions 1.4 %
   réponses (section 14)  s = 0,01 sans sauts            η final 1.445 (vrai 1.25) ; sd a posteriori 0.9 %, entre répétitions 2.0 %
 
-terminé en 164 s
+terminé en 156 s

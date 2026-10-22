@@ -27,7 +27,9 @@ n_eta = 61
 s = 0.04
 w = 0.03
 s_saut = 0.5
-# lisseur hors ligne : η quasi constant pour une ROI (marche aléatoire de 0,2 % par trame sur ln η)
+# lisseur hors ligne : marche aléatoire de 0,2 % par trame sur ln η, échantillonnée sur la grille de η (pas de 1,83 %) :
+# le poids vers le point voisin vaut ~ 1e-19, donc η est en pratique CONSTANT dans le filtre et le lisseur
+# (il ne peut pas suivre une dérive ; cf. sorties_exemples/, scénario de dérive)
 s_eta_lisseur = 0.002
 # section 14 : 16 portes temporelles (η n'est jamais figé : la bascule vers le ratio seul a été retirée)
 portes = 16

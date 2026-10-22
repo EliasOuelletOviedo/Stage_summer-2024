@@ -23,9 +23,10 @@ import pandas as pd
 ICI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ICI)
 from src.modele import charger_params, chemin_params, charger_calibration, Senseur, x_vers_c
-from src.filtre import (Grille, grille_c, grille_eta, portes_log, transition, filtre_lisseur, FiltreTempsReel,
+from src.filtre import (Grille, grille_c, grille_eta, portes_log, transition, FiltreTempsReel,
                         resume_c, resume_eta)
-from src.simulation import (trame_modele, trajectoire_exemple, trajectoires_roi, Mesures, inconnu, fond_moyen)
+from src.simulation import trame_modele, trajectoires_roi, Mesures, inconnu, fond_moyen
+from src.exemple import METHODES_EXEMPLE, course_exemple, bilan_exemple
 from src.information import bornes, sigma_eta
 from src import figures
 
@@ -41,10 +42,6 @@ def dire(*a):
 
 def ecrire(nom, lignes):
     pd.DataFrame(lignes).to_csv(os.path.join(SORTIES, nom + '.csv'), index=False, float_format='%.6g')
-
-
-def noyaux(g, f):
-    return transition(np.log(g.c), f['s'], f['s_saut'], f['w']), transition(np.log(g.eta), f['s_eta_lisseur'])
 
 
 # ================================================================================================ 1. vérifications
@@ -105,47 +102,9 @@ def information(S, g, p, rng):
 
 
 # ================================================================================================ 3. exemple (section 15)
-METHODES_EXEMPLE = (('ratio avec la calibration (η = 1)', 'c_ratio_eta1'), ('durée de vie seule, trame par trame', 'c_flim'),
-                    ('filtre hybride, temps réel', 'c_filtre'), ('filtre hybride, lissé après coup', 'c_lisse'))
-
-
-def course_exemple(S, g, p, rng):
-    """Une course de la section 15 : trames, filtre et lisseur sur la grille complète. Renvoie (table par trame, H, durée)."""
-    e, f = p['exemple'], p['filtre']; T = e['trames']
-    C = trajectoire_exemple(e)
-    A = 1 + e['derive_A'] * np.arange(T) / (T - 1)            # photoblanchiment : le filtre ne le connaît pas
-    H = [trame_modele(S, C[k], e['photons'] * A[k], rng, e['eta']) for k in range(T)]
-    t0 = time.perf_counter()
-    Ls = np.array([g.loglik(B, Y) for B, Y in H])
-    Kc, Ke = noyaux(g, f)
-    alpha, post = filtre_lisseur(Ls, Kc, Ke)
-    duree = time.perf_counter() - t0
-    out = []
-    for k in range(T):
-        B, Y = H[k]
-        fm, flo, fhi = resume_c(alpha[k].sum(1), g.c); lm, llo, lhi = resume_c(post[k].sum(1), g.c)
-        ef, ef_sd = resume_eta(alpha[k].sum(0), g.eta); el, el_sd = resume_eta(post[k].sum(0), g.eta)
-        out.append(dict(trame=k + 1, c_vrai=C[k], N_B=B.sum(), N_Y=Y.sum(), R=Y.sum() / B.sum(),
-                        c_ratio_eta1=g.lire_ratio(B, Y), c_flim=g.lire_flim(B, Y),
-                        c_filtre=fm[0], filtre_bas=flo[0], filtre_haut=fhi[0], eta_filtre=ef, eta_filtre_sd=ef_sd,
-                        c_lisse=lm[0], lisse_bas=llo[0], lisse_haut=lhi[0], eta_lisse=el, eta_lisse_sd=el_sd))
-    return pd.DataFrame(out), H, duree
-
-
-def bilan_exemple(D):
-    b = {}
-    for nom, col in METHODES_EXEMPLE:
-        err = D[col] - D.c_vrai
-        b[f'{col}_biais'] = err.mean(); b[f'{col}_erreur'] = np.sqrt((err ** 2).mean())
-    b['couverture_filtre'] = np.mean((D.filtre_bas <= D.c_vrai) & (D.c_vrai <= D.filtre_haut))
-    b['couverture_lisse'] = np.mean((D.lisse_bas <= D.c_vrai) & (D.c_vrai <= D.lisse_haut))
-    b['eta_filtre_final'] = D.eta_filtre.iloc[-1]; b['eta_lisse'] = D.eta_lisse.iloc[0]
-    return b
-
-
 def exemple(S, g, p, rng):
     e = p['exemple']; T = e['trames']
-    D, H, duree = course_exemple(S, g, p, rng)
+    D, H, duree = course_exemple(S, g, p['filtre'], e, rng)
     ecrire('exemple', D.to_dict('records'))
     B, Y = H[0]
     dire(f"  trame 1 : N_B = {B.sum():.0f}, N_Y = {Y.sum():.0f}, R = {Y.sum() / B.sum():.2f} (R₁(0) = {g.R1_zero:.2f}) ; "
@@ -160,7 +119,7 @@ def exemple(S, g, p, rng):
     b1 = bilan_exemple(D)
     dire(f"  répétition 1 (la trace ci-dessus) : η final temps réel {D.eta_filtre.iloc[-1]:.3f} ± {100 * D.eta_filtre_sd.iloc[-1]:.1f} %,"
          f" lissé {b1['eta_lisse']:.3f} (vrai {e['eta']}) ; {1e3 * duree / T:.1f} ms par trame (grille complète, avec lissage)")
-    reps = [b1] + [bilan_exemple(course_exemple(S, g, p, rng)[0]) for _ in range(1, 4 if RAPIDE else e['repetitions'])]
+    reps = [b1] + [bilan_exemple(course_exemple(S, g, p['filtre'], e, rng)[0]) for _ in range(1, 4 if RAPIDE else e['repetitions'])]
     R = pd.DataFrame(reps); R.insert(0, 'repetition', np.arange(1, len(R) + 1)); ecrire('exemple_repetitions', R.to_dict('records'))
     doc = dict(c_ratio_eta1=(-11.5, 11.8), c_flim=(np.nan, 41), c_filtre=(0.3, 1.4), c_lisse=(-0.5, 1.0))
     dire(f"  bilan, répétition 1 | moyenne ± sd sur {len(R)} répétitions | (document)")
@@ -383,7 +342,9 @@ def main():
     dire("\n8. η selon le modèle de transition (1 000 photons, 10 ROI)"); eta_transition(S, g, p, rng(8))
     mes = Mesures(os.path.join(ICI, p['donnees']['dossier']), p['donnees']['titration'], cal)
     figures.donnees(S, mes, cal, p, rng(7), os.path.join(SORTIES, 'fig_donnees.png'))
-    figures.exemple(ex, p, os.path.join(SORTIES, 'fig_exemple.png'))
+    e = p['exemple']
+    figures.exemple(ex, f"a · un soma, η = {e['eta']} inconnu du filtre, {e['photons']} photons par trame, A −30 % (photoblanchiment)",
+                    os.path.join(SORTIES, 'fig_exemple.png'))
     figures.cramer_rao(cr, p['donnees']['nom'], os.path.join(SORTIES, 'fig_cramer_rao.png'))
     figures.temps_reel(tr, os.path.join(SORTIES, 'fig_temps_reel.png'))
     figures.amincissement(trace, am, p['donnees']['nom'], os.path.join(SORTIES, 'fig_amincissement.png'))
