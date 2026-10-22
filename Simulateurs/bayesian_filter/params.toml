@@ -110,6 +110,9 @@ part_gardee_max = 0.5
 # hybride : η fixé par un échantillon de contexte de facteur_contexte × N photons bleus, même concentration, tiré par
 # Poisson autour de la forme de l'ensemble des fichiers de test (100 × 100 000 dépasse ce qu'ils contiennent à 0 mM)
 facteur_contexte = 100
+# python3 boxplots.py --eta : η de chaque échantillon (et de son contexte) uniforme dans cet intervalle, sorties à part
+eta_variable = [0.9, 1.1]
+sorties_eta = "sorties_boxplots_eta"
 # grilles des estimateurs (maximum de vraisemblance) : c de 0 à 300 mM, τ mono-exponentiel de 0,5 à 6 ns
 n_c = 2000
 n_tau = 4000

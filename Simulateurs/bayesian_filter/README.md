@@ -23,8 +23,10 @@ python3 run.py                             # --rapide : moins de répétitions (
 python3 step0_calibration.py --params params_SCLM.toml
 python3 run.py --params params_SCLM.toml
 
-# comparaison de 4 techniques sur les .sdt réels de SCLM_mCer3 → sorties_boxplots/ (~4 min, --rapide ~1 min)
+# comparaison de 4 techniques sur les .sdt réels de SCLM_mCer3 → sorties_boxplots/ (~4,5 min, --rapide ~1 min)
 python3 boxplots.py
+# la même, avec η de chaque échantillon uniforme de 0,9 à 1,1 → sorties_boxplots_eta/ (~4,5 min)
+python3 boxplots.py --eta
 ```
 
 Un jeu de données = un fichier de paramètres : seul le bloc `[donnees]` diffère entre `params.toml` (SCLM_mCer3) et
@@ -49,7 +51,7 @@ leurs histogrammes sommés, versionnés par `step17_bruts_mCer3.jl` (`irf_bruts_
 
 | Fichier | Rôle | lignes |
 | --- | --- | --- |
-| `params.toml` | le seul endroit pour les constantes (données, grilles, transition, scénarios, graine, boxplots) ; SCLM_mCer3 | 118 |
+| `params.toml` | le seul endroit pour les constantes (données, grilles, transition, scénarios, graine, boxplots) ; SCLM_mCer3 | 121 |
 | `params_SCLM.toml` | les mêmes, pour la titration SCLM régulière à 800 nm | 94 |
 | `step0_calibration.py` | le pont unique avec les données : appelle le `sclm_hybride.py` du jeu, écrit sa calibration (`calibrer` sert aussi à boxplots.py) | 86 |
 | `calibration.json`, `calibration_SCLM.json` | la calibration ajustée (constantes, isothermes, IRF, fonds et décalages par acquisition) ; écrites par step0 | — |
@@ -57,9 +59,9 @@ leurs histogrammes sommés, versionnés par `step17_bruts_mCer3.jl` (`irf_bruts_
 | `src/filtre.py` | vraisemblance découpée ratio / FLIM (section 11), grille (c, η), transition, filtre et lisseur (13), temps réel à M ROI, portes et bascule (14), lectures de référence | 190 |
 | `src/information.py` | Fisher et Cramér-Rao, nuisances par complément de Schur (section 10) | 50 |
 | `src/simulation.py` | les deux générateurs (lit les colonnes voie1/voie2 de step17 et bleu/jaune de step16), les trajectoires des sections 14 et 15 | 97 |
-| `src/figures.py` | rendu | 151 |
+| `src/figures.py` | rendu | 163 |
 | `src/estimateurs.py` | les 4 lectures d'un échantillon (temps de vie unique, FLIM du système, ratio, hybride à η du contexte), en bloc | 98 |
-| `boxplots.py` | partage des .sdt, calibration sur une moitié, échantillons et contextes tirés de l'autre, boxplots | 158 |
+| `boxplots.py` | partage des .sdt, calibration sur une moitié, échantillons et contextes tirés de l'autre (η = 1 ou variable), boxplots | 173 |
 | `run.py` | la course en 8 parties ; un CSV par partie, `journal.txt`, 5 figures | 398 |
 | `test/run_tests.py` | 13 vérifications : calibration = annexe, découpage exact, portes (93,7 % de l'information FLIM gardée), η retrouvé, bascule, couverture du lisseur, amincissement | 165 |
 
@@ -198,8 +200,10 @@ concentration, 98 à 2,5 mM ; leur somme redonne exactement `irf_bruts_mCer3.csv
   (≈ 2,5 N photons jaunes). Amincir un comptage de Poisson donne un comptage de Poisson : chaque échantillon a la
   statistique exacte d'une acquisition plus courte, avec les écarts réels d'un fichier à l'autre (horloge, dérive). Les
   échantillons d'un même fichier ne sont pas indépendants entre eux à fort N (50 fichiers de test par concentration).
-- **Sorties** : `boxplots_<N>.png` (un panneau par concentration, les 4 techniques ; boîte 25–75 %, trait médian,
-  moustaches 2,5–97,5 %, pas de points isolés), `fig_resume.png` (demi-largeur 2,5–97,5 % et |médiane| contre N),
+- **Sorties** : deux séries de graphiques par nombre de photons — `boxplots_<N>.png` (écart signé) et
+  `boxplots_abs_<N>.png` (|écart|, échelle log commune aux 8 panneaux ; un |écart| sous 10⁻³ mM, c'est-à-dire une
+  lecture exacte au bord c = 0, est ramené à 10⁻³) ; un panneau par concentration, les 4 techniques ; boîte 25–75 %,
+  trait médian, moustaches 2,5–97,5 %, pas de points isolés — `fig_resume.png` (demi-largeur 2,5–97,5 % et |médiane| contre N),
   `ecarts_resume.csv` (moyenne, écart-type, RMSE, quantiles, part des lectures au bord de la grille), `eta_contexte.csv`,
   `journal.txt`.
 
@@ -238,6 +242,43 @@ Ce qu'on y lit :
    et des boîtes tronquées à −c aux faibles concentrations. À 1 000 et 3 000 photons, le temps de vie unique et le FLIM
    touchent aussi le haut de la grille (300 mM) : jusqu'à 50 % des lectures (colonne `part_au_bord_pct`). Leurs
    moustaches à ces N mesurent surtout la grille.
+
+### Avec η variable (`sorties_boxplots_eta/`, `python3 boxplots.py --eta`)
+
+Mêmes fichiers, même calibration, mêmes échantillons, mais chaque échantillon reçoit son propre η, tiré uniformément de
+0,9 à 1,1 : ses photons jaunes (amincis avec la part × η) et ceux de son contexte (la même expérience) en sont
+multipliés. Aucune lecture ne connaît η : le ratio le prend égal à 1, l'hybride l'apprend de son contexte de 100 × N
+photons ; les deux lectures par la forme (temps de vie unique, FLIM du système) n'en dépendent pas et ne changent pas.
+
+Demi-largeur de l'intervalle 2,5–97,5 % de l'écart (mM), ratio / hybride :
+
+| photons bleus | 0 | 2,5 | 5 | 10 | 20 | 40 | 80 | 131 mM |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 000 | 2,8 / 1,6 | 4,5 / 3,1 | 5,9 / 4,3 | 7,2 / 4,8 | 9,9 / 7,8 | 15 / 12 | 31 / 28 | 58 / **69** |
+| 3 000 | 2,4 / 0,9 | 4,1 / 2,2 | 5,2 / 2,5 | 6,2 / 2,8 | 8,4 / 4,5 | 13 / 6,8 | 26 / 16 | 47 / 37 |
+| 10 000 | 2,2 / 0,5 | 3,9 / 1,2 | 4,8 / 1,4 | 5,7 / 1,6 | 7,7 / 2,5 | 12 / 3,8 | 23 / 8,7 | 42 / 21 |
+| 30 000 | 2,2 / 0,3 | 3,8 / 0,7 | 4,6 / 0,8 | 5,5 / 1,0 | 7,5 / 1,5 | 11 / 2,3 | 22 / 5,3 | 40 / 13 |
+| 100 000 | 2,1 / 0,2 | 3,7 / 0,4 | 4,6 / 0,5 | 5,4 / 0,6 | 7,3 / 0,9 | 11 / 1,3 | 22 / 2,9 | 40 / 8,2 |
+
+Médiane de |écart| (mM), ratio / hybride :
+
+| photons bleus | 2,5 | 5 | 10 | 20 | 40 | 80 | 131 mM |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 000 | 2,3 / 1,3 | 2,4 / 1,5 | 2,9 / 1,8 | 3,9 / 3,6 | 6,0 / 4,5 | 12 / 9,3 | 21 / **22** |
+| 10 000 | 2,2 / 0,4 | 2,4 / 0,8 | 2,8 / 1,0 | 3,7 / 3,4 | 5,8 / 2,6 | 11 / 4,7 | 20 / 15 |
+| 100 000 | 2,2 / 0,2 | 2,4 / 0,7 | 2,8 / 0,9 | 3,6 / 3,4 | 5,8 / 2,5 | 11 / 4,4 | 20 / 15 |
+
+1. **L'hybride est plus précis que le ratio seul**, à toutes les concentrations dès 3 000 photons bleus, et partout à
+   1 000 sauf à 131 mM. L'erreur du ratio ne baisse plus avec les photons : elle vient de η (± 10 % de η ≈ ± 5,5 mM à
+   10 mM) et plafonne vers 2 à 40 mM de demi-largeur selon c ; celle de l'hybride continue de suivre 1/√N.
+2. **Ce qui reste à l'hybride est le plancher de la calibration FLIM**, le même qu'à η = 1 : son η̂ est décalé de
+   −1,5 à +3,9 % selon la concentration (`eta_contexte.csv`, colonne `erreur_eta_pct_mediane` : +3,7 % à 20 mM, +3,9 %
+   à 131 mM), d'où des biais de +3,4 mM à 20 mM et +15 mM à 131 mM. À 20 mM, la médiane de |écart| de l'hybride
+   (3,4 mM) n'est donc qu'à peine sous celle du ratio (3,6 à 3,9 mM), et à 131 mM et 1 000 photons, l'hybride fait un peu
+   moins bien que le ratio (69 contre 58 mM de demi-largeur, 22 contre 21 mM de médiane).
+3. Les deux lectures par la forme donnent, aux fluctuations de tirage près, les mêmes boîtes qu'à η = 1 (à 10 000
+   photons et 10 mM : 9,8 contre 9,7 mM de demi-largeur pour le FLIM, 17,4 contre 17,1 pour le temps de vie unique) :
+   elles ne voient pas η, mais restent 5 à 10 fois plus dispersées que l'hybride.
 
 ## Pas fait
 

@@ -111,24 +111,36 @@ def amincissement(trace, D, nom, chemin):
 COULEURS_TECHNIQUES = (GRIS, ORANGE, BLEU, VERT)
 
 
-def boxplots(stats, N, conc, techniques, n_ech, chemin):
-    """Un panneau par concentration, une boîte par technique : boîte 25–75 %, trait médian, moustaches 2,5–97,5 %."""
-    fig, ax = plt.subplots(2, 4, figsize=(17, 8.5))
+PLANCHER_ABS = 1e-3      # mM : |écart| plus petit (lectures exactes au bord c = 0) ramené ici, pour l'échelle log
+
+
+def boxplots(stats, N, conc, techniques, n_ech, chemin, eta=None, absolu=False):
+    """
+    Un panneau par concentration, une boîte par technique : boîte 25–75 %, trait médian, moustaches 2,5–97,5 %.
+    absolu : les quantiles sont ceux de |écart|, échelle log commune aux 8 panneaux.
+    """
+    fig, ax = plt.subplots(2, 4, figsize=(17, 8.5), sharey=absolu)
     for a, c in zip(ax.ravel(), conc):
         bx = [dict(label=t, whislo=stats[(N, c, t)][0], q1=stats[(N, c, t)][1], med=stats[(N, c, t)][2],
                    q3=stats[(N, c, t)][3], whishi=stats[(N, c, t)][4]) for t in techniques]
         art = a.bxp(bx, showfliers=False, patch_artist=True, widths=0.6, medianprops=dict(color=NOIR, lw=1.5))
         for patch, coul in zip(art['boxes'], COULEURS_TECHNIQUES):
             patch.set_facecolor(coul); patch.set_alpha(0.75)
-        a.axhline(0, color=NOIR, lw=0.6, ls='--')
+        if absolu:
+            a.set_yscale('log'); a.grid(True, axis='y', which='both', alpha=0.2)
+        else:
+            a.axhline(0, color=NOIR, lw=0.6, ls='--')
         a.set_xticks([]); a.set_title(f'{c:g} mM'); a.grid(True, axis='y', alpha=0.3)
     for a in ax[:, 0]:
-        a.set_ylabel('c mesuré − c réel (mM)')
+        a.set_ylabel('|c mesuré − c réel| (mM)' if absolu else 'c mesuré − c réel (mM)')
     poignees = [plt.Rectangle((0, 0), 1, 1, color=coul, alpha=0.75) for coul in COULEURS_TECHNIQUES]
     fig.legend(poignees, techniques, loc='lower center', ncol=4, frameon=False)
     milliers = lambda x: f'{x:,}'.replace(',', ' ')
     fig.suptitle(f'{milliers(N)} photons bleus par échantillon — {milliers(n_ech)} échantillons par concentration, tirés des .sdt de test'
-                 + '\nboîte : 25–75 %, trait : médiane, moustaches : 2,5–97,5 %')
+                 + ('' if eta is None else f' — η uniforme de {eta[0]:g} à {eta[1]:g} (jaune × η), inconnu des lectures'.replace('.', ','))
+                 + '\nboîte : 25–75 %, trait : médiane, moustaches : 2,5–97,5 %'
+                 + (f' — valeur absolue de l\'écart, échelle log ; |écart| < {PLANCHER_ABS:g} mM ramené à {PLANCHER_ABS:g}'.replace('.', ',')
+                    if absolu else ''))
     fig.tight_layout(rect=(0, 0.04, 1, 0.95)); fig.savefig(chemin, dpi=130); plt.close(fig)
 
 
