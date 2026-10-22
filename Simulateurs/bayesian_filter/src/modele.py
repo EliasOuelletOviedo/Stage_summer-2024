@@ -1,5 +1,6 @@
 """
-modele.py — le modèle direct du senseur (sections 3 à 7 du document), construit à partir de calibration.json.
+modele.py — le modèle direct du senseur (sections 3 à 7 du document), construit à partir de la calibration
+écrite par step0 (calibration.json, ou celle du jeu de données choisi par --params).
 
     bleu  : μ_B,i = A [IRF_B ⊗ d_B]_i,     d_B = f1 e^{-t/τ1} + f2 e^{-t/τ2} + (1 − f1 − f2) e^{-t/τD}
     jaune : μ_Y,i = η A [IRF_Y ⊗ (λ d_B + G (f1 k1 s1 + g2 f2 k2 s2) + κ x e^{-t/τA})]_i
@@ -18,13 +19,19 @@ ICI = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SOUS_CASES = 16
 
 
+def chemin_params(argv):
+    """--params f.toml sur la ligne de commande (un autre jeu de données), params.toml sinon."""
+    return os.path.join(ICI, argv[argv.index('--params') + 1]) if '--params' in argv else None
+
+
 def charger_params(chemin=None):
     with open(chemin or os.path.join(ICI, 'params.toml'), 'rb') as f:
         return tomllib.load(f)
 
 
-def charger_calibration(chemin=None):
-    chemin = chemin or os.path.join(ICI, 'calibration.json')
+def charger_calibration(p=None):
+    """La calibration écrite par step0 pour le jeu de données de `p` (calibration.json par défaut)."""
+    chemin = os.path.join(ICI, p['donnees']['calibration'] if p else 'calibration.json')
     if not os.path.exists(chemin):
         raise FileNotFoundError(f"{chemin} absent : lancer d'abord python3 step0_calibration.py")
     with open(chemin) as f:

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-run.py — la course : le filtre bayésien hybride (ratio + FLIM) sur des données simulées d'après SCLM_mCer3.
+run.py — la course : le filtre bayésien hybride (ratio + FLIM) sur des données simulées d'après une titration
+(SCLM_mCer3 par défaut ; SCLM régulier avec --params params_SCLM.toml).
 
   1. vérifications : les exemples chiffrés des sections 6, 7, 9, 11 et 12 du document ;
   2. information   : bornes de Cramér-Rao (section 10) et leur vérification par 400 tirages ;
@@ -11,9 +12,9 @@ run.py — la course : le filtre bayésien hybride (ratio + FLIM) sur des donné
   6. robustesse    : les biais de la section 16 à 10 mM, plus le décalage d'horloge et le fond des données ;
   7. inconnu       : l'échantillon « inconnu » mesuré le même jour, lu par le ratio, le FLIM et le filtre ;
   8. η et le modèle de transition : ce que la dynamique supposée de c fait à l'estimation de η.
-Sorties dans sorties/ : un CSV par partie, les figures, journal.txt.
+Sorties dans le dossier [donnees] sorties (sorties/, sorties_SCLM/) : un CSV par partie, les figures, journal.txt.
 
-Lancer depuis ce dossier (après step0_calibration.py) :  python3 run.py  [--rapide]   (~4 min ; --rapide ~1 min)
+Lancer depuis ce dossier (après step0_calibration.py) :  python3 run.py  [--params f.toml] [--rapide]   (~2,5 min ; --rapide ~25 s)
 """
 import os, sys, time
 import numpy as np
@@ -21,14 +22,15 @@ import pandas as pd
 
 ICI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ICI)
-from src.modele import charger_params, charger_calibration, Senseur, x_vers_c
+from src.modele import charger_params, chemin_params, charger_calibration, Senseur, x_vers_c
 from src.filtre import (Grille, grille_c, grille_eta, portes_log, transition, filtre_lisseur, FiltreTempsReel,
                         resume_c, resume_eta)
 from src.simulation import (trame_modele, trajectoire_exemple, trajectoires_roi, Mesures, inconnu, fond_moyen)
 from src.information import bornes, sigma_eta
 from src import figures
 
-SORTIES = os.path.join(ICI, 'sorties')
+P = charger_params(chemin_params(sys.argv))
+SORTIES = os.path.join(ICI, P['donnees']['sorties'])
 RAPIDE = '--rapide' in sys.argv
 JOURNAL = []
 
@@ -308,7 +310,7 @@ def eta_transition(S, g, p, rng):
 # ================================================================================================ 6. robustesse (section 16)
 def robustesse(S, p, cal):
     q = p['robustesse']; c0, N = q['c_mM'], q['photons']
-    cf = np.geomspace(2, 60, 3001); ef = np.geomspace(0.6, 1.8, 2401)
+    cf = np.geomspace(0.5, 300, 4001); ef = np.geomspace(0.6, 1.8, 2401)       # toute la grille du filtre, pas de 0,16 %
     gf = Grille(S, cf, ef)
     def lire(B, Y):
         L = gf.formes(B, Y)[:, None] + gf.ratio(B.sum(), Y.sum())
@@ -364,12 +366,14 @@ def echantillon_inconnu(S, g, p, cal):
 
 def main():
     t0 = time.time(); os.makedirs(SORTIES, exist_ok=True)
-    p = charger_params(); cal = charger_calibration(); f = p['filtre']
+    p = P; cal = charger_calibration(p); f = p['filtre']
     rng = lambda i: np.random.default_rng(p['simulation']['graine'] + i)
     S = Senseur(cal)
     g = Grille(S, grille_c(f), grille_eta(f))
     gp = Grille(S, grille_c(f), grille_eta(f), portes_log(S.n_fen, f['portes']))
-    dire(f"calibration : {cal['source']} ; déviance/ddl {cal['deviance'] / cal['ddl']:.3f}" + (' ; --rapide' if RAPIDE else ''))
+    dire(f"{p['donnees']['nom']} — calibration : {cal['source']} ; déviance/ddl {cal['deviance'] / cal['ddl']:.3f}" + (' ; --rapide' if RAPIDE else ''))
+    dire("\nLes valeurs « document » sont celles du PDF, calibré sur SCLM_mCer3 : pour un autre senseur, elles ne servent"
+         "\nque de repère.")
     dire("\n1. Vérifications (exemples chiffrés du document)"); verifications(S, g)
     dire("\n2. Information de Fisher et borne de Cramér-Rao (section 10)"); cr = information(S, g, p, rng(2))
     dire("\n3. Exemple complet, trame par trame (section 15)"); ex = exemple(S, g, p, rng(3))
@@ -382,9 +386,9 @@ def main():
     mes = Mesures(os.path.join(ICI, p['donnees']['dossier']), p['donnees']['titration'], cal)
     figures.donnees(S, mes, cal, p, rng(7), os.path.join(SORTIES, 'fig_donnees.png'))
     figures.exemple(ex, p, os.path.join(SORTIES, 'fig_exemple.png'))
-    figures.cramer_rao(cr, os.path.join(SORTIES, 'fig_cramer_rao.png'))
+    figures.cramer_rao(cr, p['donnees']['nom'], os.path.join(SORTIES, 'fig_cramer_rao.png'))
     figures.temps_reel(tr, os.path.join(SORTIES, 'fig_temps_reel.png'))
-    figures.amincissement(trace, am, os.path.join(SORTIES, 'fig_amincissement.png'))
+    figures.amincissement(trace, am, p['donnees']['nom'], os.path.join(SORTIES, 'fig_amincissement.png'))
     dire(f"\nterminé en {time.time() - t0:.0f} s")
     with open(os.path.join(SORTIES, 'journal.txt'), 'w') as fj:
         fj.write('\n'.join(JOURNAL) + '\n')

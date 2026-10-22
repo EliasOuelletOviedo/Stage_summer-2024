@@ -6,12 +6,17 @@
 # main, relancer step0.
 
 [donnees]
+# un jeu de données = un fichier de paramètres (ici SCLM_mCer3 ; params_SCLM.toml : SCLM régulier)
+nom = "SCLM_mCer3"
 # histogrammes sommés (8 [Cl⁻] × 2 canaux + IRF) extraits des 900 .sdt de Data/2026-10-16/SCLM_mCer3 (step17)
 dossier = "../FLIM-FRET_2-channels/sorties/declins_purs_2026-10-16_SCLM_mCer3"
 titration = "irf_bruts_mCer3.csv"
 inconnu = "inconnu_bruts_mCer3.csv"
 # le module de calibration qui accompagne ces données (ajustement conjoint, section 9 du document)
 module_calibration = "sclm_hybride.py"
+# écrit par step0, lu par run.py ; dossier des sorties de run.py
+calibration = "calibration.json"
+sorties = "sorties"
 
 [filtre]
 # section 12 : 260 valeurs de [Cl⁻], de 0,5 à 300 mM, pas de 2,5 % ; section 14 : 61 valeurs de η, de 0,6 à 1,8

@@ -1,4 +1,5 @@
 {
+  "jeu": "SCLM_mCer3",
   "source": "../FLIM-FRET_2-channels/sorties/declins_purs_2026-10-16_SCLM_mCer3/irf_bruts_mCer3.csv",
   "periode_ns": 12.508393432142384,
   "n_cases": 256,

@@ -1,5 +1,5 @@
 """
-simulation.py — les données simulées, inspirées des mesures SCLM_mCer3 du 2026-10-16.
+simulation.py — les données simulées, inspirées des mesures de titration du 2026-10-16 (SCLM_mCer3, SCLM).
 
 Deux générateurs de trames (histogrammes bleu et jaune, cases de la fenêtre) :
   - « modèle »        : comptages de Poisson autour du modèle calibré (modele.Senseur), pour toute trajectoire
@@ -57,13 +57,19 @@ def trajectoires_roi(rng, n_roi, T):
 
 
 # ------------------------------------------------------------------------------------------- amincissement
+def _lire(dossier, fichier):
+    """Un CSV d'histogrammes et ses deux préfixes de colonnes : voie1/voie2 (step17, mCer3) ou bleu/jaune (step16, SCLM)."""
+    df = pd.read_csv(os.path.join(dossier, fichier)); df.columns = [c.strip() for c in df.columns]
+    return df, (('voie1', 'voie2') if any(c.startswith('voie1_brut_') for c in df.columns) else ('bleu', 'jaune'))
+
+
 class Mesures:
-    """Les 16 histogrammes mesurés de la titration mCer3, restreints à la fenêtre d'analyse."""
+    """Les 16 histogrammes mesurés de la titration, restreints à la fenêtre d'analyse."""
     def __init__(self, dossier, fichier, cal):
-        df = pd.read_csv(os.path.join(dossier, fichier)); df.columns = [c.strip() for c in df.columns]
+        df, (vB, vY) = _lire(dossier, fichier)
         a, b = cal['fenetre']
-        self.B = np.array([df[f'voie1_brut_{e}'].values[a:b + 1] for e in ETIQUETTES], float)
-        self.Y = np.array([df[f'voie2_brut_{e}'].values[a:b + 1] for e in ETIQUETTES], float)
+        self.B = np.array([df[f'{vB}_brut_{e}'].values[a:b + 1] for e in ETIQUETTES], float)
+        self.Y = np.array([df[f'{vY}_brut_{e}'].values[a:b + 1] for e in ETIQUETTES], float)
         self.c = CONC
 
     def indice(self, c):
@@ -80,9 +86,9 @@ class Mesures:
 
 def inconnu(dossier, fichier, cal):
     """L'échantillon « inconnu » mesuré le même jour (histogrammes bleu et jaune, fenêtre)."""
-    df = pd.read_csv(os.path.join(dossier, fichier)); df.columns = [c.strip() for c in df.columns]
+    df, (vB, vY) = _lire(dossier, fichier)
     a, b = cal['fenetre']
-    return df['voie1_brut_inconnu'].values[a:b + 1].astype(float), df['voie2_brut_inconnu'].values[a:b + 1].astype(float)
+    return df[f'{vB}_brut_inconnu'].values[a:b + 1].astype(float), df[f'{vY}_brut_inconnu'].values[a:b + 1].astype(float)
 
 
 def fond_moyen(cal):

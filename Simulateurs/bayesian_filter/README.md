@@ -18,7 +18,14 @@ python3 step0_calibration.py
 python3 test/run_tests.py
 # la course complète (~2,5 min)
 python3 run.py                             # --rapide : moins de répétitions (~25 s)
+
+# le second jeu : SCLM régulier (800 nm) → calibration_SCLM.json, sorties_SCLM/ (~2 + 2,5 min)
+python3 step0_calibration.py --params params_SCLM.toml
+python3 run.py --params params_SCLM.toml
 ```
+
+Un jeu de données = un fichier de paramètres : seul le bloc `[donnees]` diffère entre `params.toml` (SCLM_mCer3) et
+`params_SCLM.toml` (SCLM régulier) ; filtre, scénarios et graines sont les mêmes, pour comparer les deux senseurs.
 
 ## Données : ce qui vient des mesures
 
@@ -39,18 +46,19 @@ leurs histogrammes sommés, versionnés par `step17_bruts_mCer3.jl` (`irf_bruts_
 
 | Fichier | Rôle | lignes |
 | --- | --- | --- |
-| `params.toml` | le seul endroit pour les constantes (grilles, transition, scénarios, graine) | 92 |
-| `step0_calibration.py` | le pont unique avec les données : appelle `sclm_hybride.py`, écrit `calibration.json` | 77 |
-| `calibration.json` | la calibration ajustée (constantes, isothermes, IRF, fonds et décalages par acquisition) ; écrit par step0 | — |
-| `src/modele.py` | modèle direct μ_B, μ_Y (sections 3 à 7) : IRF ⊗ déclins périodiques, isothermes, η, A ; perturbations | 130 |
+| `params.toml` | le seul endroit pour les constantes (données, grilles, transition, scénarios, graine) ; SCLM_mCer3 | 97 |
+| `params_SCLM.toml` | les mêmes, pour la titration SCLM régulière à 800 nm | 94 |
+| `step0_calibration.py` | le pont unique avec les données : appelle le `sclm_hybride.py` du jeu, écrit sa calibration | 79 |
+| `calibration.json`, `calibration_SCLM.json` | la calibration ajustée (constantes, isothermes, IRF, fonds et décalages par acquisition) ; écrites par step0 | — |
+| `src/modele.py` | modèle direct μ_B, μ_Y (sections 3 à 7) : IRF ⊗ déclins périodiques, isothermes, η, A ; perturbations | 137 |
 | `src/filtre.py` | vraisemblance découpée ratio / FLIM (section 11), grille (c, η), transition, filtre et lisseur (13), temps réel à M ROI, portes et bascule (14), lectures de référence | 190 |
 | `src/information.py` | Fisher et Cramér-Rao, nuisances par complément de Schur (section 10) | 50 |
-| `src/simulation.py` | les deux générateurs, les trajectoires des sections 14 et 15 | 91 |
+| `src/simulation.py` | les deux générateurs (lit les colonnes voie1/voie2 de step17 et bleu/jaune de step16), les trajectoires des sections 14 et 15 | 97 |
 | `src/figures.py` | rendu | 108 |
-| `run.py` | la course en 8 parties ; un CSV par partie, `journal.txt`, 5 figures | 394 |
+| `run.py` | la course en 8 parties ; un CSV par partie, `journal.txt`, 5 figures | 398 |
 | `test/run_tests.py` | 13 vérifications : calibration = annexe, découpage exact, portes (93,7 % de l'information FLIM gardée), η retrouvé, bascule, couverture du lisseur, amincissement | 165 |
 
-## Sorties (`sorties/`)
+## Sorties (`sorties/` pour SCLM_mCer3, `sorties_SCLM/` pour SCLM régulier)
 
 `journal.txt` (tout ce qui suit, chiffres compris), `verifications.csv`, `cramer_rao.csv`, `cramer_rao_verification.csv`,
 `exemple.csv` (la trace de la section 15, trame par trame), `exemple_repetitions.csv`, `temps_reel.csv`,
@@ -64,8 +72,9 @@ leurs histogrammes sommés, versionnés par `step17_bruts_mCer3.jl` (`irf_bruts_
 −5 688,3 / −5 710,7, la « ligne » (c, η) du ratio, l'a posteriori 10,1 [7,6 – 12,7] mM) ; tout le tableau de
 Cramér-Rao à 10 mM et 10 000 photons (forme bleue 10,19, jaune 39,94, deux canaux 9,88, ratio 1,28, ratio + formes
 1,27 mM) ; sd(ln η) = 1,78 % pour 10⁶ photons (1,8 %) ; 400 tirages : ratio ± 1,26 mM (1,25), durée de vie seule
-12,9 ± 11,5 mM (12,8, ≈ 11) ; les biais de la section 16 (η = 1,2 : −8,73 contre −8,8 ; accepteurs inactifs : +8,2 /
-+9,0 / +8,9 contre +8,2 / +9,0 / +8,8 ; autofluorescence du jaune sur le ratio −2,74 contre −2,7) ; la référence
+12,9 ± 11,5 mM (12,8, ≈ 11) ; les biais de la section 16 (η = 1,2 : −8,76 contre −8,8 ; accepteurs inactifs : +8,2 /
++9,0 / +8,8 contre +8,2 / +9,0 / +8,8 ; autofluorescence du jaune sur le ratio −2,74 contre −2,7 ; autofluorescence des
+deux canaux sur le FLIM bleu −9,50 contre −9,6 ; durées de vie 5 % plus courtes, FLIM bleu −8,39 contre −8,4) ; la référence
 « η connu » de la section 14 (1,72 / 1,17 / 0,78 mM contre 1,7 / 1,1 / 0,8).
 
 **Section 15 (un soma, η = 1,25 inconnu, 5 000 photons/trame, A −30 % pendant la course).** Moyenne sur 20 répétitions
@@ -110,10 +119,51 @@ Coût : 0,6 ms par ROI et par trame sur la grille 260 × 61, 0,2 à 0,3 ms avec 
    donnent la bonne [Cl⁻] par le ratio à 0,5 mM près, mais le FLIM, seul juge de η, y lit η entre 0,991 et 1,046 selon la
    concentration (1,046 à 20 mM). Sur les trames amincies avec fond connu, le filtre garde ainsi −1,6 / −0,3 / −2,7 mM
    de biais à 10 / 20 / 40 mM (η final 1,238 ± 1,7 %), contre −9,7 à −21 mM pour le ratio lu à η = 1.
-5. **Le décalage d'horloge.** +10 ps non modélisé : +3,5 mM pour l'hybride, +7,1 mM pour le FLIM bleu, rien pour le ratio.
+5. **Le décalage d'horloge.** +10 ps non modélisé : +3,6 mM pour l'hybride, +7,1 mM pour le FLIM bleu, rien pour le ratio.
    Les acquisitions de la titration ont dérivé de −5 à +15 ps : il faut mesurer le décalage de chaque session.
 6. **L'échantillon « inconnu »** du même jour (16,5 + 33,2 millions de photons) : ratio (η = 1) 37,7 mM, FLIM 38,6 mM,
    hybride 36,3 [35,9 – 37,7] mM avec η = 0,988 ± 0,8 %, cohérent avec η = 1 dans les conditions de la calibration.
+
+## Second jeu : SCLM régulier (800 nm), `sorties_SCLM/`
+
+Mêmes scénarios, mêmes graines ; données `../FLIM-FRET_2-channels/sorties/declins_purs_2026-10-16_SCLM/`
+(`irf_bruts_purs_800nm.csv`, `inconnu_irf_bruts_800nm.csv`, de `step16_declins_purs.jl` ; 64 ps par canal, une période
+de 195 canaux, fenêtre de 182 canaux). Le fichier à 850 nm s'utiliserait en changeant deux noms dans `params_SCLM.toml`.
+
+**La calibration ajuste bien, mais ne se lit pas comme celle de mCer3.** Déviance/ddl 2,00, résidus à ± 4 (`fig_donnees`).
+τ₁ 0,063, τ₂ 0,723, τ_D 2,715, τ_A 3,260 ns ; λ 0,720, G 1,59, g₂ 0,254, κ 0,154 ; fond 3,8 % du bleu et 1,8 % du jaune.
+Le donneur n'est pas mCerulean3 : τ_D = 2,72 ns (le τ₃ = 2,72 ns de l'analyse FLIM-FRET de ces données), et la
+« population 2 » **croît** avec le chlore (f₂ de 0,33 à 0,55 entre 0 et 131 mM, isotherme ajustée de 0,335 vers 0,643) :
+c'est sans doute une composante propre au donneur, pas une population en FRET. Le modèle reste une calibration empirique
+valable de la forme et du ratio en fonction de [Cl⁻] sur 0 à 131 mM — c'est tout ce dont le filtre a besoin — mais
+x = f₁ + f₂ n'y est plus la fraction en FRET (x de 0,864 à 0,641, x_min ajusté 0,475). Ce qui suppose cette lecture
+physique est donc sans objet pour ce senseur : la vérification § 6, et la perturbation « 10 % d'accepteurs inactifs »
+(qui multiplie f₁ et f₂ par 0,9 : +14,9 / +59,7 / +28,6 mM). Les valeurs « document » du journal sont celles de mCer3.
+
+**Ce que change le senseur.** La forme du déclin renseigne davantage : à 10 mM et 10 000 photons, σ_c = 5,6 mM par les
+formes (9,9 pour mCer3), 1,19 mM par le ratio (1,28) ; sd(ln η) = 1,26 % pour 10⁶ photons (1,78 %). η s'apprend donc
+plus vite et le filtre fait mieux :
+
+| | SCLM régulier | SCLM_mCer3 |
+| --- | --- | --- |
+| section 15, temps réel / lissé (mM, 20 répétitions) | 1,45 / 0,87 | 2,13 / 1,14 |
+| section 15, η final | 1,244 ± 0,016 | 1,244 ± 0,021 |
+| section 14, 1 000 photons : 1 ROI / 10 ROI / η connu (mM) | 2,30 / 1,84 / 1,75 | 3,76 / 2,35 / 1,72 |
+| section 14, 10 000 photons : 1 ROI / 10 ROI / η connu (mM) | 0,92 / 0,75 / 0,75 | 1,38 / 1,47 / 0,78 |
+| η final, 1 000 photons, 10 ROI, c statique, transition du document | 1,228 | 1,176 |
+| amincissement, filtre avec fond connu, biais à 10 / 20 / 40 mM | +0,0 / −1,4 / −1,3 | −1,6 / −0,3 / −2,7 |
+| amincissement, filtre sans fond, biais à 10 / 20 / 40 mM | +2,4 / +0,7 / +1,9 | +3,3 / +6,7 / +7,9 |
+| titration relue : η du FLIM (fond ajusté) | 0,976 à 1,026 | 0,991 à 1,046 |
+
+Les points 1 et 2 ci-dessus valent encore, atténués : η reste tiré vers le bas (1,228 à 1 000 photons) ou vers le haut
+avec une transition trop raide (1,361), et la bascule fige η à 1,224 à 3 000 photons (trame 68). À 10 000 photons, 10 ROI
+rejoignent la référence η connu (0,75 mM).
+
+**Ce qui est propre à ce jeu.** L'autofluorescence (formes illustratives) coûte bien plus à l'hybride : +10,0 mM
+(5 % du jaune) et +9,8 mM (5 % des deux canaux), contre +0,7 et −9,0 pour mCer3. L'échantillon « inconnu » (1,9 + 5,2
+millions de photons) se lit 43,3 mM par le ratio (η = 1), 31,7 / 35,9 mM par le FLIM (bleu / deux canaux), 36,7 mM par
+l'hybride, avec η = 0,931 ± 0,2 % : un écart de 7 % à η = 1 que la titration relue (η du FLIM à ± 3 %) n'explique pas
+entièrement ; l'intervalle à 95 % de l'hybride ([36,8 – 36,8]) est plus étroit que le pas de la grille (2,5 %).
 
 ## Pas fait
 

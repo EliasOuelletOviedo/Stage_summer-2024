@@ -1,0 +1,104 @@
+SCLM (800 nm) — calibration : ../FLIM-FRET_2-channels/sorties/declins_purs_2026-10-16_SCLM/irf_bruts_purs_800nm.csv ; déviance/ddl 2.000
+
+Les valeurs « document » sont celles du PDF, calibré sur SCLM_mCer3 : pour un autre senseur, elles ne servent
+que de repère.
+
+1. Vérifications (exemples chiffrés du document)
+  §  6 c pour x = 0,475 (mM)                          document     10.00   calculé 153160.48
+  §  7 R1(0 mM)                                       document      3.61   calculé      6.05
+  §  7 R1(5 mM)                                       document      3.21   calculé      5.25
+  §  7 R1(10 mM)                                      document      2.92   calculé      4.66
+  §  7 R1(20 mM)                                      document      2.50   calculé      3.84
+  §  7 R1(40 mM)                                      document      2.02   calculé      2.92
+  §  7 R1(131 mM)                                     document      1.33   calculé      1.67
+  §  9 ln L(5 mM), N_B = 2560, N_Y = 7440             document  -5697.80   calculé  -5989.23
+  §  9 ln L(10 mM), N_B = 2560, N_Y = 7440            document  -5688.30   calculé  -5884.44
+  §  9 ln L(20 mM), N_B = 2560, N_Y = 7440            document  -5710.70   calculé  -5759.34
+  §  9 maximum de vraisemblance (mM)                  document     10.20   calculé     40.55
+  § 11 c indiqué par le ratio si η = 0.9 (mM)         document      4.80   calculé     31.75
+  § 11 c indiqué par le ratio si η = 1.0 (mM)         document     10.20   calculé     40.55
+  § 11 c indiqué par le ratio si η = 1.1 (mM)         document     16.00   calculé     49.94
+  § 11 c indiqué par le ratio si η = 1.2 (mM)         document     22.40   calculé     60.02
+  § 11 c indiqué par le ratio si η = 1.3 (mM)         document     29.20   calculé     70.83
+  § 12 moyenne a posteriori (mM)                      document     10.10   calculé     40.54
+  § 12 borne basse à 95 % (mM)                        document      7.60   calculé     36.76
+  § 12 borne haute à 95 % (mM)                        document     12.70   calculé     44.79
+
+2. Information de Fisher et borne de Cramér-Rao (section 10)
+  σ_c à 10 mM  10000 photons  forme bleu seule                 6.32 mM (document 10.20) ; photons pour 1 mM ≈ 399 284
+  σ_c à 10 mM  10000 photons  forme jaune seule               11.92 mM (document 39.90) ; photons pour 1 mM ≈ 1 419 958
+  σ_c à 10 mM  10000 photons  formes 2 canaux (eta inconnu)    5.58 mM (document  9.90) ; photons pour 1 mM ≈ 311 650
+  σ_c à 10 mM  10000 photons  ratio (eta connu)                1.19 mM (document  1.28) ; photons pour 1 mM ≈ 14 097
+  σ_c à 10 mM  10000 photons  ratio + formes (eta connu)       1.16 mM (document  1.27) ; photons pour 1 mM ≈ 13 487
+  sd(ln η) pour 10⁶ photons mis en commun à 10 mM : 1.26 % (document 1,8 %)
+  400 tirages à 10 mM : ratio 9.91 ± 1.21 mM (document ± 1,25) ; durée de vie seule 10.8 ± 5.6 mM (document 12,8, ≈ 11)
+
+3. Exemple complet, trame par trame (section 15)
+  trame 1 : N_B = 714, N_Y = 4223, R = 5.91 (R₁(0) = 6.05) ; ratio à η = 1 → 0.7 mM ; FLIM seul → 4.3 mM
+  ligne du ratio : η 1.10 → 4.1 mM ; η 1.20 → 7.8 mM ; η 1.25 → 9.2 mM ; η 1.29 → 11.0 mM ; η 1.39 → 14.4 mM
+  trame   1 : vrai   8.0 | filtre   4.5 [  0.5 –  17.1] η 1.103 ± 11.4 % | lissé   7.8 [  6.2 –   9.7]
+  trame  10 : vrai   8.0 | filtre   3.1 [  0.6 –   7.4] η 1.092 ±  5.2 % | lissé   7.6 [  6.2 –   9.0]
+  trame  50 : vrai   8.0 | filtre   6.5 [  4.2 –   9.2] η 1.236 ±  2.8 % | lissé   7.3 [  5.9 –   8.8]
+  trame  70 : vrai  20.5 | filtre  17.6 [ 14.4 –  21.3] η 1.232 ±  2.3 % | lissé  19.0 [ 16.7 –  21.3]
+  trame 100 : vrai  22.0 | filtre  19.4 [ 15.5 –  23.0] η 1.228 ±  1.9 % | lissé  20.7 [ 18.4 –  23.0]
+  trame 240 : vrai  10.2 | filtre   9.8 [  7.8 –  11.8] η 1.238 ±  1.3 % | lissé   9.4 [  7.9 –  11.0]
+  répétition 1 (la trace ci-dessus) : η final temps réel 1.240 ± 1.2 %, lissé 1.240 (vrai 1.25) ; 3.3 ms par trame (grille complète, avec lissage)
+  bilan, répétition 1 | moyenne ± sd sur 20 répétitions | (document)
+  ratio avec la calibration (η = 1)      biais  -9.55 |  -9.49 ± 0.11 (-11.5) ; erreur typique  9.77 |  9.72 ± 0.11 (11.8) mM
+  durée de vie seule, trame par trame    biais  +1.68 |  +1.90 ± 0.68 (—) ; erreur typique 11.21 | 10.95 ± 0.65 (41.0) mM
+  filtre hybride, temps réel             biais  -0.89 |  -0.28 ± 0.80 (+0.3) ; erreur typique  1.53 |  1.45 ± 0.34 (1.4) mM
+  filtre hybride, lissé après coup       biais  -0.45 |  -0.23 ± 0.66 (-0.5) ; erreur typique  0.81 |  0.87 ± 0.30 (1.0) mM
+  η final temps réel 1.244 ± 0.016, lissé 1.244 ; couverture à 95 % : filtre 97 %, lissé 96 % (minimum 76 %)
+
+4. Version temps réel (section 14)
+    1000 photons, 1 ROI                  RMSE  2.30 mM (document 2.6) | η 1.228 ± 2.5 % | bascule à la trame   nan | 0.63 ms/ROI/trame
+    1000 photons, 10 ROI partageant η    RMSE  1.84 mM (document 2.5) | η 1.224 ± 1.0 % | bascule à la trame   188 | 0.37 ms/ROI/trame
+    1000 photons, η connu d'avance       RMSE  1.75 mM (document 1.7) | η 1.250 ± 0.0 % | bascule à la trame     0 | 0.05 ms/ROI/trame
+    3000 photons, 1 ROI                  RMSE  1.54 mM (document 1.5) | η 1.241 ± 1.5 % | bascule à la trame   nan | 0.76 ms/ROI/trame
+    3000 photons, 10 ROI partageant η    RMSE  1.45 mM (document 1.4) | η 1.224 ± 1.0 % | bascule à la trame    68 | 0.20 ms/ROI/trame
+    3000 photons, η connu d'avance       RMSE  1.15 mM (document 1.1) | η 1.250 ± 0.0 % | bascule à la trame     0 | 0.05 ms/ROI/trame
+   10000 photons, 1 ROI                  RMSE  0.92 mM (document 1.5) | η 1.249 ± 1.0 % | bascule à la trame   191 | 0.62 ms/ROI/trame
+   10000 photons, 10 ROI partageant η    RMSE  0.75 mM (document 0.9) | η 1.247 ± 1.0 % | bascule à la trame    19 | 0.12 ms/ROI/trame
+   10000 photons, η connu d'avance       RMSE  0.75 mM (document 0.8) | η 1.250 ± 0.0 % | bascule à la trame     0 | 0.07 ms/ROI/trame
+
+5. Trames tirées des histogrammes mesurés (amincissement)
+  trames tirées des histogrammes mesurés : 5000 photons, η = 1.25 inconnu, fond mesuré 3.8 % du bleu, 20 répétitions ; erreur sur la seconde moitié de chaque palier
+  ratio (η = 1)             10 mM : biais  -8.68 mM, sd  1.04 mM
+  ratio (η = 1)             40 mM : biais -16.77 mM, sd  1.89 mM
+  ratio (η = 1)             20 mM : biais -11.66 mM, sd  1.46 mM
+  durée de vie seule        10 mM : biais  +1.30 mM, sd  7.88 mM
+  durée de vie seule        40 mM : biais  -1.19 mM, sd 14.28 mM
+  durée de vie seule        20 mM : biais  -0.25 mM, sd 10.71 mM
+  filtre, fond connu        10 mM : biais  +0.01 mM, sd  0.59 mM | η final 1.229 (entre répétitions ± 0.9 %)
+  filtre, fond connu        40 mM : biais  -1.26 mM, sd  1.37 mM | η final 1.229 (entre répétitions ± 0.9 %)
+  filtre, fond connu        20 mM : biais  -1.36 mM, sd  0.85 mM | η final 1.229 (entre répétitions ± 0.9 %)
+  filtre, fond ignoré       10 mM : biais  +2.35 mM, sd  0.65 mM | η final 1.248 (entre répétitions ± 0.8 %)
+  filtre, fond ignoré       40 mM : biais  +1.92 mM, sd  1.48 mM | η final 1.248 (entre répétitions ± 0.8 %)
+  filtre, fond ignoré       20 mM : biais  +0.73 mM, sd  0.92 mM | η final 1.248 (entre répétitions ± 0.8 %)
+   titration complète relue (plancher de la calibration)
+  fond ajusté           ratio (η = 1) : écart max  2.74 mM | η du FLIM : 1.021 1.026 1.001 1.005 0.991 0.976 0.983 0.988  (à 0, 2.5, 5, 10, 20, 40, 80, 131 mM)
+  part moyenne du fond  ratio (η = 1) : écart max  3.60 mM | η du FLIM : 1.028 1.028 1.004 1.006 0.994 0.971 0.966 0.972  (à 0, 2.5, 5, 10, 20, 40, 80, 131 mM)
+  sans fond             ratio (η = 1) : écart max  5.43 mM | η du FLIM : 1.092 1.085 1.057 1.052 1.033 0.990 0.958 0.946  (à 0, 2.5, 5, 10, 20, 40, 80, 131 mM)
+
+6. Robustesse à 10 mM (section 16) : biais calculé (document)
+  aucune                                       ratio  +0.00 (  +0.0) | FLIM bleu  -0.00 (  +0.0) | hybride  -0.02 (  +0.0) mM
+  η = 1.2 (diffusion, profondeur)              ratio  -7.35 (  -8.8) | FLIM bleu  -0.00 (  +0.0) | hybride  -0.00 (  +0.0) mM
+  autofluorescence = 5 % du jaune              ratio  -2.25 (  -2.7) | FLIM bleu  -0.00 (  +0.0) | hybride +10.01 (   —  ) mM
+  autofluorescence = 5 % des deux canaux       ratio  +0.00 (  +0.0) | FLIM bleu  +0.19 (  -9.6) | hybride  +9.79 (   —  ) mM
+  durées de vie 5 % plus courtes               ratio  -0.02 (  +0.0) | FLIM bleu  -5.90 (  -8.4) | hybride  +3.08 (  -7.2) mM
+  10 % d'accepteurs inactifs en plus           ratio +14.88 (  +8.2) | FLIM bleu +59.66 (  +9.0) | hybride +28.61 (  +8.8) mM
+  décalage d'horloge de +10 ps non modélisé    ratio  +0.00 (   —  ) | FLIM bleu  +5.15 (   —  ) | hybride  +1.25 (   —  ) mM
+  fond mesuré non modélisé (3.8 % du bleu)     ratio  +1.82 (   —  ) | FLIM bleu  +9.66 (   —  ) | hybride  +6.68 (   —  ) mM
+
+7. Échantillon inconnu mesuré le 2026-10-16
+  inconnu mesuré : N_B = 1.87e+06, N_Y = 5.17e+06, R = 2.764 | ratio (η = 1) 43.3 mM | FLIM bleu 31.7, 2 canaux 35.9 mM | hybride 36.7 [36.8 – 36.8] mM, η = 0.931 ± 0.2 %
+
+8. η selon le modèle de transition (1 000 photons, 10 ROI)
+  c statique (10 mM)     document (s = 0,04, w = 0,03)  η final 1.228 (vrai 1.25) ; sd a posteriori 0.8 %, entre répétitions 0.6 %
+  c statique (10 mM)     s = 0,04 sans sauts            η final 1.234 (vrai 1.25) ; sd a posteriori 0.8 %, entre répétitions 0.6 %
+  c statique (10 mM)     s = 0,01 sans sauts            η final 1.247 (vrai 1.25) ; sd a posteriori 0.8 %, entre répétitions 0.5 %
+  réponses (section 14)  document (s = 0,04, w = 0,03)  η final 1.237 (vrai 1.25) ; sd a posteriori 0.7 %, entre répétitions 1.0 %
+  réponses (section 14)  s = 0,04 sans sauts            η final 1.264 (vrai 1.25) ; sd a posteriori 0.6 %, entre répétitions 1.4 %
+  réponses (section 14)  s = 0,01 sans sauts            η final 1.361 (vrai 1.25) ; sd a posteriori 0.5 %, entre répétitions 1.8 %
+
+terminé en 136 s

@@ -28,7 +28,7 @@ def donnees(S, mes, cal, p, rng, chemin):
             a.semilogy(t, n, '.', ms=2.5, color=coul, label=f'{c:g} mM mesuré')
             a.semilogy(t, m, '-', lw=0.8, color=coul)
             r.plot(t, (n - m) / np.sqrt(m), '-', lw=0.6, color=coul, label=f'{c:g} mM')
-        a.set_title(f'canal {canal} : titration mCer3 (points) et modèle calibré (traits)')
+        a.set_title(f"canal {canal} : titration {p['donnees']['nom']} (points), modèle (traits)")
         a.set_xlabel('t (ns)'); a.set_ylabel('photons par case'); a.legend(fontsize=8)
         r.set_title(f'canal {canal} : résidus (n − μ)/√μ, modèle aux isothermes', fontsize=10)
         r.set_xlabel('t (ns)'); r.axhline(0, color=NOIR, lw=0.5); r.legend(fontsize=8)
@@ -66,14 +66,14 @@ def exemple(D, p, chemin):
     fig.tight_layout(); fig.savefig(chemin, dpi=130); plt.close(fig)
 
 
-def cramer_rao(lignes, chemin):
+def cramer_rao(lignes, nom, chemin):
     D = pd.DataFrame(lignes)
     fig, a = plt.subplots(figsize=(8, 5))
     for col, coul, ls in (('forme jaune seule', GRIS, ':'), ('formes 2 canaux (eta inconnu)', ORANGE, '-'),
                           ('ratio (eta connu)', BLEU, '-'), ('ratio + formes (eta connu)', VERT, '--')):
         a.loglog(D.c_mM, D[col], ls, color=coul, marker='o', ms=3, label=col)
     a.set_xlabel('[Cl⁻] (mM)'); a.set_ylabel('σ_c minimal (mM)')
-    a.set_title('borne de Cramér-Rao, modèle calibré sur mCer3, 10 000 photons')
+    a.set_title(f'borne de Cramér-Rao, modèle calibré sur {nom}, 10 000 photons')
     a.grid(True, which='both', alpha=0.3); a.legend(fontsize=8)
     fig.tight_layout(); fig.savefig(chemin, dpi=130); plt.close(fig)
 
@@ -87,7 +87,7 @@ def temps_reel(D, chemin):
     fig.tight_layout(); fig.savefig(chemin, dpi=130); plt.close(fig)
 
 
-def amincissement(trace, D, chemin):
+def amincissement(trace, D, nom, chemin):
     fig, ax = plt.subplots(1, 2, figsize=(15, 5), gridspec_kw=dict(width_ratios=[2, 1]))
     a = ax[0]; k = trace['trame']
     a.plot(k, np.clip(trace['durée de vie seule'], 0, 120), '.', ms=3, color=GRIS, label='durée de vie seule')
@@ -96,7 +96,7 @@ def amincissement(trace, D, chemin):
     a.plot(k, trace['filtre, fond connu'], '-', lw=1.4, color=BLEU, label='filtre, fond connu')
     a.plot(k, trace['c_vrai'], '-', color=NOIR, lw=1.2, label='vraie valeur (titration)')
     a.set_ylim(0, 80); a.set_xlabel('trame'); a.set_ylabel('[Cl⁻] (mM)'); a.legend(fontsize=8)
-    a.set_title('trames tirées des histogrammes mesurés (mCer3, 2026-10-16), η = 1,25 inconnu')
+    a.set_title(f'trames tirées des histogrammes mesurés ({nom}, 2026-10-16), η = 1,25 inconnu')
     b = ax[1]
     meth = [m for m in D.methode.unique() if m != 'durée de vie seule']
     pal = sorted(D.palier_mM.unique()); w = 0.8 / len(meth)
