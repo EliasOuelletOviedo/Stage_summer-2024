@@ -10,7 +10,9 @@ s_eta_candidats (0 = η constant) sont moyennés selon leur vraisemblance margin
 Sorties dans sorties_exemples/ : fig_exemple_<scénario>_<photons>.png (les deux panneaux de fig_exemple.png),
 exemple_<scénario>_<photons>.csv.gz (la table par trame), resume.csv, fig_resume.png, journal.txt.
 
-Lancer depuis ce dossier :  python3 exemples.py  [--rapide]      (~15 min ; --rapide : 300 trames, 2 nombres de photons)
+Avec --figures : redessine les figures à partir des tables par trame déjà écrites, sans refaire les courses.
+
+Lancer depuis ce dossier :  python3 exemples.py  [--rapide | --figures]      (~15 min ; --rapide : 300 trames, 2 nombres de photons)
 """
 import os, sys, time
 import numpy as np
@@ -24,6 +26,7 @@ from src.exemple import METHODES_EXEMPLE, course_exemple, bilan_exemple, etirer
 from src import figures
 
 RAPIDE = '--rapide' in sys.argv
+FIGURES = '--figures' in sys.argv
 JOURNAL = []
 
 
@@ -31,9 +34,28 @@ def dire(*a):
     s = ' '.join(str(x) for x in a); print(s); JOURNAL.append(s)
 
 
+def titre_figure(N, T, sc):
+    return f"{N} photons par trame, {T} trames — {sc['titre']}, inconnu du filtre — A −30 % (photoblanchiment)"
+
+
+def redessiner(p):
+    """Les figures seules, depuis exemple_<scénario>_<photons>.csv.gz (poids des modèles : colonnes poids_filtre_s_eta_*)."""
+    q = p['exemples']; sortie = os.path.join(ICI, q['sorties'])
+    for sc in q['scenarios']:
+        for N in q['photons']:
+            nom = f"{sc['nom']}_{N}"
+            D = pd.read_csv(os.path.join(sortie, f'exemple_{nom}.csv.gz'))
+            cols = [c for c in D.columns if c.startswith('poids_filtre_s_eta_')]
+            D.attrs['poids_filtre_final'] = {float(c[len('poids_filtre_s_eta_'):]): D[c].iloc[-1] for c in cols}
+            figures.exemple(D, titre_figure(N, len(D), sc), os.path.join(sortie, f'fig_exemple_{nom}.png'), eta_lim=(0.8, 1.3))
+            print(f"fig_exemple_{nom}.png")
+
+
 def main():
     t0 = time.time()
     p = charger_params(); q, f = p['exemples'], p['filtre']
+    if FIGURES:
+        return redessiner(p)
     sortie = os.path.join(ICI, q['sorties']); os.makedirs(sortie, exist_ok=True)
     S = Senseur(charger_calibration(p))
     g = Grille(S, grille_c(f), grille_eta(f))
@@ -51,8 +73,7 @@ def main():
             D, _, duree = course_exemple(S, g, f, e, np.random.default_rng(q['graine'] + 100 * i + j), eta, lisser=False)
             nom = f"{sc['nom']}_{N}"
             D.to_csv(os.path.join(sortie, f'exemple_{nom}.csv.gz'), index=False, float_format='%.6g')
-            figures.exemple(D, f"{N} photons par trame, {T} trames — {sc['titre']}, inconnu du filtre — A −30 % (photoblanchiment)",
-                            os.path.join(sortie, f'fig_exemple_{nom}.png'), eta_lim=(0.8, 1.3))
+            figures.exemple(D, titre_figure(N, T, sc), os.path.join(sortie, f'fig_exemple_{nom}.png'), eta_lim=(0.8, 1.3))
             b = bilan_exemple(D)
             fin = slice(T - T // 10, T)                          # le dernier dixième : η appris, c sur son plateau final
             b.update(scenario=sc['nom'], photons=N, trames=T,

@@ -298,9 +298,21 @@ Médiane de |écart| (mM), ratio / hybride :
 A −30 %) sur **3 000 trames** au lieu de 300, même forme de courbe (montée à la trame 601, τ 40 trames ; descente à
 1 401, τ 250), pour 1 000, 3 000, 10 000, 30 000 et 100 000 photons par trame et trois η vrais, inconnus du filtre :
 1, 1,1, et une dérive linéaire de 1 à 1,1 de la première à la dernière trame. **Filtre temps réel seulement** (aucun
-lissage) : une figure par cas (`fig_exemple_<scénario>_<photons>.png` ; ratio en points, filtre et son intervalle à
-95 %, η en temps réel ± 2 sd et poids des modèles de dynamique à la dernière trame), la table par trame
-(`exemple_<scénario>_<photons>.csv.gz`), `resume.csv`, `fig_resume.png`, `journal.txt`.
+lissage) : une figure par cas (`fig_exemple_<scénario>_<photons>.png` ; ratio en ligne orange, filtre et son intervalle
+à 95 % en bleu, erreur rms de chaque lecture dans la légende ; η en temps réel ± 2 sd, en bleu, et poids des modèles de
+dynamique à la dernière trame), la table par trame (`exemple_<scénario>_<photons>.csv.gz`), `resume.csv`,
+`fig_resume.png`, `journal.txt`. `python3 exemples.py --figures` redessine les figures depuis les tables, sans refaire
+les courses.
+
+Erreur rms sur toute la course (mM), durée de vie seule / ratio lu à η = 1 / filtre hybride temps réel :
+
+| photons par trame | η = 1 | η = 1,1 | η dérive de 1 à 1,1 |
+| --- | --- | --- | --- |
+| 1 000 | 112 / 4,84 / 3,53 | 115 / 6,74 / 2,49 | 110 / 5,32 / 4,83 |
+| 3 000 | 57,2 / 2,85 / 1,88 | 64,4 / 6,01 / 1,16 | 64,8 / 4,03 / 2,36 |
+| 10 000 | 17,2 / 1,53 / 0,76 | 20,8 / 5,65 / 1,02 | 20,2 / 3,47 / 1,49 |
+| 30 000 | 7,94 / 0,90 / 0,58 | 8,60 / 5,60 / 0,60 | 8,06 / 3,25 / 1,07 |
+| 100 000 | 4,10 / 0,49 / 0,38 | 4,26 / 5,55 / 0,45 | 4,07 / 3,17 / 0,56 |
 
 ### η qui dérive
 
