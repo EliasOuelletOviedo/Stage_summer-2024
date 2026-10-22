@@ -1,0 +1,13 @@
+methode,palier_mM,biais_mM,sd_mM,eta_final,eta_final_sd_entre_rep
+ratio (η = 1),10,-9.6989,0.558334,,
+ratio (η = 1),40,-20.9909,2.10427,,
+ratio (η = 1),20,-13.2649,1.51972,,
+durée de vie seule,10,4.57353,19.8066,,
+durée de vie seule,40,17.833,58.0342,,
+durée de vie seule,20,8.93312,26.6154,,
+"filtre, fond connu",10,-1.61667,0.712059,1.23834,0.0214679
+"filtre, fond connu",40,-2.73102,1.53127,1.23834,0.0214679
+"filtre, fond connu",20,-0.28754,0.982227,1.23834,0.0214679
+"filtre, fond ignoré",10,3.24562,0.897876,1.32076,0.0237981
+"filtre, fond ignoré",40,7.86218,1.94096,1.32076,0.0237981
+"filtre, fond ignoré",20,6.71265,1.23798,1.32076,0.0237981

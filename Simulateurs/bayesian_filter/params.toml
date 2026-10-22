@@ -1,0 +1,92 @@
+# params.toml — le seul endroit pour les constantes du filtre bayésien hybride (ratio + FLIM) et de son
+# simulateur, d'après « Mesurer le chlore avec SuperClomeleon : FLIM, ratio et filtre bayésien expliqués.pdf ».
+#
+# La calibration (durées de vie, λ, G, g₂, κ, isothermes, IRF, fonds) n'est PAS ici : step0_calibration.py
+# l'ajuste sur les histogrammes mCer3 du 2026-10-16 et l'écrit dans calibration.json. Ne pas l'éditer à la
+# main, relancer step0.
+
+[donnees]
+# histogrammes sommés (8 [Cl⁻] × 2 canaux + IRF) extraits des 900 .sdt de Data/2026-10-16/SCLM_mCer3 (step17)
+dossier = "../FLIM-FRET_2-channels/sorties/declins_purs_2026-10-16_SCLM_mCer3"
+titration = "irf_bruts_mCer3.csv"
+inconnu = "inconnu_bruts_mCer3.csv"
+# le module de calibration qui accompagne ces données (ajustement conjoint, section 9 du document)
+module_calibration = "sclm_hybride.py"
+
+[filtre]
+# section 12 : 260 valeurs de [Cl⁻], de 0,5 à 300 mM, pas de 2,5 % ; section 14 : 61 valeurs de η, de 0,6 à 1,8
+c_min_mM = 0.5
+c_max_mM = 300.0
+n_c = 260
+eta_min = 0.6
+eta_max = 1.8
+n_eta = 61
+# section 13 : ln c_k = ln c_{k-1} + ε, ε ~ (1 − w) N(0, s²) + w N(0, s_saut²)
+s = 0.04
+w = 0.03
+s_saut = 0.5
+# lisseur hors ligne : η quasi constant pour une ROI (marche aléatoire de 0,2 % par trame sur ln η)
+s_eta_lisseur = 0.002
+# section 14 : bascule vers le filtre léger (ratio seul) quand sd(ln η) < 1 % ; 16 portes temporelles
+bascule_sd_ln_eta = 0.01
+portes = 16
+
+[simulation]
+graine = 20261022
+
+[exemple]
+# section 15 : un soma, η = 1,25 inconnu, 5 000 photons par trame, 8 → 22 mM à la trame 61, → 10 mM à la trame 141
+trames = 300
+photons = 5000
+eta = 1.25
+c_base_mM = 8.0
+c_haut_mM = 22.0
+c_fin_mM = 10.0
+trame_montee = 61
+tau_montee_trames = 4.0
+trame_descente = 141
+tau_descente_trames = 25.0
+# l'amplitude A dérive (photoblanchiment) : le ratio et les formes n'en dépendent pas
+derive_A = -0.30
+# la trace détaillée est la répétition 1 ; les suivantes ne donnent que le bilan
+repetitions = 20
+
+[temps_reel]
+# section 14 : 300 trames, η = 1,25 inconnu, [Cl⁻] propre à chaque ROI, erreur mesurée après la trame 100
+trames = 300
+eta = 1.25
+photons = [1000, 3000, 10000]
+n_roi = 10
+trame_debut_erreur = 100
+repetitions = 3
+
+[amincissement]
+# trames tirées des histogrammes MESURÉS (Poisson sur la forme mesurée, fond et défauts du modèle compris) :
+# aucune hypothèse de modèle dans le générateur. Seules les 8 [Cl⁻] de la titration sont disponibles.
+trames = 300
+photons = 5000
+eta = 1.25
+paliers_mM = [10.0, 40.0, 20.0]        # trois paliers de 100 trames
+repetitions = 20
+
+[information]
+# section 10 : borne de Cramér-Rao pour 10 000 photons
+photons = 10000
+concentrations_mM = [0.5, 1.0, 2.5, 5.0, 7.5, 10.0, 15.0, 20.0, 30.0, 40.0, 60.0, 80.0, 100.0, 131.0]
+# vérification par simulation (fin de la section 10) : 400 tirages à 10 mM
+tirages = 400
+c_verif_mM = 10.0
+
+[robustesse]
+# section 16 : biais à 10 mM sur l'histogramme attendu (sans bruit), selon la perturbation
+c_mM = 10.0
+photons = 1.0e8
+eta = 1.2
+autofluo_part = 0.05
+# formes d'autofluorescence ILLUSTRATIVES (à mesurer dans du tissu sans senseur) : NAD(P)H dans le bleu,
+# flavines dans le jaune ; [poids, τ en ns]
+autofluo_bleu = [[0.7, 0.4], [0.3, 2.5]]
+autofluo_jaune = [[0.6, 0.3], [0.4, 2.0]]
+taus_plus_courts = 0.05
+accepteurs_inactifs = 0.10
+decalage_ps = 10.0

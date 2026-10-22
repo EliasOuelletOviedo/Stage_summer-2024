@@ -1,0 +1,25 @@
+repetition,trajectoire,transition,eta_final,eta_sd_pct
+1,c statique (10 mM),"document (s = 0,04, w = 0,03)",1.16135,1.18706
+1,c statique (10 mM),"s = 0,04 sans sauts",1.18008,1.1083
+1,c statique (10 mM),"s = 0,01 sans sauts",1.21894,1.11106
+1,réponses (section 14),"document (s = 0,04, w = 0,03)",1.23565,1.12857
+1,réponses (section 14),"s = 0,04 sans sauts",1.29692,0.972581
+1,réponses (section 14),"s = 0,01 sans sauts",1.47216,0.874503
+2,c statique (10 mM),"document (s = 0,04, w = 0,03)",1.16925,1.17071
+2,c statique (10 mM),"s = 0,04 sans sauts",1.18775,1.1061
+2,c statique (10 mM),"s = 0,01 sans sauts",1.22367,1.09467
+2,réponses (section 14),"document (s = 0,04, w = 0,03)",1.24378,1.13982
+2,réponses (section 14),"s = 0,04 sans sauts",1.2935,0.995807
+2,réponses (section 14),"s = 0,01 sans sauts",1.45288,0.967584
+3,c statique (10 mM),"document (s = 0,04, w = 0,03)",1.17988,1.16853
+3,c statique (10 mM),"s = 0,04 sans sauts",1.19448,1.13164
+3,c statique (10 mM),"s = 0,01 sans sauts",1.22943,1.10852
+3,réponses (section 14),"document (s = 0,04, w = 0,03)",1.20302,1.09566
+3,réponses (section 14),"s = 0,04 sans sauts",1.25836,1.01793
+3,réponses (section 14),"s = 0,01 sans sauts",1.40422,0.991543
+4,c statique (10 mM),"document (s = 0,04, w = 0,03)",1.19475,1.17199
+4,c statique (10 mM),"s = 0,04 sans sauts",1.21158,1.12346
+4,c statique (10 mM),"s = 0,01 sans sauts",1.24766,1.11166
+4,réponses (section 14),"document (s = 0,04, w = 0,03)",1.21642,1.10106
+4,réponses (section 14),"s = 0,04 sans sauts",1.28355,1.00896
+4,réponses (section 14),"s = 0,01 sans sauts",1.44977,0.893274

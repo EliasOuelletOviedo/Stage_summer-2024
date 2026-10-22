@@ -1,0 +1,9 @@
+perturbation,ratio_calibration_fixe,flim_bleu_taus_fixes,hybride_eta_libre,doc_ratio,doc_flim_bleu,doc_hybride
+aucune,7.64451e-07,0.00462288,0.00462288,0,0,0
+"η = 1.2 (diffusion, profondeur)",-8.73131,0.00462288,-0.00671325,-8.8,0,0
+autofluorescence = 5 % du jaune,-2.74187,0.00462288,0.721006,-2.7,0,
+autofluorescence = 5 % des deux canaux,7.64451e-07,-8,-8,0,-9.6,
+durées de vie 5 % plus courtes,-0.00100443,-8,-8,0,-8.4,-7.2
+10 % d'accepteurs inactifs en plus,8.21973,8.96267,8.87687,8.2,9,8.8
+décalage d'horloge de +10 ps non modélisé,2.26254e-05,7.08446,3.51076,,,
+fond mesuré non modélisé (2.3 % du bleu),1.33751,5.30527,4.87755,,,
