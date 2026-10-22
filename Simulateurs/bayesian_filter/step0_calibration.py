@@ -27,11 +27,11 @@ def module_calibration(p):
     return m
 
 
-def main():
+def calibrer(p, csv, sortie):
+    """Ajuste la calibration sur les histogrammes de `csv` (format du jeu de `p`) et l'écrit dans `sortie` (json)."""
     t0 = time.time()
-    p = charger_params(chemin_params(sys.argv))
     sh = module_calibration(p)
-    d = sh.load(os.path.join(ICI, p['donnees']['dossier'], p['donnees']['titration']))
+    d = sh.load(csv)
     irfp = {ch: sh.fit_irf(d, ch, ntail=2 if ch == 1 else 3) for ch in (1, 2)}
     R = sh.fit_joint(d, irfp, G2=True)
     iso = sh.fit_isotherms(R)
@@ -52,7 +52,7 @@ def main():
             part_fond_bleu=float(q[f'bgB{c}'] * w.sum() / mB[c][w].sum()),
             part_fond_jaune=float(q[f'bgY{c}'] * w.sum() / mY[c][w].sum())))
     out = dict(
-        jeu=p['donnees']['nom'], source=os.path.join(p['donnees']['dossier'], p['donnees']['titration']),
+        jeu=p['donnees']['nom'], source=os.path.relpath(csv, ICI),
         periode_ns=float(d['T']), n_cases=int(d['NB']), fenetre=[int(i) for i in np.where(w)[0][[0, -1]]],
         constantes={k: float(q[k]) for k in cles}, erreurs_types={k: float(se[k]) for k in cles},
         isothermes={k: dict(fmax=float(v['fmax']), fmin=float(v['fmin']), K=float(v['K']),
@@ -63,7 +63,7 @@ def main():
                                jaune=float(np.mean([t['decalage_jaune_ps'] for t in titration]))),
         deviance=float(R['dev']), ddl=int(R['dof']), titration=titration,
         note="η = 1 par définition dans les conditions de la calibration ; λ, G et κ sont relatifs à ces conditions.")
-    with open(os.path.join(ICI, p['donnees']['calibration']), 'w') as f:
+    with open(sortie, 'w') as f:
         json.dump(out, f, indent=2, ensure_ascii=False)
     k = out['constantes']
     print(f"déviance/ddl = {R['dev']:.0f}/{R['dof']} = {R['dev'] / R['dof']:.3f}")
@@ -72,7 +72,14 @@ def main():
         print(f"{n:2s} : max {v['fmax']:.3f}  min {v['fmin']:.3f}  K {v['K']:.1f} mM")
     print("part du fond dans la fenêtre (bleu / jaune, %) :",
           " ".join(f"{t['c_mM']:g}:{100 * t['part_fond_bleu']:.1f}/{100 * t['part_fond_jaune']:.1f}" for t in titration))
-    print(f"{p['donnees']['calibration']} écrit ({time.time() - t0:.0f} s)")
+    print(f"{os.path.relpath(sortie, ICI)} écrit ({time.time() - t0:.0f} s)")
+    return out
+
+
+def main():
+    p = charger_params(chemin_params(sys.argv))
+    calibrer(p, os.path.join(ICI, p['donnees']['dossier'], p['donnees']['titration']),
+             os.path.join(ICI, p['donnees']['calibration']))
 
 
 if __name__ == '__main__':

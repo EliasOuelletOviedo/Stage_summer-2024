@@ -106,3 +106,46 @@ def amincissement(trace, D, nom, chemin):
     b.set_xticks(np.arange(len(pal)) + w); b.set_xticklabels([f'{c:g} mM' for c in pal]); b.axhline(0, color=NOIR, lw=0.5)
     b.set_ylabel('biais (mM), barres : sd par trame'); b.set_title('biais par palier (moyenne des répétitions)'); b.legend(fontsize=8)
     fig.tight_layout(); fig.savefig(chemin, dpi=130); plt.close(fig)
+
+
+COULEURS_TECHNIQUES = (GRIS, ORANGE, BLEU, VERT)
+
+
+def boxplots(stats, N, conc, techniques, n_ech, chemin):
+    """Un panneau par concentration, une boîte par technique : boîte 25–75 %, trait médian, moustaches 2,5–97,5 %."""
+    fig, ax = plt.subplots(2, 4, figsize=(17, 8.5))
+    for a, c in zip(ax.ravel(), conc):
+        bx = [dict(label=t, whislo=stats[(N, c, t)][0], q1=stats[(N, c, t)][1], med=stats[(N, c, t)][2],
+                   q3=stats[(N, c, t)][3], whishi=stats[(N, c, t)][4]) for t in techniques]
+        art = a.bxp(bx, showfliers=False, patch_artist=True, widths=0.6, medianprops=dict(color=NOIR, lw=1.5))
+        for patch, coul in zip(art['boxes'], COULEURS_TECHNIQUES):
+            patch.set_facecolor(coul); patch.set_alpha(0.75)
+        a.axhline(0, color=NOIR, lw=0.6, ls='--')
+        a.set_xticks([]); a.set_title(f'{c:g} mM'); a.grid(True, axis='y', alpha=0.3)
+    for a in ax[:, 0]:
+        a.set_ylabel('c mesuré − c réel (mM)')
+    poignees = [plt.Rectangle((0, 0), 1, 1, color=coul, alpha=0.75) for coul in COULEURS_TECHNIQUES]
+    fig.legend(poignees, techniques, loc='lower center', ncol=4, frameon=False)
+    milliers = lambda x: f'{x:,}'.replace(',', ' ')
+    fig.suptitle(f'{milliers(N)} photons bleus par échantillon — {milliers(n_ech)} échantillons par concentration, tirés des .sdt de test'
+                 + '\nboîte : 25–75 %, trait : médiane, moustaches : 2,5–97,5 %')
+    fig.tight_layout(rect=(0, 0.04, 1, 0.95)); fig.savefig(chemin, dpi=130); plt.close(fig)
+
+
+def resume_boxplots(D, techniques, chemin):
+    """Largeur de l'intervalle 2,5–97,5 % et médiane de l'écart contre le nombre de photons, par concentration."""
+    conc = sorted(D.c_mM.unique())
+    fig, ax = plt.subplots(2, 4, figsize=(17, 8.5), sharex=True)
+    for a, c in zip(ax.ravel(), conc):
+        for t, coul in zip(techniques, COULEURS_TECHNIQUES):
+            x = D[(D.c_mM == c) & (D.technique == t)].sort_values('photons_bleus')
+            a.loglog(x.photons_bleus, (x.q97_5 - x.q2_5) / 2, 'o-', color=coul, ms=3, label=t)
+            a.loglog(x.photons_bleus, np.abs(x.mediane), 'x:', color=coul, ms=4)
+        a.set_title(f'{c:g} mM'); a.grid(True, which='both', alpha=0.3)
+    for a in ax[1]:
+        a.set_xlabel('photons bleus')
+    for a in ax[:, 0]:
+        a.set_ylabel('mM')
+    ax[0, 0].legend(fontsize=8)
+    fig.suptitle('traits pleins : demi-largeur de l\'intervalle 2,5–97,5 % de l\'écart ; pointillés : |médiane de l\'écart| (biais)')
+    fig.tight_layout(rect=(0, 0, 1, 0.96)); fig.savefig(chemin, dpi=130); plt.close(fig)

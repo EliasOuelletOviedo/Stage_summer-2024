@@ -1,0 +1,69 @@
+      0 mM : 50 fichiers de calibration, 50 de test ; photons bleus par fichier de test 111484 à 114298
+    2.5 mM : 48 fichiers de calibration, 50 de test ; photons bleus par fichier de test 117567 à 120687
+      5 mM : 50 fichiers de calibration, 50 de test ; photons bleus par fichier de test 121212 à 130457
+     10 mM : 50 fichiers de calibration, 50 de test ; photons bleus par fichier de test 135220 à 139513
+     20 mM : 50 fichiers de calibration, 50 de test ; photons bleus par fichier de test 143512 à 147428
+     40 mM : 50 fichiers de calibration, 50 de test ; photons bleus par fichier de test 168504 à 173787
+     80 mM : 50 fichiers de calibration, 50 de test ; photons bleus par fichier de test 197943 à 203130
+    131 mM : 50 fichiers de calibration, 50 de test ; photons bleus par fichier de test 218086 à 224862
+
+calibration (modèle du document) sur les fichiers impairs :
+  τ1 0.0865  τ2 0.8519  τD 3.7516  τA 3.4829 ns | λ 0.772  G 2.347  g2 0.762  κ 0.636 | x : K 62.7 mM | déviance/ddl 1.648
+  fond : 2.37 % du bleu, 0.11 % du jaune
+  temps de vie unique τ(c) : 0 mM 3.404 ns, 2.5 mM 3.418 ns, 5 mM 3.428 ns, 10 mM 3.447 ns, 20 mM 3.515 ns, 40 mM 3.559 ns, 80 mM 3.620 ns, 131 mM 3.653 ns
+  sommes de calibration : η du contexte 0.999 0.993 1.010 0.984 1.041 0.984 1.023 1.037
+  sommes de calibration relues (écart, mM) : temps de vie unique +0.0 +0.0 +0.0 +0.0 +0.0 +0.0 +0.0 +0.0 | FLIM du système +0.0 -0.1 +0.5 -1.0 +3.7 -2.4 +4.6 +14.0 | ratio +0.0 +0.2 +0.0 -0.1 +0.5 -0.6 -0.6 -1.2 | hybride FRET-FLIM +0.0 -0.1 +0.5 -1.0 +3.7 -2.4 +4.6 +14.0
+  sommes de test        : η du contexte 1.000 0.991 1.015 0.985 1.037 0.983 1.022 1.039
+  sommes de test        relues (écart, mM) : temps de vie unique +0.0 -0.9 +0.2 -0.4 -0.2 -2.4 +4.5 +3.3 | FLIM du système +0.0 -0.1 +0.7 -0.9 +3.4 -2.5 +4.4 +15.2 | ratio +0.0 +0.2 +0.0 -0.1 +0.6 -0.6 -0.5 -0.9 | hybride FRET-FLIM +0.0 -0.1 +0.7 -0.9 +3.4 -2.5 +4.4 +15.2
+
+1000 photons bleus, 20000 échantillons par concentration
+      0 mM (1 fichier) médiane [IQR] : temps de vie unique +0.00 [19.72] | FLIM du système +0.00 [7.26] | ratio +0.00 [0.96] | hybride FRET-FLIM +0.08 [1.07] | η du contexte 1.001 [0.994 – 1.029]
+    2.5 mM (1 fichier) médiane [IQR] : temps de vie unique -0.96 [23.48] | FLIM du système -0.16 [11.99] | ratio +0.18 [2.13] | hybride FRET-FLIM -0.16 [2.58] | η du contexte 0.992 [0.944 – 1.044]
+      5 mM (1 fichier) médiane [IQR] : temps de vie unique +0.08 [29.42] | FLIM du système +0.80 [16.72] | ratio +0.00 [2.31] | hybride FRET-FLIM +0.73 [2.89] | η du contexte 1.015 [0.965 – 1.069]
+     10 mM (1 fichier) médiane [IQR] : temps de vie unique -0.55 [39.71] | FLIM du système -0.66 [21.75] | ratio -0.13 [2.76] | hybride FRET-FLIM -0.93 [3.34] | η du contexte 0.985 [0.934 – 1.042]
+     20 mM (1 fichier) médiane [IQR] : temps de vie unique -0.48 [89.58] | FLIM du système +3.39 [34.74] | ratio +0.55 [3.82] | hybride FRET-FLIM +3.43 [5.25] | η du contexte 1.037 [0.978 – 1.101]
+     40 mM (1 fichier) médiane [IQR] : temps de vie unique -2.30 [149.88] | FLIM du système -1.97 [64.02] | ratio -0.61 [6.07] | hybride FRET-FLIM -2.47 [8.02] | η du contexte 0.983 [0.915 – 1.061]
+     80 mM (1 fichier) médiane [IQR] : temps de vie unique +1.05 [244.17] | FLIM du système +4.59 [178.90] | ratio -0.48 [12.11] | hybride FRET-FLIM +4.39 [18.82] | η du contexte 1.022 [0.939 – 1.114]
+    131 mM (1 fichier) médiane [IQR] : temps de vie unique -1.05 [271.77] | FLIM du système +15.21 [243.99] | ratio -1.06 [22.24] | hybride FRET-FLIM +15.50 [43.30] | η du contexte 1.040 [0.937 – 1.160]
+
+3000 photons bleus, 20000 échantillons par concentration
+      0 mM (1 fichier) médiane [IQR] : temps de vie unique +0.00 [13.03] | FLIM du système +0.00 [3.47] | ratio +0.00 [0.55] | hybride FRET-FLIM +0.00 [0.56] | η du contexte 1.000 [0.996 – 1.008]
+    2.5 mM (1 fichier) médiane [IQR] : temps de vie unique -0.64 [14.45] | FLIM du système -0.19 [7.42] | ratio +0.22 [1.25] | hybride FRET-FLIM -0.15 [1.50] | η du contexte 0.991 [0.963 – 1.021]
+      5 mM (1 fichier) médiane [IQR] : temps de vie unique +0.29 [16.10] | FLIM du système +0.84 [10.01] | ratio -0.01 [1.36] | hybride FRET-FLIM +0.74 [1.68] | η du contexte 1.015 [0.986 – 1.047]
+     10 mM (1 fichier) médiane [IQR] : temps de vie unique -0.36 [18.70] | FLIM du système -0.81 [12.06] | ratio -0.09 [1.62] | hybride FRET-FLIM -0.92 [1.94] | η du contexte 0.985 [0.955 – 1.017]
+     20 mM (1 fichier) médiane [IQR] : temps de vie unique -0.20 [40.66] | FLIM du système +3.41 [19.73] | ratio +0.57 [2.25] | hybride FRET-FLIM +3.41 [3.04] | η du contexte 1.037 [1.003 – 1.073]
+     40 mM (1 fichier) médiane [IQR] : temps de vie unique -2.20 [65.84] | FLIM du système -2.05 [34.69] | ratio -0.58 [3.50] | hybride FRET-FLIM -2.45 [4.62] | η du contexte 0.983 [0.942 – 1.027]
+     80 mM (1 fichier) médiane [IQR] : temps de vie unique +3.79 [152.37] | FLIM du système +4.53 [87.63] | ratio -0.48 [7.10] | hybride FRET-FLIM +4.44 [11.02] | η du contexte 1.022 [0.973 – 1.074]
+    131 mM (1 fichier) médiane [IQR] : temps de vie unique +3.58 [185.11] | FLIM du système +14.27 [220.24] | ratio -1.01 [12.69] | hybride FRET-FLIM +15.15 [24.71] | η du contexte 1.039 [0.976 – 1.106]
+
+10000 photons bleus, 20000 échantillons par concentration
+      0 mM (1 fichier) médiane [IQR] : temps de vie unique +0.00 [7.52] | FLIM du système +0.00 [1.39] | ratio +0.00 [0.31] | hybride FRET-FLIM +0.00 [0.30] | η du contexte 1.000 [0.998 – 1.002]
+    2.5 mM (1 fichier) médiane [IQR] : temps de vie unique -1.00 [10.32] | FLIM du système -0.15 [4.88] | ratio +0.23 [0.69] | hybride FRET-FLIM -0.15 [0.83] | η du contexte 0.991 [0.976 – 1.007]
+      5 mM (1 fichier) médiane [IQR] : temps de vie unique +0.26 [12.76] | FLIM du système +0.76 [5.45] | ratio +0.00 [0.74] | hybride FRET-FLIM +0.72 [0.92] | η du contexte 1.015 [0.999 – 1.032]
+     10 mM (1 fichier) médiane [IQR] : temps de vie unique -0.37 [13.74] | FLIM du système -0.88 [6.49] | ratio -0.08 [0.92] | hybride FRET-FLIM -0.92 [1.09] | η du contexte 0.985 [0.968 – 1.002]
+     20 mM (1 fichier) médiane [IQR] : temps de vie unique -0.06 [20.76] | FLIM du système +3.32 [10.71] | ratio +0.55 [1.26] | hybride FRET-FLIM +3.40 [1.67] | η du contexte 1.037 [1.018 – 1.057]
+     40 mM (1 fichier) médiane [IQR] : temps de vie unique -2.69 [36.98] | FLIM du système -2.51 [18.18] | ratio -0.59 [2.00] | hybride FRET-FLIM -2.50 [2.62] | η du contexte 0.983 [0.960 – 1.007]
+     80 mM (1 fichier) médiane [IQR] : temps de vie unique +4.15 [88.48] | FLIM du système +4.54 [45.37] | ratio -0.45 [3.99] | hybride FRET-FLIM +4.48 [6.06] | η du contexte 1.022 [0.995 – 1.050]
+    131 mM (1 fichier) médiane [IQR] : temps de vie unique +2.23 [114.19] | FLIM du système +14.88 [114.32] | ratio -1.00 [7.07] | hybride FRET-FLIM +15.01 [13.75] | η du contexte 1.039 [1.003 – 1.075]
+
+30000 photons bleus, 20000 échantillons par concentration
+      0 mM (1 fichier) médiane [IQR] : temps de vie unique +0.00 [3.67] | FLIM du système +0.00 [0.49] | ratio +0.00 [0.21] | hybride FRET-FLIM +0.00 [0.20] | η du contexte 1.000 [0.999 – 1.001]
+    2.5 mM (1 fichier) médiane [IQR] : temps de vie unique -0.99 [6.76] | FLIM du système -0.16 [2.92] | ratio +0.22 [0.42] | hybride FRET-FLIM -0.15 [0.49] | η du contexte 0.991 [0.982 – 1.001]
+      5 mM (1 fichier) médiane [IQR] : temps de vie unique +0.25 [9.72] | FLIM du système +0.73 [3.14] | ratio +0.00 [0.42] | hybride FRET-FLIM +0.73 [0.53] | η du contexte 1.015 [1.006 – 1.025]
+     10 mM (1 fichier) médiane [IQR] : temps de vie unique -0.43 [8.61] | FLIM du système -0.92 [3.80] | ratio -0.08 [0.57] | hybride FRET-FLIM -0.91 [0.68] | η du contexte 0.985 [0.975 – 0.995]
+     20 mM (1 fichier) médiane [IQR] : temps de vie unique -0.16 [10.75] | FLIM du système +3.38 [6.19] | ratio +0.55 [0.79] | hybride FRET-FLIM +3.39 [1.02] | η du contexte 1.037 [1.026 – 1.048]
+     40 mM (1 fichier) médiane [IQR] : temps de vie unique -2.40 [22.06] | FLIM du système -2.55 [10.52] | ratio -0.58 [1.22] | hybride FRET-FLIM -2.50 [1.56] | η du contexte 0.983 [0.970 – 0.997]
+     80 mM (1 fichier) médiane [IQR] : temps de vie unique +4.23 [52.75] | FLIM du système +4.54 [25.67] | ratio -0.45 [2.47] | hybride FRET-FLIM +4.45 [3.59] | η du contexte 1.022 [1.006 – 1.038]
+    131 mM (1 fichier) médiane [IQR] : temps de vie unique +3.24 [70.52] | FLIM du système +14.94 [62.03] | ratio -0.93 [4.21] | hybride FRET-FLIM +15.20 [7.96] | η du contexte 1.039 [1.018 – 1.059]
+
+100000 photons bleus, 20000 échantillons par concentration
+      0 mM (2 fichiers) médiane [IQR] : temps de vie unique +0.00 [1.47] | FLIM du système +0.00 [0.00] | ratio +0.00 [0.12] | hybride FRET-FLIM +0.00 [0.11] | η du contexte 1.000 [1.000 – 1.001]
+    2.5 mM (2 fichiers) médiane [IQR] : temps de vie unique -0.92 [4.16] | FLIM du système -0.14 [1.65] | ratio +0.23 [0.25] | hybride FRET-FLIM -0.15 [0.29] | η du contexte 0.991 [0.986 – 0.996]
+      5 mM (2 fichiers) médiane [IQR] : temps de vie unique +0.26 [6.01] | FLIM du système +0.73 [1.75] | ratio -0.00 [0.23] | hybride FRET-FLIM +0.72 [0.29] | η du contexte 1.015 [1.010 – 1.020]
+     10 mM (2 fichiers) médiane [IQR] : temps de vie unique -0.39 [4.79] | FLIM du système -0.93 [2.03] | ratio -0.08 [0.34] | hybride FRET-FLIM -0.92 [0.38] | η du contexte 0.985 [0.980 – 0.990]
+     20 mM (2 fichiers) médiane [IQR] : temps de vie unique -0.22 [5.52] | FLIM du système +3.36 [3.47] | ratio +0.54 [0.46] | hybride FRET-FLIM +3.39 [0.57] | η du contexte 1.037 [1.031 – 1.043]
+     40 mM (2 fichiers) médiane [IQR] : temps de vie unique -2.32 [12.03] | FLIM du système -2.53 [5.85] | ratio -0.59 [0.72] | hybride FRET-FLIM -2.50 [0.90] | η du contexte 0.983 [0.976 – 0.991]
+     80 mM (2 fichiers) médiane [IQR] : temps de vie unique +4.37 [27.53] | FLIM du système +4.38 [14.29] | ratio -0.47 [1.40] | hybride FRET-FLIM +4.44 [2.03] | η du contexte 1.022 [1.013 – 1.031]
+    131 mM (1 fichier) médiane [IQR] : temps de vie unique +2.67 [38.09] | FLIM du système +15.08 [31.95] | ratio -0.92 [2.51] | hybride FRET-FLIM +15.24 [4.50] | η du contexte 1.039 [1.028 – 1.050]
+
+terminé en 264 s

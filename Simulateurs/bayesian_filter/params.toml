@@ -95,3 +95,24 @@ autofluo_jaune = [[0.6, 0.3], [0.4, 2.0]]
 taus_plus_courts = 0.05
 accepteurs_inactifs = 0.10
 decalage_ps = 10.0
+
+[boxplots]
+# boxplots.py : 4 techniques calibrées sur la moitié des .sdt de la titration, testées sur l'autre moitié
+# (python3 boxplots.py ; SCLM_mCer3 seulement : il lit les .sdt bruts à deux blocs de step17)
+sdt = "../FLIM-FRET_2-channels/Data/2026-10-16/SCLM_mCer3"
+sorties = "sorties_boxplots"
+# fichiers à numéro impair (c001, c003, …) pour calibrer, pairs pour tester : entrelacés dans le temps
+photons_bleus = [1000, 3000, 10000, 30000, 100000]
+echantillons = 20000                  # par concentration et par nombre de photons
+# un échantillon : 1 ou plusieurs fichiers de test tirés au hasard, amincis (binomial) à N photons bleus attendus ;
+# assez de fichiers pour que la part gardée reste ≤ 0,5
+part_gardee_max = 0.5
+# hybride : η fixé par un échantillon de contexte de facteur_contexte × N photons bleus, même concentration, tiré par
+# Poisson autour de la forme de l'ensemble des fichiers de test (100 × 100 000 dépasse ce qu'ils contiennent à 0 mM)
+facteur_contexte = 100
+# grilles des estimateurs (maximum de vraisemblance) : c de 0 à 300 mM, τ mono-exponentiel de 0,5 à 6 ns
+n_c = 2000
+n_tau = 4000
+tau_min_ns = 0.5
+tau_max_ns = 6.0
+graine = 20261023
