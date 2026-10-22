@@ -30,10 +30,12 @@ n_eta = 61
 s = 0.04
 w = 0.03
 s_saut = 0.5
-# lisseur hors ligne : marche aléatoire de 0,2 % par trame sur ln η, échantillonnée sur la grille de η (pas de 1,83 %) :
-# le poids vers le point voisin vaut ~ 1e-19, donc η est en pratique CONSTANT dans le filtre et le lisseur
-# (il ne peut pas suivre une dérive ; cf. sorties_exemples/, scénario de dérive)
-s_eta_lisseur = 0.002
+# filtre et lisseur d'une ROI (exemple, section 15) : η peut évoluer, ln η_k = ln η_{k−1} + N(0, s_η²) par trame.
+# s_η n'est pas connu : un modèle par candidat (0 = η constant), moyennés selon leur vraisemblance marginale
+# (en temps réel : celle des trames passées ; lissé : celle de toute la course). Grille de η plus fine (pas de 0,46 %)
+# pour que la marche et la précision de η ne soient pas limitées par le pas de la grille.
+n_eta_lisseur = 241
+s_eta_candidats = [0.0, 1.0e-4, 3.0e-4, 1.0e-3, 3.0e-3]
 # section 14 : 16 portes temporelles (η n'est jamais figé : la bascule vers le ratio seul a été retirée)
 portes = 16
 

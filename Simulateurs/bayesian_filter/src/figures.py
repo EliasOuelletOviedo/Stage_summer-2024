@@ -43,15 +43,22 @@ def donnees(S, mes, cal, p, rng, chemin):
 
 
 def exemple(D, titre, chemin, eta_lim=(0.95, 1.6)):
-    """Section 15 : panneau a, [Cl⁻] ; panneau b, η (le vrai η, constant ou non, est dans la colonne eta_vrai)."""
+    """
+    Section 15 : panneau a, [Cl⁻] ; panneau b, η (le vrai η, constant ou non, est dans la colonne eta_vrai).
+    Sans colonnes « lisse » (filtre temps réel seul), seul le filtre temps réel est tracé, avec son intervalle à 95 %.
+    """
     fig, ax = plt.subplots(2, 1, figsize=(11, 8), sharex=True, gridspec_kw=dict(height_ratios=[2.2, 1]))
-    k = D.trame; ms = 3 if len(D) <= 500 else 1
+    k = D.trame; ms = 3 if len(D) <= 500 else 1; lisse = 'c_lisse' in D
     a = ax[0]
     a.plot(k, np.clip(D.c_flim, 0, 80), '.', ms=ms, color=GRIS, label='durée de vie seule, trame par trame')
-    a.plot(k, D.c_ratio_eta1, '-', lw=1, color=ORANGE, label='ratio lu avec la calibration (η = 1)')
-    a.fill_between(k, D.lisse_bas, D.lisse_haut, color=BLEU, alpha=0.2, lw=0, label='lissé, intervalle à 95 %')
-    a.plot(k, D.c_filtre, '-', lw=0.8, color=VERT, label='filtre hybride, temps réel')
-    a.plot(k, D.c_lisse, '-', lw=1.4, color=BLEU, label='filtre hybride, lissé')
+    a.plot(k, D.c_ratio_eta1, '.', ms=ms, color=ORANGE, label='ratio lu avec la calibration (η = 1)')
+    if lisse:
+        a.fill_between(k, D.lisse_bas, D.lisse_haut, color=BLEU, alpha=0.2, lw=0, label='lissé, intervalle à 95 %')
+        a.plot(k, D.c_filtre, '-', lw=0.8, color=VERT, label='filtre hybride, temps réel')
+        a.plot(k, D.c_lisse, '-', lw=1.4, color=BLEU, label='filtre hybride, lissé')
+    else:
+        a.fill_between(k, D.filtre_bas, D.filtre_haut, color=BLEU, alpha=0.2, lw=0, label='temps réel, intervalle à 95 %')
+        a.plot(k, D.c_filtre, '-', lw=1.2, color=BLEU, label='filtre hybride, temps réel')
     a.plot(k, D.c_vrai, '-', lw=1.2, color=NOIR, label='vraie valeur')
     a.set_ylim(0, 45); a.set_ylabel('[Cl⁻] (mM)'); a.legend(fontsize=8, ncol=2, loc='upper right')
     a.set_title(titre, fontsize=10)
@@ -59,9 +66,13 @@ def exemple(D, titre, chemin, eta_lim=(0.95, 1.6)):
     b.fill_between(k, D.eta_filtre * np.exp(-2 * D.eta_filtre_sd), D.eta_filtre * np.exp(2 * D.eta_filtre_sd),
                    color=ORANGE, alpha=0.2, lw=0)
     b.plot(k, D.eta_filtre, color=ORANGE, label='temps réel (± 2 sd)')
-    b.plot(k, D.eta_lisse, color=BLEU, label='après coup')
+    if lisse:
+        b.plot(k, D.eta_lisse, color=BLEU, label='après coup')
     b.plot(k, D.eta_vrai, color=NOIR, lw=0.8, ls='--', label='vrai')
-    b.set_ylim(*eta_lim); b.set_ylabel('η'); b.set_xlabel('trame'); b.legend(fontsize=8); b.set_title('b · η estimé')
+    w = D.attrs.get('poids_lisseur' if lisse else 'poids_filtre_final')
+    poids = '' if not w else (' — poids des modèles ' + ('(lissé)' if lisse else 'à la dernière trame') + ', s_η par trame : '
+                              + ', '.join(f'{100 * s:g} % : {x:.2f}'.replace('.', ',') for s, x in w.items() if x >= 0.005))
+    b.set_ylim(*eta_lim); b.set_ylabel('η'); b.set_xlabel('trame'); b.legend(fontsize=8); b.set_title('b · η estimé' + poids, fontsize=10)
     fig.tight_layout(); fig.savefig(chemin, dpi=130); plt.close(fig)
 
 
@@ -167,8 +178,10 @@ def resume_exemples(R, scenarios, methodes, chemin):
     fig, ax = plt.subplots(1, len(scenarios), figsize=(5.5 * len(scenarios), 4.8), sharey=True)
     for a, sc in zip(np.atleast_1d(ax), scenarios):
         x = R[R.scenario == sc['nom']].sort_values('photons')
-        for (nom, col), coul in zip(methodes, (ORANGE, GRIS, VERT, BLEU)):
-            a.loglog(x.photons, x[f'{col}_erreur'], 'o-', color=coul, ms=4, label=nom)
+        lisse = 'c_lisse_erreur' in x
+        for (nom, col), coul in zip(methodes, (ORANGE, GRIS, VERT if lisse else BLEU, BLEU)):
+            if f'{col}_erreur' in x:
+                a.loglog(x.photons, x[f'{col}_erreur'], 'o-', color=coul, ms=4, label=nom)
         a.set_title(sc['titre']); a.set_xlabel('photons par trame'); a.grid(True, which='both', alpha=0.3)
     np.atleast_1d(ax)[0].set_ylabel('erreur typique sur toute la course (mM)'); np.atleast_1d(ax)[0].legend(fontsize=8)
     fig.tight_layout(); fig.savefig(chemin, dpi=130); plt.close(fig)

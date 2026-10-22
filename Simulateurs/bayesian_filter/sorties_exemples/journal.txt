@@ -1,24 +1,24 @@
 3000 trames : 8 mM, montée vers 22 mM à la trame 601 (τ 40 trames), retour vers 10 mM à la trame 1401 (τ 250 trames) ; A -30 %
 
 η = 1
-    1000 photons : erreur typique (mM) ratio η = 1   4.84 | durée de vie seule 111.98 | filtre  3.56 | lissé  3.11 ; biais lissé -2.98 ; η final 0.951 (vrai 1.000) ± 1.2 %, η lissé à 4.9 % près ; couverture 95 % filtre 67 %, lissé 28 %
-    3000 photons : erreur typique (mM) ratio η = 1   2.85 | durée de vie seule  57.23 | filtre  1.85 | lissé  1.96 ; biais lissé -1.85 ; η final 0.970 (vrai 1.000) ± 0.8 %, η lissé à 3.0 % près ; couverture 95 % filtre 86 %, lissé 52 %
-   10000 photons : erreur typique (mM) ratio η = 1   1.53 | durée de vie seule  17.18 | filtre  0.74 | lissé  0.47 ; biais lissé +0.00 ; η final 1.000 (vrai 1.000) ± 0.5 %, η lissé à 0.0 % près ; couverture 95 % filtre 99 %, lissé 100 %
-   30000 photons : erreur typique (mM) ratio η = 1   0.90 | durée de vie seule   7.94 | filtre  0.51 | lissé  0.37 ; biais lissé +0.10 ; η final 1.002 (vrai 1.000) ± 0.1 %, η lissé à 0.2 % près ; couverture 95 % filtre 99 %, lissé 99 %
-  100000 photons : erreur typique (mM) ratio η = 1   0.49 | durée de vie seule   4.10 | filtre  0.37 | lissé  0.29 ; biais lissé +0.10 ; η final 1.002 (vrai 1.000) ± 0.0 %, η lissé à 0.2 % près ; couverture 95 % filtre 96 %, lissé 98 %
+    1000 photons : erreur typique (mM) ratio η = 1   4.84 | durée de vie seule 111.98 | filtre temps réel  3.53 (biais -3.11) ; η final 0.950 (vrai 1.000) ± 1.5 %, η à 5.8 % près sur la course ; s_η à la dernière trame 0.021 %/trame ; couverture 95 % 71 %
+    3000 photons : erreur typique (mM) ratio η = 1   2.85 | durée de vie seule  57.23 | filtre temps réel  1.88 (biais -1.56) ; η final 0.973 (vrai 1.000) ± 0.9 %, η à 2.8 % près sur la course ; s_η à la dernière trame 0.015 %/trame ; couverture 95 % 88 %
+   10000 photons : erreur typique (mM) ratio η = 1   1.53 | durée de vie seule  17.18 | filtre temps réel  0.76 (biais -0.27) ; η final 0.993 (vrai 1.000) ± 0.6 %, η à 0.6 % près sur la course ; s_η à la dernière trame 0.011 %/trame ; couverture 95 % 99 %
+   30000 photons : erreur typique (mM) ratio η = 1   0.90 | durée de vie seule   7.94 | filtre temps réel  0.58 (biais -0.26) ; η final 0.993 (vrai 1.000) ± 0.4 %, η à 0.5 % près sur la course ; s_η à la dernière trame 0.008 %/trame ; couverture 95 % 97 %
+  100000 photons : erreur typique (mM) ratio η = 1   0.49 | durée de vie seule   4.10 | filtre temps réel  0.38 (biais -0.08) ; η final 0.999 (vrai 1.000) ± 0.3 %, η à 0.2 % près sur la course ; s_η à la dernière trame 0.006 %/trame ; couverture 95 % 97 %
 
 η = 1,1
-    1000 photons : erreur typique (mM) ratio η = 1   6.74 | durée de vie seule 114.98 | filtre  2.44 | lissé  2.39 ; biais lissé -2.21 ; η final 1.062 (vrai 1.100) ± 1.2 %, η lissé à 3.5 % près ; couverture 95 % filtre 93 %, lissé 65 %
-    3000 photons : erreur typique (mM) ratio η = 1   6.01 | durée de vie seule  64.35 | filtre  1.15 | lissé  0.78 ; biais lissé -0.32 ; η final 1.095 (vrai 1.100) ± 0.7 %, η lissé à 0.5 % près ; couverture 95 % filtre 99 %, lissé 98 %
-   10000 photons : erreur typique (mM) ratio η = 1   5.65 | durée de vie seule  20.77 | filtre  1.01 | lissé  0.97 ; biais lissé -0.84 ; η final 1.084 (vrai 1.100) ± 0.8 %, η lissé à 1.4 % près ; couverture 95 % filtre 96 %, lissé 95 %
-   30000 photons : erreur typique (mM) ratio η = 1   5.60 | durée de vie seule   8.60 | filtre  0.57 | lissé  0.40 ; biais lissé -0.12 ; η final 1.098 (vrai 1.100) ± 0.0 %, η lissé à 0.2 % près ; couverture 95 % filtre 97 %, lissé 98 %
-  100000 photons : erreur typique (mM) ratio η = 1   5.55 | durée de vie seule   4.26 | filtre  0.43 | lissé  0.30 ; biais lissé -0.11 ; η final 1.098 (vrai 1.100) ± 0.0 %, η lissé à 0.2 % près ; couverture 95 % filtre 93 %, lissé 96 %
+    1000 photons : erreur typique (mM) ratio η = 1   6.74 | durée de vie seule 114.98 | filtre temps réel  2.49 (biais -1.84) ; η final 1.061 (vrai 1.100) ± 1.5 %, η à 3.4 % près sur la course ; s_η à la dernière trame 0.021 %/trame ; couverture 95 % 94 %
+    3000 photons : erreur typique (mM) ratio η = 1   6.01 | durée de vie seule  64.35 | filtre temps réel  1.16 (biais -0.20) ; η final 1.091 (vrai 1.100) ± 0.9 %, η à 0.8 % près sur la course ; s_η à la dernière trame 0.013 %/trame ; couverture 95 % 99 %
+   10000 photons : erreur typique (mM) ratio η = 1   5.65 | durée de vie seule  20.77 | filtre temps réel  1.02 (biais -0.59) ; η final 1.087 (vrai 1.100) ± 0.5 %, η à 1.4 % près sur la course ; s_η à la dernière trame 0.010 %/trame ; couverture 95 % 96 %
+   30000 photons : erreur typique (mM) ratio η = 1   5.60 | durée de vie seule   8.60 | filtre temps réel  0.60 (biais -0.21) ; η final 1.090 (vrai 1.100) ± 0.6 %, η à 0.6 % près sur la course ; s_η à la dernière trame 0.014 %/trame ; couverture 95 % 98 %
+  100000 photons : erreur typique (mM) ratio η = 1   5.55 | durée de vie seule   4.26 | filtre temps réel  0.45 (biais -0.18) ; η final 1.098 (vrai 1.100) ± 0.2 %, η à 0.5 % près sur la course ; s_η à la dernière trame 0.007 %/trame ; couverture 95 % 95 %
 
 η dérive de 1 à 1,1
-    1000 photons : erreur typique (mM) ratio η = 1   5.32 | durée de vie seule 109.68 | filtre  4.97 | lissé  3.97 ; biais lissé -3.66 ; η final 0.983 (vrai 1.100) ± 1.2 %, η lissé à 6.8 % près ; couverture 95 % filtre 39 %, lissé 28 %
-    3000 photons : erreur typique (mM) ratio η = 1   4.03 | durée de vie seule  64.82 | filtre  2.49 | lissé  2.05 ; biais lissé -1.25 ; η final 1.026 (vrai 1.100) ± 0.8 %, η lissé à 3.5 % près ; couverture 95 % filtre 62 %, lissé 58 %
-   10000 photons : erreur typique (mM) ratio η = 1   3.47 | durée de vie seule  20.22 | filtre  2.03 | lissé  1.69 ; biais lissé -0.53 ; η final 1.039 (vrai 1.100) ± 0.0 %, η lissé à 2.9 % près ; couverture 95 % filtre 51 %, lissé 39 %
-   30000 photons : erreur typique (mM) ratio η = 1   3.25 | durée de vie seule   8.06 | filtre  2.02 | lissé  1.53 ; biais lissé -0.42 ; η final 1.044 (vrai 1.100) ± 0.8 %, η lissé à 2.7 % près ; couverture 95 % filtre 28 %, lissé 43 %
-  100000 photons : erreur typique (mM) ratio η = 1   3.17 | durée de vie seule   4.07 | filtre  1.27 | lissé  0.53 ; biais lissé -0.03 ; η final 1.078 (vrai 1.100) ± 0.0 %, η lissé à 0.8 % près ; couverture 95 % filtre 25 %, lissé 77 %
+    1000 photons : erreur typique (mM) ratio η = 1   5.32 | durée de vie seule 109.68 | filtre temps réel  4.83 (biais -3.78) ; η final 1.003 (vrai 1.100) ± 2.7 %, η à 8.1 % près sur la course ; s_η à la dernière trame 0.072 %/trame ; couverture 95 % 53 %
+    3000 photons : erreur typique (mM) ratio η = 1   4.03 | durée de vie seule  64.82 | filtre temps réel  2.36 (biais -1.74) ; η final 1.045 (vrai 1.100) ± 2.0 %, η à 3.8 % près sur la course ; s_η à la dernière trame 0.051 %/trame ; couverture 95 % 74 %
+   10000 photons : erreur typique (mM) ratio η = 1   3.47 | durée de vie seule  20.22 | filtre temps réel  1.49 (biais -1.02) ; η final 1.077 (vrai 1.100) ± 1.5 %, η à 2.3 % près sur la course ; s_η à la dernière trame 0.082 %/trame ; couverture 95 % 91 %
+   30000 photons : erreur typique (mM) ratio η = 1   3.25 | durée de vie seule   8.06 | filtre temps réel  1.07 (biais -0.83) ; η final 1.085 (vrai 1.100) ± 1.1 %, η à 1.5 % près sur la course ; s_η à la dernière trame 0.096 %/trame ; couverture 95 % 87 %
+  100000 photons : erreur typique (mM) ratio η = 1   3.17 | durée de vie seule   4.07 | filtre temps réel  0.56 (biais -0.32) ; η final 1.089 (vrai 1.100) ± 0.6 %, η à 0.7 % près sur la course ; s_η à la dernière trame 0.056 %/trame ; couverture 95 % 92 %
 
-terminé en 180 s
+terminé en 833 s

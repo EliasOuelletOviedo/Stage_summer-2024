@@ -74,6 +74,11 @@ class Grille:
                 out += np.log((S_ * p + b) / (S_ + b.sum())) @ h
         return out
 
+    def logs_ratio(self):
+        """(ln M_B/(M_B + η M_Y), ln η M_Y/(M_B + η M_Y)) sur la grille (n_c, n_η) : ratio(NB, NY) = NB·[0] + NY·[1]."""
+        mB = self.MB[:, None]; mY = self.MY[:, None] * self.eta[None, :]
+        return np.log(mB / (mB + mY)), np.log(mY / (mB + mY))
+
     def ratio(self, NB, NY, eta=None):
         """Morceau « combien » : partage binomial des photons entre les couleurs, matrice (n_c, n_η)."""
         eta = self.eta if eta is None else np.atleast_1d(eta)
@@ -101,10 +106,27 @@ class Grille:
 
 
 def transition(logx, s, s_saut=None, w=0.0):
-    """K[i, j] = P(x_i | x_j) : marche aléatoire gaussienne sur ln x, plus des sauts rares (section 13)."""
-    dd = logx[:, None] - logx[None, :]
-    K = np.exp(-0.5 * (dd / s) ** 2); K /= K.sum(0, keepdims=True)
+    """
+    K[i, j] = P(x_i | x_j) : marche aléatoire de pas s (sd par trame) sur ln x, plus des sauts rares (section 13).
+
+    Sur une grille de pas Δ (uniforme en ln x), une gaussienne échantillonnée ne représente la marche que si s ≳ Δ : pour
+    s ≪ Δ, le poids vers le voisin, exp(−Δ²/2s²), s'effondre (~ 1e-19 pour s = 0,2 %, Δ = 1,83 %) et x ne bouge plus.
+    Pour s < Δ, on prend donc la discrétisation standard de la diffusion : vers chaque voisin avec la probabilité
+    s²/2Δ², sur place sinon ; la variance ajoutée par trame vaut alors exactement s² (bords réfléchissants).
+    s = 0 : x constant (identité).
+    """
+    n = len(logx)
+    if s == 0:
+        K = np.eye(n)
+    elif n > 1 and s < (pas := float(np.mean(np.diff(logx)))):
+        q = s ** 2 / (2 * pas ** 2)
+        K = np.diag(np.full(n, 1 - 2 * q)) + np.diag(np.full(n - 1, q), 1) + np.diag(np.full(n - 1, q), -1)
+        K[0, 0] += q; K[-1, -1] += q                                  # bords : la part qui sortirait reste sur place
+    else:
+        dd = logx[:, None] - logx[None, :]
+        K = np.exp(-0.5 * (dd / s) ** 2); K /= K.sum(0, keepdims=True)
     if s_saut:
+        dd = logx[:, None] - logx[None, :]
         K2 = np.exp(-0.5 * (dd / s_saut) ** 2); K2 /= K2.sum(0, keepdims=True)
         K = (1 - w) * K + w * K2
     return K
@@ -117,27 +139,64 @@ def resume_c(pc, c):
 
 
 def resume_eta(pe, eta):
-    """η moyen (géométrique) et sd(ln η), qui vaut l'incertitude relative sur η."""
-    le = np.log(eta); m = (pe * le).sum()
-    return float(np.exp(m)), float(np.sqrt((pe * (le - m) ** 2).sum()))
+    """η moyen (géométrique) et sd(ln η), qui vaut l'incertitude relative sur η ; pe : (n_η,) ou (T, n_η)."""
+    le = np.log(eta); m = (pe * le).sum(-1)
+    sd = np.sqrt((pe * (le - np.expand_dims(m, -1)) ** 2).sum(-1))
+    return (float(np.exp(m)), float(sd)) if np.ndim(pe) == 1 else (np.exp(m), sd)
 
 
-def filtre_lisseur(Ls, Kc, Ke):
+def filtre_lisseur(loglik, T, Kc, Ke, lisser=True):
     """
-    Filtre causal puis lissage avant-arrière sur la grille (c, η) (sections 12 et 13).
-    Ls : (T, n_c, n_η) log-vraisemblances par trame. Renvoie (filtre, lisse), chacun (T, n_c, n_η), normalisés.
+    Filtre causal puis lissage avant-arrière sur la grille (c, η) (sections 12 et 13), η pouvant évoluer selon Ke.
+    loglik(k) : ln L de la trame k, (n_c, n_η). Renvoie un dict de marginales par trame — filtre_c (T, n_c),
+    filtre_eta (T, n_η), lisse_c, lisse_eta — et ln_evidence (T,) : ln p(trame k | trames 1..k−1), dont la somme
+    cumulée est la vraisemblance marginale des k premières trames sous ce modèle de dynamique.
+    Mémoire : seul le filtre est gardé (float32) ; les prédictions sont recalculées pendant la passe arrière.
+    lisser=False : filtre causal seul (pas de passe arrière, rien d'autre que les marginales gardé).
     """
-    T, nc, ne = Ls.shape
-    p = np.full((nc, ne), 1.0 / (nc * ne))
-    alpha = np.empty_like(Ls); pred = np.empty_like(Ls)
+    p = None; alpha = None; ln_ev = np.empty(T); fc = fe = None
     for k in range(T):
-        pred[k] = Kc @ p @ Ke.T if k > 0 else p
-        p = pred[k] * np.exp(Ls[k] - Ls[k].max()); p /= p.sum(); alpha[k] = p
-    post = np.empty_like(alpha); post[-1] = alpha[-1]
+        L = loglik(k)
+        if fc is None:
+            fc, fe = np.empty((T, L.shape[0])), np.empty((T, L.shape[1]))
+            alpha = np.empty((T,) + L.shape, np.float32) if lisser else None
+            pred = np.full(L.shape, 1.0 / L.size)
+        else:
+            pred = Kc @ p @ Ke.T
+        m = L.max(); q = pred * np.exp(L - m); z = q.sum()
+        p = q / z; ln_ev[k] = np.log(z) + m
+        fc[k], fe[k] = p.sum(1), p.sum(0)
+        if lisser:
+            alpha[k] = p
+    out = dict(filtre_c=fc, filtre_eta=fe, ln_evidence=ln_ev)
+    if not lisser:
+        return out
+    lc = np.empty((T, alpha.shape[1])); le = np.empty((T, alpha.shape[2]))
+    post = alpha[-1].astype(np.float64); lc[-1], le[-1] = post.sum(1), post.sum(0)
     for k in range(T - 2, -1, -1):
-        post[k] = alpha[k] * (Kc.T @ (post[k + 1] / np.maximum(pred[k + 1], 1e-300)) @ Ke)
-        post[k] /= post[k].sum()
-    return alpha, post
+        a = alpha[k].astype(np.float64)
+        pred = Kc @ a @ Ke.T
+        post = a * (Kc.T @ (post / np.maximum(pred, 1e-300)) @ Ke); post /= post.sum()
+        lc[k], le[k] = post.sum(1), post.sum(0)
+    out.update(lisse_c=lc, lisse_eta=le)
+    return out
+
+
+def moyenne_de_modeles(courses, causal):
+    """
+    Moyenne bayésienne sur les modèles de dynamique de η (a priori uniforme), à partir des sorties de filtre_lisseur.
+    causal=True  : poids de la trame k ∝ p(trames 1..k | modèle) — pour le filtre temps réel ;
+    causal=False : poids ∝ p(toutes les trames | modèle), les mêmes à toutes les trames — pour le lisseur.
+    Renvoie (marginale de c, marginale de η, poids (T, n_modèles)).
+    """
+    cum = np.array([np.cumsum(r['ln_evidence']) for r in courses]).T          # (T, n_modèles)
+    if not causal:
+        cum = np.repeat(cum[-1:], len(cum), 0)
+    w = np.exp(cum - cum.max(1, keepdims=True)); w /= w.sum(1, keepdims=True)
+    cle = 'filtre' if causal else 'lisse'
+    pc = sum(w[:, i, None] * r[f'{cle}_c'] for i, r in enumerate(courses))
+    pe = sum(w[:, i, None] * r[f'{cle}_eta'] for i, r in enumerate(courses))
+    return pc, pe, w
 
 
 class FiltreTempsReel:

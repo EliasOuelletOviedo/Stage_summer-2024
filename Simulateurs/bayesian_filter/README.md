@@ -14,7 +14,7 @@ transmission du jaune relative au bleu, propre à chaque tranche.
 pip install -r requirements.txt            # numpy, scipy, pandas, matplotlib, sdtfile
 # une seule fois : ajuster la calibration sur les histogrammes mCer3 → calibration.json (~1 min)
 python3 step0_calibration.py
-# les vérifications (13)
+# les vérifications (15)
 python3 test/run_tests.py
 # la course complète (~2,5 min)
 python3 run.py                             # --rapide : moins de répétitions (~25 s)
@@ -54,21 +54,21 @@ leurs histogrammes sommés, versionnés par `step17_bruts_mCer3.jl` (`irf_bruts_
 
 | Fichier | Rôle | lignes |
 | --- | --- | --- |
-| `params.toml` | le seul endroit pour les constantes (données, grilles, transition, scénarios, graine, boxplots) ; SCLM_mCer3 | 133 |
-| `params_SCLM.toml` | les mêmes, pour la titration SCLM régulière à 800 nm | 95 |
+| `params.toml` | le seul endroit pour les constantes (données, grilles, transition, scénarios, graine, boxplots) ; SCLM_mCer3 | 135 |
+| `params_SCLM.toml` | les mêmes, pour la titration SCLM régulière à 800 nm | 97 |
 | `step0_calibration.py` | le pont unique avec les données : appelle le `sclm_hybride.py` du jeu, écrit sa calibration (`calibrer` sert aussi à boxplots.py) | 86 |
 | `calibration.json`, `calibration_SCLM.json` | la calibration ajustée (constantes, isothermes, IRF, fonds et décalages par acquisition) ; écrites par step0 | — |
 | `src/modele.py` | modèle direct μ_B, μ_Y (sections 3 à 7) : IRF ⊗ déclins périodiques, isothermes, η, A ; perturbations | 137 |
-| `src/filtre.py` | vraisemblance découpée ratio / FLIM (section 11), grille (c, η), transition, filtre et lisseur (13), temps réel à M ROI et portes (14 ; η jamais figé), lectures de référence | 179 |
+| `src/filtre.py` | vraisemblance découpée ratio / FLIM (section 11), grille (c, η), transition, filtre et lisseur (13 ; η variable, moyenne de modèles de dynamique), temps réel à M ROI et portes (14 ; η jamais figé), lectures de référence | 238 |
 | `src/information.py` | Fisher et Cramér-Rao, nuisances par complément de Schur (section 10) | 50 |
 | `src/simulation.py` | les deux générateurs (lit les colonnes voie1/voie2 de step17 et bleu/jaune de step16), les trajectoires des sections 14 et 15 | 97 |
-| `src/figures.py` | rendu | 174 |
+| `src/figures.py` | rendu | 187 |
 | `src/estimateurs.py` | les 4 lectures d'un échantillon (temps de vie unique, FLIM du système, ratio, hybride à η du contexte), en bloc | 98 |
 | `boxplots.py` | partage des .sdt, calibration sur une moitié, échantillons et contextes tirés de l'autre (η = 1 ou variable), boxplots | 173 |
 | `run.py` | la course en 8 parties ; un CSV par partie, `journal.txt`, 5 figures | 357 |
-| `src/exemple.py` | une course de la section 15 (trajectoire étirée, η constant ou par trame), partagée par run.py et exemples.py | 66 |
-| `exemples.py` | l'exemple de la section 15 sous 15 conditions (photons × η) | 80 |
-| `test/run_tests.py` | 13 vérifications : calibration = annexe, découpage exact, portes (93,7 % de l'information FLIM gardée), η retrouvé, η jamais figé, couverture du lisseur, amincissement | 167 |
+| `src/exemple.py` | une course de la section 15 (trajectoire étirée, η constant ou par trame), partagée par run.py et exemples.py | 93 |
+| `exemples.py` | l'exemple de la section 15 sous 15 conditions (photons × η), filtre temps réel seul | 79 |
+| `test/run_tests.py` | 15 vérifications : calibration = annexe, découpage exact, portes (93,7 % de l'information FLIM gardée), η retrouvé, η jamais figé, couverture du lisseur, marche sur η (variance n·s²), dérive de η suivie, amincissement | 193 |
 
 ## Sorties (`sorties/` pour SCLM_mCer3, `sorties_SCLM/` pour SCLM régulier)
 
@@ -87,10 +87,11 @@ Cramér-Rao à 10 mM et 10 000 photons (forme bleue 10,19, jaune 39,94, deux can
 12,9 ± 11,5 mM (12,8, ≈ 11) ; les biais de la section 16 (η = 1,2 : −8,76 contre −8,8 ; accepteurs inactifs : +8,2 /
 +9,0 / +8,8 contre +8,2 / +9,0 / +8,8 ; autofluorescence du jaune sur le ratio −2,74 contre −2,7 ; autofluorescence des
 deux canaux sur le FLIM bleu −9,50 contre −9,6 ; durées de vie 5 % plus courtes, FLIM bleu −8,39 contre −8,4) ; la référence
-« η connu » de la section 14 (1,72 / 1,17 / 0,78 mM contre 1,7 / 1,1 / 0,8).
+« η connu » de la section 14 (1,70 / 1,16 / 0,77 mM contre 1,7 / 1,1 / 0,8).
 
-**Section 15 (un soma, η = 1,25 inconnu, 5 000 photons/trame, A −30 % pendant la course).** Moyenne sur 20 répétitions
-(document entre parenthèses) :
+**Section 15 (un soma, η = 1,25 inconnu, 5 000 photons/trame, A −30 % pendant la course).** η peut y évoluer : marche
+aléatoire de pas s_η inconnu, cinq modèles (s_η = 0, 0,01, 0,03, 0,1, 0,3 % par trame) moyennés selon leur
+vraisemblance marginale (voir « η qui dérive » plus bas). Moyenne sur 20 répétitions (document entre parenthèses) :
 
 | méthode | biais (mM) | erreur typique (mM) |
 | --- | --- | --- |
@@ -99,7 +100,7 @@ deux canaux sur le FLIM bleu −9,50 contre −9,6 ; durées de vie 5 % plus cou
 | filtre hybride, temps réel | −0,1 ± 1,4 (+0,3) | 2,1 ± 0,6 (1,4) |
 | filtre hybride, lissé après coup | −0,3 ± 1,0 (−0,5) | 1,1 ± 0,4 (1,0) |
 
-η final 1,244 ± 0,021 ; couverture des intervalles à 95 % : 96 % (filtre), 98 % (lissé). Le document montre un seul
+η final 1,245 ± 0,020 ; couverture des intervalles à 95 % : 97 % (filtre), 98 % (lissé). Le document montre un seul
 tirage ; ici, celui de `fig_exemple.png` (répétition 1) finit à η = 1,222, d'où un biais de −1,1 mM sur ce tirage-là.
 
 **Section 14 (300 trames, η = 1,25 inconnu, 3 répétitions).** Erreur typique après la trame 100, en mM. η est mis à
@@ -121,7 +122,7 @@ ROI et par trame avec les portes (la bascule le ramenait à 0,2 ms, au prix d'un
 1. **η n'est pas appris que du FLIM.** Le score ℓ_m(η) de la section 14 absorbe aussi l'écart entre la dynamique supposée
    de c et la vraie : un η statique peut « expliquer » une partie d'un changement de ratio. Partie 8, 1 000 photons,
    10 ROI, η vrai 1,25 : c statique et transition du document → η = 1,18 (−6 %, ≈ 5 sd a posteriori) ; c qui répond et
-   transition trop raide (s = 0,01, sans sauts) → η = 1,45. Dans un essai hors course, avec c figé et K = identité,
+   transition trop raide (s = 0,01, sans sauts) → η = 1,42. Dans un essai hors course, avec c figé et K = identité,
    η revenait à 1,24–1,26.
    Le module de référence (`sclm_hybride.py`, `demo_temps_reel`) fait la même chose : 1,21 à 1 000 photons pour trois
    graines, et 1,231 à 1,250 à 3 000 photons (le 1,250 ± 1,0 % du document est la graine 0).
@@ -164,8 +165,8 @@ plus vite et le filtre fait mieux :
 
 | | SCLM régulier | SCLM_mCer3 |
 | --- | --- | --- |
-| section 15, temps réel / lissé (mM, 20 répétitions) | 1,45 / 0,87 | 2,13 / 1,14 |
-| section 15, η final | 1,244 ± 0,016 | 1,244 ± 0,021 |
+| section 15, temps réel / lissé (mM, 20 répétitions) | 1,46 / 0,87 | 2,12 / 1,14 |
+| section 15, η final | 1,244 ± 0,017 | 1,245 ± 0,020 |
 | section 14, 1 000 photons : 1 ROI / 10 ROI / η connu (mM) | 2,30 / 1,81 / 1,71 | 3,76 / 2,35 / 1,70 |
 | section 14, 10 000 photons : 1 ROI / 10 ROI / η connu (mM) | 0,89 / 0,73 / 0,73 | 1,38 / 0,82 / 0,77 |
 | η final, 1 000 photons, 10 ROI, c statique, transition du document | 1,228 | 1,176 |
@@ -174,7 +175,7 @@ plus vite et le filtre fait mieux :
 | titration relue : η du FLIM (fond ajusté) | 0,976 à 1,026 | 0,991 à 1,046 |
 
 Le point 1 ci-dessus vaut encore, atténué : η reste tiré vers le bas (1,228 à 1 000 photons) ou vers le haut avec une
-transition trop raide (1,361). Sans bascule, 10 ROI font 1,81 / 1,20 / 0,73 mM à 1 000 / 3 000 / 10 000 photons
+transition trop raide (1,346). Sans bascule, 10 ROI font 1,81 / 1,20 / 0,73 mM à 1 000 / 3 000 / 10 000 photons
 (η connu : 1,71 / 1,12 / 0,73), contre 1,84 / 1,45 / 0,75 quand la bascule figeait η à 1,224 à 3 000 photons.
 
 **Ce qui est propre à ce jeu.** L'autofluorescence (formes illustratives) coûte bien plus à l'hybride : +10,0 mM
@@ -293,39 +294,53 @@ Médiane de |écart| (mM), ratio / hybride :
 
 ## L'exemple de la section 15 sous d'autres conditions (`sorties_exemples/`)
 
-`python3 exemples.py` (~3 min). La course de la section 15 (un soma ; 8 mM, montée vers 22 mM, retour vers 10 mM ;
+`python3 exemples.py` (~14 min). La course de la section 15 (un soma ; 8 mM, montée vers 22 mM, retour vers 10 mM ;
 A −30 %) sur **3 000 trames** au lieu de 300, même forme de courbe (montée à la trame 601, τ 40 trames ; descente à
 1 401, τ 250), pour 1 000, 3 000, 10 000, 30 000 et 100 000 photons par trame et trois η vrais, inconnus du filtre :
-1, 1,1, et une dérive linéaire de 1 à 1,1 de la première à la dernière trame. Une figure par cas
-(`fig_exemple_<scénario>_<photons>.png`, les deux panneaux de `fig_exemple.png`), la table par trame
+1, 1,1, et une dérive linéaire de 1 à 1,1 de la première à la dernière trame. **Filtre temps réel seulement** (aucun
+lissage) : une figure par cas (`fig_exemple_<scénario>_<photons>.png` ; ratio en points, filtre et son intervalle à
+95 %, η en temps réel ± 2 sd et poids des modèles de dynamique à la dernière trame), la table par trame
 (`exemple_<scénario>_<photons>.csv.gz`), `resume.csv`, `fig_resume.png`, `journal.txt`.
 
-Erreur typique sur toute la course (mM), ratio lu à η = 1 / filtre temps réel / lissé :
+### η qui dérive
 
-| photons par trame | η = 1 | η = 1,1 | η dérive de 1 à 1,1 |
-| --- | --- | --- | --- |
-| 1 000 | 4,8 / 3,6 / 3,1 | 6,7 / 2,4 / 2,4 | 5,3 / 5,0 / 4,0 |
-| 3 000 | 2,9 / 1,8 / 2,0 | 6,0 / 1,2 / 0,8 | 4,0 / 2,5 / 2,1 |
-| 10 000 | 1,5 / 0,7 / 0,5 | 5,6 / 1,0 / 1,0 | 3,5 / 2,0 / 1,7 |
-| 30 000 | 0,9 / 0,5 / 0,4 | 5,6 / 0,6 / 0,4 | 3,2 / 2,0 / 1,5 |
-| 100 000 | 0,5 / 0,4 / 0,3 | 5,6 / 0,4 / 0,3 | 3,2 / 1,3 / 0,5 |
+Le filtre suppose une marche aléatoire sur ln η, ln η_k = ln η_{k−1} + N(0, s_η²), et la traite rigoureusement :
 
-1. **η constant et inconnu (1,1)** : le filtre retrouve η (1,084 à 1,098 dès 3 000 photons) et lit c à 0,3–1 mM près, là
-   où le ratio calibré garde ~ 5,6 mM d'erreur quel que soit le nombre de photons. Couverture des intervalles lissés à
-   95 % : 95 à 98 %.
-2. **Peu de photons et longue ligne de base** : à 1 000 et 3 000 photons, η finit trop bas (0,951 et 0,970 pour η = 1 ;
-   1,062 pour η = 1,1) — l'effet du point 1 de « Ce que la simulation apprend », plus fort ici avec 600 trames de ligne
-   de base statique — et les intervalles lissés ne contiennent la vraie valeur que 28 à 65 % du temps : ils sont trop
-   étroits, parce qu'ils supposent η connu à la précision de sa distribution a posteriori, qui ne voit pas ce biais.
-3. **η qui dérive : ce filtre ne le suit pas.** Il suppose η constant (section 14 du document) : la marche aléatoire de
-   `s_eta_lisseur` (0,2 % par trame) est plus fine que le pas de la grille de η (1,83 %), le poids vers le point voisin
-   vaut ~ 10⁻¹⁹, et η reste en pratique constant. Le filtre choisit un η de compromis (0,98 à 1,04 dans le lisseur) :
-   trop haut au début, trop bas à la fin ; à 10 000 et 30 000 photons, l'erreur du filtre temps réel plafonne à 2,0 mM
-   (2,8 mM sur le dernier dixième), et la couverture lissée tombe à 28–77 %. Sa sd a posteriori « ± 0,0 % » veut dire
-   que toute la probabilité est sur un seul point de la grille, pas que η est connu à mieux que le pas. L'hybride
-   reste plus juste que le ratio calibré (4,7 à 5,7 mM sur le dernier dixième), mais pour suivre une dérive il faudrait
-   une vraie marche aléatoire sur η (noyau qui garde la variance sur la grille, ou grille plus fine), au prix d'un η
-   moins précis quand il ne bouge pas.
+- **Discrétisation qui garde la variance.** Sur la grille de η, une gaussienne échantillonnée de sd s_η plus petite que le
+  pas Δ ne déplace plus la probabilité (poids ~ 10⁻¹⁹ vers le voisin pour s = 0,2 %, Δ = 1,83 %) : c'est ce qui figeait η
+  jusqu'ici, quel que soit `s_eta_lisseur`. Pour s < Δ, le noyau envoie s²/2Δ² vers chaque voisin : la variance ajoutée
+  vaut exactement s² par trame (vérifié : sd après 3 000 trames = s·√3000 à 4 décimales). Pour s ≥ Δ (cas de c), la
+  gaussienne échantillonnée reste.
+- **Grille de η plus fine** pour ce filtre : 241 valeurs de 0,6 à 1,8 (pas de 0,46 %, contre 1,83 %), pour que la
+  précision de η ne soit pas bornée par la grille. Le filtre à M ROI de la section 14 garde 61 valeurs et un η statique,
+  pour lequel sa factorisation p(η) Π p(c_m | η) est exacte.
+- **s_η n'est pas deviné.** Cinq modèles (s_η = 0, c'est-à-dire η constant, 0,01, 0,03, 0,1 et 0,3 % par trame) tournent
+  en parallèle et sont moyennés selon leur vraisemblance marginale ; en temps réel, le poids de la trame k n'utilise
+  que les trames 1..k (causal). Avec η constant, les modèles lents gardent le poids ; avec la dérive, s_η = 0,03–0,1 %
+  l'emporte (0,05 à 0,10 % par trame en moyenne à la dernière trame).
+
+Erreur typique sur toute la course (mM), ratio lu à η = 1 / filtre temps réel, et couverture de son intervalle à 95 % :
+
+| photons par trame | η = 1 | η = 1,1 | η dérive de 1 à 1,1 | avant (η figé), dérive |
+| --- | --- | --- | --- | --- |
+| 1 000 | 4,8 / 3,5 (71 %) | 6,7 / 2,5 (94 %) | 5,3 / 4,8 (53 %) | 5,0 (39 %) |
+| 3 000 | 2,9 / 1,9 (88 %) | 6,0 / 1,2 (99 %) | 4,0 / 2,4 (74 %) | 2,5 (62 %) |
+| 10 000 | 1,5 / 0,8 (99 %) | 5,6 / 1,0 (96 %) | 3,5 / 1,5 (91 %) | 2,0 (51 %) |
+| 30 000 | 0,9 / 0,6 (97 %) | 5,6 / 0,6 (98 %) | 3,2 / 1,1 (87 %) | 2,0 (28 %) |
+| 100 000 | 0,5 / 0,4 (97 %) | 5,6 / 0,5 (95 %) | 3,2 / 0,6 (92 %) | 1,3 (25 %) |
+
+1. **La dérive est suivie.** η final 1,077 / 1,085 / 1,089 (vrai 1,100) à 10 000 / 30 000 / 100 000 photons, contre
+   1,039 / 1,044 / 1,078 quand η était figé ; dès 10 000 photons, l'erreur sur c est divisée par 1,4 à 2,3 et l'intervalle
+   à 95 % contient de nouveau la vraie valeur ~ 90 % du temps (25 à 51 % avant) ; à 1 000 et 3 000 photons le gain est
+   faible (point 3). Il reste un retard : η temps réel est 1 à 2 % sous la
+   vérité en fin de course. Un filtre causal sur une marche aléatoire suit une rampe avec un retard ; s'y ajoute que
+   seul le FLIM distingue une dérive lente de η d'une dérive lente de c (les deux changent le ratio de la même façon),
+   et que le modèle de c (4 % par trame, sauts) en absorbe une partie.
+2. **Le cas constant ne perd presque rien** : avec η = 1 ou 1,1, les erreurs restent à ± 0,1 mM de celles du filtre à η
+   constant (par exemple 0,58 contre 0,51 mM, 0,60 contre 0,57 mM à 30 000 photons) — le prix de laisser η bouger.
+3. **À 1 000 et 3 000 photons, η reste biaisé vers le bas** (0,950 et 0,973 pour η = 1 ; 1,003 au lieu de 1,1 en fin de
+   dérive) et la couverture tombe à 53–88 % : c'est le point 1 de « Ce que la simulation apprend », plus fort ici avec
+   600 trames de ligne de base statique ; trop peu d'information FLIM par trame pour que η s'en dégage.
 
 ## Pas fait
 

@@ -9,7 +9,8 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.modele import charger_params, charger_calibration, Senseur, isotherme, x_vers_c
-from src.filtre import Grille, grille_c, grille_eta, portes_log, transition, filtre_lisseur, FiltreTempsReel
+from src.filtre import (Grille, grille_c, grille_eta, portes_log, transition, filtre_lisseur, FiltreTempsReel,
+                        moyenne_de_modeles, resume_eta)
 from src.simulation import trame_modele, Mesures
 
 P = charger_params(); CAL = charger_calibration(); F = P['filtre']
@@ -144,11 +145,36 @@ def lisseur_couvre_la_verite():
     """Une ROI, η inconnu, 60 trames à 10 000 photons : l'intervalle lissé à 95 % contient c presque partout."""
     rng = np.random.default_rng(5); c = np.r_[np.full(30, 8.0), np.full(30, 16.0)]
     Ls = np.array([G.loglik(*trame_modele(S, x, 10000, rng, 1.2)) for x in c])
-    K = transition(np.log(G.c), F['s'], F['s_saut'], F['w']); Ke = transition(np.log(G.eta), F['s_eta_lisseur'])
-    _, post = filtre_lisseur(Ls, K, Ke)
-    pc = post.sum(2); cdf = np.cumsum(pc, 1)
+    K = transition(np.log(G.c), F['s'], F['s_saut'], F['w']); Ke = transition(np.log(G.eta), 0.0)
+    pc = filtre_lisseur(lambda k: Ls[k], len(c), K, Ke)['lisse_c']; cdf = np.cumsum(pc, 1)
     lo, hi = G.c[np.argmax(cdf >= 0.025, 1)], G.c[np.argmax(cdf >= 0.975, 1)]
     assert np.mean((lo <= c) & (c <= hi)) >= 0.85
+
+
+@test
+def marche_sur_eta_garde_la_variance():
+    """Noyau de η plus fin que la grille : après n trames, la variance ajoutée vaut n·s² (et non 0)."""
+    le = np.log(np.geomspace(0.6, 1.8, 241)); K = transition(le, 5e-4)
+    x = np.zeros(len(le)); x[120] = 1
+    for _ in range(2000):
+        x = K @ x
+    assert np.isclose(x.sum(), 1) and abs(np.sqrt((x * (le - le[120]) ** 2).sum()) / (5e-4 * np.sqrt(2000)) - 1) < 0.01
+
+
+@test
+def lisseur_suit_une_derive_de_eta():
+    """c constant, η de 1 à 1,15 sur 400 trames à 30 000 photons : la moyenne de modèles suit η — erreur rms < 1,5 %,
+    partout sous 3 sd a posteriori (les bords, où le lisseur n'a de données que d'un côté, compris) — et écarte η constant."""
+    from src.exemple import grille_lisseur
+    rng = np.random.default_rng(7); T = 400; eta = np.linspace(1.0, 1.15, T)
+    gl = grille_lisseur(S, G, F)
+    H = [trame_modele(S, 10.0, 30000, rng, e) for e in eta]
+    Ls = [gl.loglik(B, Y) for B, Y in H]
+    K = transition(np.log(gl.c), F['s'], F['s_saut'], F['w'])
+    courses = [filtre_lisseur(lambda k: Ls[k], T, K, transition(np.log(gl.eta), s)) for s in F['s_eta_candidats']]
+    _, pe, w = moyenne_de_modeles(courses, causal=False)
+    m, sd = resume_eta(pe, gl.eta); e = np.log(m / eta)
+    assert np.sqrt(np.mean(e ** 2)) < 0.015 and np.max(np.abs(e) / sd) < 3 and w[0, 0] < 0.01, (e, w[0])
 
 
 @test
