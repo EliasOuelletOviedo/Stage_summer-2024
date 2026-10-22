@@ -10,4 +10,4 @@ sorties/deux_canaux_*/*.jls
 sorties/deux_canaux_*_essai/
 sorties/figures/essai_*
 # données brutes SCLM_mCer3 (2026-10-16, 900 fichiers .sdt) : non versionnées
-Data/2026-10-16/SCLM_mCer3/
+# Data/2026-10-16/SCLM_mCer3/
