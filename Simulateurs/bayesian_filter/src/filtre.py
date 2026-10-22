@@ -6,7 +6,8 @@ Vraisemblance d'une trame (section 11), A profilé, découpage exact « combien 
                + Σ_i n_B,i ln p_B,i(c) + Σ_i n_Y,i ln p_Y,i(c)                   FLIM  : dépend de c seulement
 Filtre dans le temps (section 13) : prédiction par le noyau K (marche aléatoire sur ln c avec sauts rares), puis
 mise à jour bayésienne ; lissage avant-arrière hors ligne. Version temps réel (section 14) : η statique partagé par
-M ROI, p(c_1..c_M, η) = p(η) Π_m p(c_m | η), portes temporelles, bascule vers un filtre sur le ratio seul.
+M ROI, p(c_1..c_M, η) = p(η) Π_m p(c_m | η), portes temporelles. η n'est jamais figé : la bascule de la section 14
+(filtre léger sur le ratio seul une fois sd(ln η) < 1 %) a été retirée, elle figeait η sur un biais.
 
 Fond (absent du document, présent dans les données : ~2,3 % du bleu) : facultatif, en photons par case et par trame,
 supposé connu. Il est soustrait des totaux (« fond soustrait », section 7) et ajouté aux formes :
@@ -144,17 +145,16 @@ class FiltreTempsReel:
     Filtre causal exact pour un η statique partagé par M ROI (même profondeur) (section 14).
     Chaque ROI garde p(c | η, trames 1..k) (colonnes normalisées) ; le groupe garde ln p(η).
     ℓ_m,k(η) = Σ_c L_m,k(c, η) p(c | η, 1..k−1) ;   p(η | 1..k) ∝ p(η | 1..k−1) Π_m ℓ_m,k(η).
-    Quand sd(ln η) < bascule, η est figé et chaque ROI passe à un filtre sur c seul, nourri par N_B et N_Y.
-    eta_fixe : η connu d'avance (référence « η connu ») ; la grille de η est alors réduite à cette valeur.
+    η est mis à jour à chaque trame, jusqu'à la fin : il n'est jamais figé.
+    eta_fixe : η connu d'avance (référence « η connu ») ; la grille de η est réduite à cette valeur, la mise à jour
+    (formes et ratio) est la même.
     """
-    def __init__(self, grille, n_roi, Kc, bascule=None, eta_fixe=None):
-        self.g, self.Kc, self.bascule = grille, Kc, bascule
+    def __init__(self, grille, n_roi, Kc, eta_fixe=None):
+        self.g, self.Kc = grille, Kc
         self.eta = grille.eta if eta_fixe is None else np.array([float(eta_fixe)])
         self.P = np.full((n_roi, len(grille.c), len(self.eta)), 1.0 / len(grille.c))
         self.log_pe = np.zeros(len(self.eta))
-        self.eta_fige = float(eta_fixe) if eta_fixe is not None else None
-        self.pc = self.P[:, :, 0].copy() if eta_fixe is not None else None
-        self.k = 0; self.trame_bascule = 0 if eta_fixe is not None else None
+        self.k = 0
 
     def pe(self):
         p = np.exp(self.log_pe - self.log_pe.max()); return p / p.sum()
@@ -165,26 +165,15 @@ class FiltreTempsReel:
         B, Y = g.regrouper(np.atleast_2d(B)), g.regrouper(np.atleast_2d(Y))
         for m in range(B.shape[0]):
             NB, NY = g._sous_fond(B[m], Y[m], fond)
-            if self.eta_fige is None:
-                if self.k > 0:
-                    self.P[m] = self.Kc @ self.P[m]
-                L = g.formes(B[m], Y[m], fond)[:, None] + g.ratio(NB, NY, self.eta)
-                Q = self.P[m] * np.exp(L - L.max())
-                ell = np.maximum(Q.sum(0), 1e-300)
-                self.P[m] = Q / ell; self.log_pe += np.log(ell)
-            else:
-                if self.k > 0:
-                    self.pc[m] = self.Kc @ self.pc[m]
-                L = g.ratio(NB, NY, self.eta_fige)[:, 0]
-                q = self.pc[m] * np.exp(L - L.max()); self.pc[m] = q / q.sum()
+            if self.k > 0:
+                self.P[m] = self.Kc @ self.P[m]
+            L = g.formes(B[m], Y[m], fond)[:, None] + g.ratio(NB, NY, self.eta)
+            Q = self.P[m] * np.exp(L - L.max())
+            ell = np.maximum(Q.sum(0), 1e-300)
+            self.P[m] = Q / ell; self.log_pe += np.log(ell)
         self.log_pe -= self.log_pe.max()
         pe = self.pe(); eta_m, eta_sd = resume_eta(pe, self.eta)
-        if self.eta_fige is None:
-            pc = np.einsum('mce,e->mc', self.P, pe)
-            if self.bascule is not None and eta_sd < self.bascule:
-                self.eta_fige, self.pc, self.trame_bascule = float(eta_m), pc.copy(), self.k
-        else:
-            pc = self.pc
+        pc = np.einsum('mce,e->mc', self.P, pe)
         self.k += 1
         m_, lo, hi = resume_c(pc, g.c)
         return dict(c=m_, bas=lo, haut=hi, eta=float(eta_m), eta_sd=float(eta_sd))

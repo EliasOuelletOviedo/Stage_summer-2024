@@ -29,8 +29,7 @@ w = 0.03
 s_saut = 0.5
 # lisseur hors ligne : η quasi constant pour une ROI (marche aléatoire de 0,2 % par trame sur ln η)
 s_eta_lisseur = 0.002
-# section 14 : bascule vers le filtre léger (ratio seul) quand sd(ln η) < 1 % ; 16 portes temporelles
-bascule_sd_ln_eta = 0.01
+# section 14 : 16 portes temporelles (η n'est jamais figé : la bascule vers le ratio seul a été retirée)
 portes = 16
 
 [simulation]

@@ -183,8 +183,8 @@ def temps_reel(S, g_portes, g_cases, p, rng):
         for r in range(reps):
             C = trajectoires_roi(rng, M, T)
             H = [[trame_modele(S, C[m, k], N, rng, q['eta']) for m in range(M)] for k in range(T)]
-            variantes = {'1 ROI': [FiltreTempsReel(g_portes, 1, Kc, f['bascule_sd_ln_eta']) for _ in range(M)],
-                         f'{M} ROI partageant η': [FiltreTempsReel(g_portes, M, Kc, f['bascule_sd_ln_eta'])],
+            variantes = {'1 ROI': [FiltreTempsReel(g_portes, 1, Kc) for _ in range(M)],
+                         f'{M} ROI partageant η': [FiltreTempsReel(g_portes, M, Kc)],
                          'η connu d\'avance': [FiltreTempsReel(g_cases, M, Kc, eta_fixe=q['eta'])]}
             for nom, filtres in variantes.items():
                 est = np.zeros((M, T)); duree = 0.0; etas = []
@@ -198,10 +198,8 @@ def temps_reel(S, g_portes, g_cases, p, rng):
                         x = filtres[0].mettre_a_jour(B, Y); est[:, k] = x['c']; etas = [(x['eta'], x['eta_sd'])]
                     duree += time.perf_counter() - t0
                 rmse = np.sqrt(np.mean((est[:, deb:] - C[:, deb:]) ** 2))
-                bascules = [fl.trame_bascule for fl in filtres]
                 lignes.append(dict(photons=N, repetition=r + 1, variante=nom, rmse_mM=rmse,
                                    eta_moyen=np.mean([x[0] for x in etas]), eta_sd_pct=100 * np.mean([x[1] for x in etas]),
-                                   bascule_trame=np.mean([b for b in bascules if b is not None]) if any(b is not None for b in bascules) else np.nan,
                                    ms_par_roi_trame=1e3 * duree / T / M))
     ecrire('temps_reel', lignes)
     D = pd.DataFrame(lignes).groupby(['photons', 'variante'], sort=False).mean(numeric_only=True).reset_index()
@@ -210,7 +208,7 @@ def temps_reel(S, g_portes, g_cases, p, rng):
     for _, x in D.iterrows():
         j = list(D.variante.unique()).index(x.variante)
         dire(f"  {x.photons:6.0f} photons, {x.variante:<22s} RMSE {x.rmse_mM:5.2f} mM (document {doc.get((x.photons, j), np.nan):.1f})"
-             f" | η {x.eta_moyen:.3f} ± {x.eta_sd_pct:.1f} % | bascule à la trame {x.bascule_trame:5.0f} | {x.ms_par_roi_trame:.2f} ms/ROI/trame")
+             f" | η {x.eta_moyen:.3f} ± {x.eta_sd_pct:.1f} % | {x.ms_par_roi_trame:.2f} ms/ROI/trame")
     ecrire('temps_reel_resume', D.to_dict('records'))
     return D
 

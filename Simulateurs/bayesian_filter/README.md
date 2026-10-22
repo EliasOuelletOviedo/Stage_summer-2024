@@ -51,19 +51,19 @@ leurs histogrammes sommés, versionnés par `step17_bruts_mCer3.jl` (`irf_bruts_
 
 | Fichier | Rôle | lignes |
 | --- | --- | --- |
-| `params.toml` | le seul endroit pour les constantes (données, grilles, transition, scénarios, graine, boxplots) ; SCLM_mCer3 | 121 |
-| `params_SCLM.toml` | les mêmes, pour la titration SCLM régulière à 800 nm | 94 |
+| `params.toml` | le seul endroit pour les constantes (données, grilles, transition, scénarios, graine, boxplots) ; SCLM_mCer3 | 120 |
+| `params_SCLM.toml` | les mêmes, pour la titration SCLM régulière à 800 nm | 93 |
 | `step0_calibration.py` | le pont unique avec les données : appelle le `sclm_hybride.py` du jeu, écrit sa calibration (`calibrer` sert aussi à boxplots.py) | 86 |
 | `calibration.json`, `calibration_SCLM.json` | la calibration ajustée (constantes, isothermes, IRF, fonds et décalages par acquisition) ; écrites par step0 | — |
 | `src/modele.py` | modèle direct μ_B, μ_Y (sections 3 à 7) : IRF ⊗ déclins périodiques, isothermes, η, A ; perturbations | 137 |
-| `src/filtre.py` | vraisemblance découpée ratio / FLIM (section 11), grille (c, η), transition, filtre et lisseur (13), temps réel à M ROI, portes et bascule (14), lectures de référence | 190 |
+| `src/filtre.py` | vraisemblance découpée ratio / FLIM (section 11), grille (c, η), transition, filtre et lisseur (13), temps réel à M ROI et portes (14 ; η jamais figé), lectures de référence | 179 |
 | `src/information.py` | Fisher et Cramér-Rao, nuisances par complément de Schur (section 10) | 50 |
 | `src/simulation.py` | les deux générateurs (lit les colonnes voie1/voie2 de step17 et bleu/jaune de step16), les trajectoires des sections 14 et 15 | 97 |
 | `src/figures.py` | rendu | 163 |
 | `src/estimateurs.py` | les 4 lectures d'un échantillon (temps de vie unique, FLIM du système, ratio, hybride à η du contexte), en bloc | 98 |
 | `boxplots.py` | partage des .sdt, calibration sur une moitié, échantillons et contextes tirés de l'autre (η = 1 ou variable), boxplots | 173 |
-| `run.py` | la course en 8 parties ; un CSV par partie, `journal.txt`, 5 figures | 398 |
-| `test/run_tests.py` | 13 vérifications : calibration = annexe, découpage exact, portes (93,7 % de l'information FLIM gardée), η retrouvé, bascule, couverture du lisseur, amincissement | 165 |
+| `run.py` | la course en 8 parties ; un CSV par partie, `journal.txt`, 5 figures | 396 |
+| `test/run_tests.py` | 13 vérifications : calibration = annexe, découpage exact, portes (93,7 % de l'information FLIM gardée), η retrouvé, η jamais figé, couverture du lisseur, amincissement | 167 |
 
 ## Sorties (`sorties/` pour SCLM_mCer3, `sorties_SCLM/` pour SCLM régulier)
 
@@ -97,15 +97,19 @@ deux canaux sur le FLIM bleu −9,50 contre −9,6 ; durées de vie 5 % plus cou
 η final 1,244 ± 0,021 ; couverture des intervalles à 95 % : 96 % (filtre), 98 % (lissé). Le document montre un seul
 tirage ; ici, celui de `fig_exemple.png` (répétition 1) finit à η = 1,222, d'où un biais de −1,1 mM sur ce tirage-là.
 
-**Section 14 (300 trames, η = 1,25 inconnu, 3 répétitions).** Erreur typique après la trame 100, en mM :
+**Section 14 (300 trames, η = 1,25 inconnu, 3 répétitions).** Erreur typique après la trame 100, en mM. η est mis à
+jour à chaque trame jusqu'à la fin : la bascule du document (η figé et filtre sur le ratio seul une fois
+sd(ln η) < 1 %) est retirée (voir le point 2 plus bas) ; la référence « η connu » fait la même mise à jour, formes
+comprises, avec la grille de η réduite à 1,25.
 
 | photons par trame | 1 ROI | 10 ROI partageant η | η connu |
 | --- | --- | --- | --- |
-| 1 000 | 3,76 (2,6) | 2,35 (2,5) | 1,72 (1,7) |
-| 3 000 | 2,26 (1,5) | 1,59 (1,4) | 1,17 (1,1) |
-| 10 000 | 1,38 (1,5) | **1,47 (0,9)** | 0,78 (0,8) |
+| 1 000 | 3,76 (2,6) | 2,35 (2,5) | 1,70 (1,7) |
+| 3 000 | 2,26 (1,5) | 1,51 (1,4) | 1,16 (1,1) |
+| 10 000 | 1,38 (1,5) | 0,82 (0,9) | 0,77 (0,8) |
 
-Coût : 0,6 ms par ROI et par trame sur la grille 260 × 61, 0,2 à 0,3 ms avec les portes et la bascule.
+η final pour 10 ROI : 1,215 ± 1,1 %, 1,226 ± 0,5 %, 1,247 ± 0,4 % à 1 000, 3 000, 10 000 photons. Coût : 0,6 à 1 ms par
+ROI et par trame avec les portes (la bascule le ramenait à 0,2 ms, au prix d'un η figé).
 
 ## Ce que la simulation apprend en plus du document
 
@@ -116,9 +120,11 @@ Coût : 0,6 ms par ROI et par trame sur la grille 260 × 61, 0,2 à 0,3 ms avec 
    η revenait à 1,24–1,26.
    Le module de référence (`sclm_hybride.py`, `demo_temps_reel`) fait la même chose : 1,21 à 1 000 photons pour trois
    graines, et 1,231 à 1,250 à 3 000 photons (le 1,250 ± 1,0 % du document est la graine 0).
-2. **La bascule à 1 % fige η trop tôt.** À 10 000 photons, sd(ln η) passe sous 1 % vers la trame 40, pendant la ligne de
-   base, alors que l'effet ci-dessus tire encore η vers le bas : η est figé à 1,21–1,23 dans les trois répétitions, et
-   10 ROI font moins bien qu'une seule (1,47 contre 1,38 mM). La sd a posteriori ne voit pas ce biais.
+2. **La bascule à 1 % figeait η trop tôt ; elle est retirée.** À 10 000 photons, sd(ln η) passait sous 1 % vers la
+   trame 40, pendant la ligne de base, alors que l'effet ci-dessus tirait encore η vers le bas : η restait figé à
+   1,21–1,23, et 10 ROI faisaient moins bien qu'une seule (1,47 contre 1,38 mM). Sans bascule, η continue d'apprendre
+   pendant les réponses et finit à 1,247 ; 10 ROI rejoignent la référence η connu (0,82 contre 0,77 mM). L'effet du
+   point 1 reste visible à 3 000 photons : η = 1,226 ± 0,5 % (≈ 4 sd sous 1,25).
 3. **Le fond doit être dans le modèle.** Les données en ont 2,3 % dans le bleu. Ignoré, il fausse la forme du déclin :
    η +6 % et +3 à +8 mM sur les trames amincies (partie 5), +4,9 mM pour l'hybride à 10 mM (partie 6). Le filtre accepte un
    fond connu (photons par case et par trame), soustrait des totaux et ajouté aux formes.
@@ -155,16 +161,16 @@ plus vite et le filtre fait mieux :
 | --- | --- | --- |
 | section 15, temps réel / lissé (mM, 20 répétitions) | 1,45 / 0,87 | 2,13 / 1,14 |
 | section 15, η final | 1,244 ± 0,016 | 1,244 ± 0,021 |
-| section 14, 1 000 photons : 1 ROI / 10 ROI / η connu (mM) | 2,30 / 1,84 / 1,75 | 3,76 / 2,35 / 1,72 |
-| section 14, 10 000 photons : 1 ROI / 10 ROI / η connu (mM) | 0,92 / 0,75 / 0,75 | 1,38 / 1,47 / 0,78 |
+| section 14, 1 000 photons : 1 ROI / 10 ROI / η connu (mM) | 2,30 / 1,81 / 1,71 | 3,76 / 2,35 / 1,70 |
+| section 14, 10 000 photons : 1 ROI / 10 ROI / η connu (mM) | 0,89 / 0,73 / 0,73 | 1,38 / 0,82 / 0,77 |
 | η final, 1 000 photons, 10 ROI, c statique, transition du document | 1,228 | 1,176 |
 | amincissement, filtre avec fond connu, biais à 10 / 20 / 40 mM | +0,0 / −1,4 / −1,3 | −1,6 / −0,3 / −2,7 |
 | amincissement, filtre sans fond, biais à 10 / 20 / 40 mM | +2,4 / +0,7 / +1,9 | +3,3 / +6,7 / +7,9 |
 | titration relue : η du FLIM (fond ajusté) | 0,976 à 1,026 | 0,991 à 1,046 |
 
-Les points 1 et 2 ci-dessus valent encore, atténués : η reste tiré vers le bas (1,228 à 1 000 photons) ou vers le haut
-avec une transition trop raide (1,361), et la bascule fige η à 1,224 à 3 000 photons (trame 68). À 10 000 photons, 10 ROI
-rejoignent la référence η connu (0,75 mM).
+Le point 1 ci-dessus vaut encore, atténué : η reste tiré vers le bas (1,228 à 1 000 photons) ou vers le haut avec une
+transition trop raide (1,361). Sans bascule, 10 ROI font 1,81 / 1,20 / 0,73 mM à 1 000 / 3 000 / 10 000 photons
+(η connu : 1,71 / 1,12 / 0,73), contre 1,84 / 1,45 / 0,75 quand la bascule figeait η à 1,224 à 3 000 photons.
 
 **Ce qui est propre à ce jeu.** L'autofluorescence (formes illustratives) coûte bien plus à l'hybride : +10,0 mM
 (5 % du jaune) et +9,8 mM (5 % des deux canaux), contre +0,7 et −9,0 pour mCer3. L'échantillon « inconnu » (1,9 + 5,2
@@ -285,5 +291,6 @@ Médiane de |écart| (mM), ratio / hybride :
 - L'autofluorescence n'est pas modélisée dans le filtre (le document la donne corrigée « si on la modélise ») : la
   colonne « hybride » de la partie 6 en montre l'effet sans modèle, avec des formes d'autofluorescence illustratives.
 - Ni la ré-estimation des durées de vie en tranche, ni l'estimation du décalage d'horloge par le filtre, ni le temps mort.
-- Les remèdes aux points 1 et 2 (apprendre η sur une ligne de base avec une transition ajustée, bascule sur un critère
-  qui tienne compte du biais) restent à choisir.
+- Le remède au point 1 (apprendre η sur une ligne de base avec une transition ajustée) reste à choisir. Sans la
+  bascule, le filtre temps réel coûte 2 à 5 fois plus de calcul à 10 ROI ; un filtre léger ne reviendrait qu'avec un
+  critère qui tienne compte du biais de η, pas seulement de sa sd a posteriori.

@@ -127,14 +127,16 @@ def filtre_temps_reel_retrouve_eta():
 
 
 @test
-def bascule_puis_ratio_seul():
+def eta_jamais_fige():
+    """5 ROI, 10 000 photons, 150 trames : η reste mis à jour (sa distribution bouge encore à la dernière trame)."""
     rng = np.random.default_rng(4)
     K = transition(np.log(G.c), F['s'], F['s_saut'], F['w'])
-    fl = FiltreTempsReel(G, 5, K, bascule=0.02)
+    fl = FiltreTempsReel(G, 5, K)
     for _ in range(150):
+        avant = fl.pe().copy()
         H = [trame_modele(S, 10.0, 10000, rng, 1.25) for _ in range(5)]
-        fl.mettre_a_jour(np.array([h[0] for h in H]), np.array([h[1] for h in H]))
-    assert fl.eta_fige is not None and fl.trame_bascule < 150
+        x = fl.mettre_a_jour(np.array([h[0] for h in H]), np.array([h[1] for h in H]))
+    assert not hasattr(fl, 'eta_fige') and np.abs(fl.pe() - avant).max() > 0 and x['eta_sd'] < 0.01
 
 
 @test
