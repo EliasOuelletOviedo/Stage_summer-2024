@@ -18,7 +18,12 @@ incomplète ⊛ IRF, décalage de l'IRF fixé à celui du déclin global natif).
   (taux local mesuré dans l'image) ;
 - biais = τ / τ(0) − 1, τ(0) étant l'ordonnée à l'origine de τ(ppp) au temps mort natif,
   toutes tranches réunies (une valeur par solution) ;
-- courbes : moyenne des tranches de chaque classe de ppp (± LARGEUR_CLASSE).
+- courbes : moyenne des tranches de chaque classe de ppp (± LARGEUR_CLASSE) ;
+- pointillés : biais de la SPC-150N à son temps mort natif (~115 ns), même définition, à
+  partir de ses tranches (durees_de_vie.csv, étape 2). Son temps mort plafonne son taux
+  vers 0,08 ppp enregistré : pas de ligne au-delà.
+
+`--figure` : refait la figure depuis resultats/temps_mort_logiciel.csv, sans mesurer.
 
 Sorties : resultats/temps_mort_logiciel.csv, figures/8_biais_temps_mort.png.
 Durée : ~10 min.
@@ -117,7 +122,24 @@ def classes(mes, sol):
     return out
 
 
+def biais_150n():
+    """{solution: {ppp: biais moyen}} de la SPC-150N, canal 1 : τ / τ(0) − 1 sur ses
+    tranches de taux local, τ(0) ordonnée à l'origine de τ(ppp) ; classes à ± LARGEUR_CLASSE."""
+    rows = [r for r in csv.DictReader(open(RESULTATS / "durees_de_vie.csv"))
+            if r["carte"] == "SPC-150N" and r["canal"] == "1" and r["serie"] == "spc" and r["tranche"] != "global"]
+    out = {}
+    for sol in ("low", "high"):
+        rr = [r for r in rows if r["solution"] == sol]
+        mu = np.array([float(r["mu_enr"]) for r in rr])
+        tau = np.array([float(r["tau_ns"]) for r in rr])
+        b = tau / np.polyfit(mu, tau, 1)[1] - 1
+        out[sol] = {ppp: float(b[np.abs(mu - ppp) <= LARGEUR_CLASSE].mean()) for ppp in PPP
+                    if (np.abs(mu - ppp) <= LARGEUR_CLASSE).sum() >= 3}
+    return out
+
+
 def figure(mes):
+    b150 = biais_150n()
     fig, axes = plt.subplots(1, 2, figsize=(14, 5.4), facecolor=SURFACE)
     for ax, sol in zip(axes, ("low", "high")):
         ax.set_facecolor(SURFACE)
@@ -139,6 +161,11 @@ def figure(mes):
                             color=col, alpha=0.25, lw=0)
             ax.plot(pts[:, 0], 100 * pts[:, 1], color=col, lw=2, marker="o", ms=3.5, mec=SURFACE, mew=0.5,
                     label=f"{ppp:.2f} ppp")
+            if ppp in b150[sol]:
+                ax.axhline(100 * b150[sol][ppp], color=col, lw=1.6, ls=(0, (4, 3)))
+        presents = ", ".join(f"{q:.2f}".replace(".", ",") for q in b150[sol])
+        ax.plot([], [], color=INK_2, lw=1.6, ls=(0, (4, 3)),
+                label=f"SPC-150N, temps mort ~115 ns\n(lignes à {presents} ppp seulement :\nson taux plafonne vers 0,08 ppp)")
         ax.set_xlim(7, 40)
         ax.set_xlabel("temps mort imposé D' (ns) ; pointillés : 1, 2, 3 périodes laser (12,49 ns)")
         ax.set_ylabel("biais de τ (%)")
@@ -147,7 +174,8 @@ def figure(mes):
         ax.text(D_NATIF + 0.3, ax.get_ylim()[0], "natif\n7,5 ns", fontsize=8.5, color=INK, va="bottom")
     axes[1].legend(title="photons enregistrés\npar pixel et par impulsion\n(temps mort natif)", fontsize=9,
                    title_fontsize=9, frameon=False, loc="upper left", bbox_to_anchor=(1.01, 1))
-    fig.suptitle("SPC-QC-104, données de MQAE : biais de τ selon le temps mort imposé en logiciel",
+    fig.suptitle("Données de MQAE : biais de τ de la QC-104 selon le temps mort imposé en logiciel, "
+                 "et de la 150N (pointillés)",
                  x=0.01, ha="left", fontsize=13)
     fig.text(0.01, -0.03, "Tranches de taux local des acquisitions (8 par image) à ± 0,025 ppp de la valeur ; "
              "moyenne ± erreur-type (bande). τ : MLE, exponentielle incomplète ⊛ IRF mesurée. "
@@ -159,6 +187,12 @@ def figure(mes):
 
 
 def main():
+    import sys
+    if "--figure" in sys.argv:
+        mes = [{k: (v if k == "solution" else float(v)) for k, v in r.items()}
+               for r in csv.DictReader(open(RESULTATS / "temps_mort_logiciel.csv"))]
+        figure(mes)
+        return
     D = dossier_donnees()
     preparer()
     mes = mesurer(D, Modele(irf(D, "SPC-QC-104", 1), "SPC-QC-104"))
