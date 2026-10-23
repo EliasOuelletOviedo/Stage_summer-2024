@@ -5,9 +5,15 @@ Vraisemblance d'une trame (section 11), A profilé, découpage exact « combien 
     ln L(c, η) = N_B ln[M_B/(M_B + η M_Y)] + N_Y ln[η M_Y/(M_B + η M_Y)]      ratio : dépend de c et de η
                + Σ_i n_B,i ln p_B,i(c) + Σ_i n_Y,i ln p_Y,i(c)                   FLIM  : dépend de c seulement
 Filtre dans le temps (section 13) : prédiction par le noyau K (marche aléatoire sur ln c avec sauts rares), puis
-mise à jour bayésienne ; lissage avant-arrière hors ligne. Version temps réel (section 14) : η statique partagé par
-M ROI, p(c_1..c_M, η) = p(η) Π_m p(c_m | η), portes temporelles. η n'est jamais figé : la bascule de la section 14
+mise à jour bayésienne ; lissage avant-arrière hors ligne. η n'est jamais figé : la bascule de la section 14
 (filtre léger sur le ratio seul une fois sd(ln η) < 1 %) a été retirée, elle figeait η sur un biais.
+
+Modèle par défaut, « 1-2-3 » (FiltreTempsReel ; essais et figures : derive_eta/README.md) :
+  1. η dérive : ln η_k = ln η0 + β·k/1000, θ = (η0, β) statique et inconnu, sur une grille ;
+  2. θ partagé par les M ROI d'un même champ : p(θ, c_1..c_M) = p(θ) Π_m p(c_m | θ), exact (section 14) ;
+  3. vitesse de c inconnue : un filtre par vitesse s_c candidate, moyennés selon leur vraisemblance marginale.
+L'ancien modèle d'une ROI (η en marche aléatoire de pas s_η inconnu, s fixe : filtre_lisseur, moyenne_de_modeles)
+reste disponible ([filtre] dynamique_eta = "marche").
 
 Fond (absent du document, présent dans les données : ~2,3 % du bleu) : facultatif, en photons par case et par trame,
 supposé connu. Il est soustrait des totaux (« fond soustrait », section 7) et ajouté aux formes :
@@ -199,40 +205,147 @@ def moyenne_de_modeles(courses, causal):
     return pc, pe, w
 
 
+def grille_theta(f, derive=True):
+    """
+    (1) θ = (ln η0, β) de la dérive ln η_k = ln η0 + β·k/1000 : η0 de eta0_min à eta0_max (n_eta0 valeurs, pas uniforme
+    en ln η), β de −derive_max à +derive_max (n_derive valeurs), en ln η par 1 000 trames. derive=False : β = 0.
+    Renvoie (ln η0, β), à plat ; a priori uniforme sur la grille.
+    """
+    le0 = np.log(np.geomspace(f['eta0_min'], f['eta0_max'], f['n_eta0']))
+    beta = np.linspace(-f['derive_max'], f['derive_max'], f['n_derive']) if derive else np.zeros(1)
+    L0, Bt = np.meshgrid(le0, beta, indexing='ij')
+    return L0.ravel(), Bt.ravel()
+
+
+def noyaux_c(c, f):
+    """(3) Un noyau de transition de c par vitesse candidate ([filtre] s_c_candidats), sauts du document compris."""
+    return [transition(np.log(c), s, f['s_saut'], f['w']) for s in f['s_c_candidats']]
+
+
+def logs_ratio_eta(g, ln_eta):
+    """Le partage pour des valeurs quelconques de ln η : (ln M_B/(M_B + η M_Y), ln η M_Y/(M_B + η M_Y)), (n_c, n)."""
+    r = (g.MY / g.MB)[:, None] * np.exp(np.asarray(ln_eta, float))[None, :]
+    lB = -np.log1p(r)
+    return lB, np.log(r) + lB
+
+
+# En float32, les valeurs sous ~1e-38 sont « dénormalisées » et les calculer est très lent (produits matriciels ×4) :
+# les probabilités, les noyaux et les rapports de vraisemblance sous ce plancher sont mis à 0 (ils pèsent moins de 1e-18
+# relativement au plus grand de leur colonne ; un produit de deux valeurs gardées reste au-dessus de 1e-36).
+PLANCHER = 1e-18
+
+
+def _lse(x, axis=-1):
+    m = x.max(axis, keepdims=True)
+    return np.squeeze(m, axis) + np.log(np.exp(x - m).sum(axis))
+
+
 class FiltreTempsReel:
     """
-    Filtre causal exact pour un η statique partagé par M ROI (même profondeur) (section 14).
-    Chaque ROI garde p(c | η, trames 1..k) (colonnes normalisées) ; le groupe garde ln p(η).
-    ℓ_m,k(η) = Σ_c L_m,k(c, η) p(c | η, 1..k−1) ;   p(η | 1..k) ∝ p(η | 1..k−1) Π_m ℓ_m,k(η).
-    η est mis à jour à chaque trame, jusqu'à la fin : il n'est jamais figé.
-    eta_fixe : η connu d'avance (référence « η connu ») ; la grille de η est réduite à cette valeur, la mise à jour
-    (formes et ratio) est la même.
+    Filtre causal exact pour M ROI d'un même champ ; par défaut le modèle « 1-2-3 » :
+      1. η dérive : ln η_k = ln η0 + β·k/1000 (k : trames depuis le début), θ = (η0, β) statique, grille de grille_theta ;
+      2. θ partagé par les M ROI (section 14) : chaque ROI garde p(c | θ, trames 1..k) (colonnes normalisées) et
+         ℓ_m,k(θ) = Σ_c L_m,k(c, θ) p(c | θ, 1..k−1) ;  p(θ | 1..k) ∝ p(θ | 1..k−1) Π_m ℓ_m,k(θ) — exact ;
+      3. un filtre par noyau de c (vitesses [filtre] s_c_candidats), moyennés selon leur vraisemblance marginale causale
+         p(trames 1..k | noyau) (a priori uniforme sur les noyaux).
+    θ est mis à jour à chaque trame, jusqu'à la fin : il n'est jamais figé.
+    Options : derive=False → β = 0 (η constant) ; eta_fixe → η connu d'avance (θ réduit à ce point, β = 0) ;
+    noyaux → liste de noyaux de c imposée ; partage=False → chaque ROI a son propre θ et sa propre moyenne de modèles
+    (M filtres indépendants, calculés ensemble).
     """
-    def __init__(self, grille, n_roi, Kc, eta_fixe=None):
-        self.g, self.Kc = grille, Kc
-        self.eta = grille.eta if eta_fixe is None else np.array([float(eta_fixe)])
-        self.P = np.full((n_roi, len(grille.c), len(self.eta)), 1.0 / len(grille.c))
-        self.log_pe = np.zeros(len(self.eta))
+    def __init__(self, grille, n_roi, f, eta_fixe=None, derive=True, noyaux=None, partage=True):
+        self.g, self.M, self.partage = grille, n_roi, partage
+        self.K = [np.where(np.asarray(K) < PLANCHER, 0, K).astype(np.float32)
+                  for K in (noyaux if noyaux is not None else noyaux_c(grille.c, f))]
+        if eta_fixe is not None:
+            self.le0, self.beta = np.array([np.log(float(eta_fixe))]), np.zeros(1)
+        else:
+            self.le0, self.beta = grille_theta(f, derive)
+        nk, nc, nt, ng = len(self.K), len(grille.c), len(self.le0), (1 if partage else n_roi)
+        self.P = np.full((nk, n_roi, nc, nt), 1.0 / nc, np.float32)
+        self.lpe = np.full((nk, ng, nt), -np.log(nt))           # ln p(θ | trames) par noyau et par groupe
+        self.cum = np.zeros((nk, ng))                           # ln p(trames 1..k | noyau)
         self.k = 0
 
+    def ln_eta(self, k):
+        """ln η à la trame k (0 = la première) en chaque point de θ."""
+        return self.le0 + self.beta * k / 1000.0
+
+    def poids(self):
+        """Poids des noyaux de c, (n_noyaux, groupes)."""
+        w = np.exp(self.cum - self.cum.max(0)); return w / w.sum(0)
+
     def pe(self):
-        p = np.exp(self.log_pe - self.log_pe.max()); return p / p.sum()
+        """Loi de θ, moyennée sur les noyaux : (n_θ,) si θ est partagé, (M, n_θ) sinon."""
+        p = np.einsum('kg,kgt->gt', self.poids(), np.exp(self.lpe))
+        return p[0] if self.partage else p
 
     def mettre_a_jour(self, B, Y, fond=None):
         """B, Y : (M, n_cases) ou (M, n_portes) pour la trame. Renvoie un dict de résumés par ROI."""
         g = self.g
         B, Y = g.regrouper(np.atleast_2d(B)), g.regrouper(np.atleast_2d(Y))
-        for m in range(B.shape[0]):
+        le = self.ln_eta(self.k); lB, lY = logs_ratio_eta(g, le)
+        E = np.empty(self.P.shape[1:], np.float32); mx = np.empty(self.M)
+        for m in range(self.M):
             NB, NY = g._sous_fond(B[m], Y[m], fond)
-            if self.k > 0:
-                self.P[m] = self.Kc @ self.P[m]
-            L = g.formes(B[m], Y[m], fond)[:, None] + g.ratio(NB, NY, self.eta)
-            Q = self.P[m] * np.exp(L - L.max())
-            ell = np.maximum(Q.sum(0), 1e-300)
-            self.P[m] = Q / ell; self.log_pe += np.log(ell)
-        self.log_pe -= self.log_pe.max()
-        pe = self.pe(); eta_m, eta_sd = resume_eta(pe, self.eta)
-        pc = np.einsum('mce,e->mc', self.P, pe)
+            L = g.formes(B[m], Y[m], fond)[:, None] + NB * lB + NY * lY          # float64 : |ln L| ~ 1e5 à 1e5 photons
+            mx[m] = L.max(); L -= mx[m]; L[L < np.log(PLANCHER)] = -np.inf; E[m] = np.exp(L)
+        for i, K in enumerate(self.K):
+            P = np.matmul(K, self.P[i]) if self.k > 0 else self.P[i]
+            Q = P * E; ell = np.maximum(Q.sum(1, dtype=np.float64), 1e-300)          # (M, n_θ)
+            Pn = Q / np.maximum(ell, 1e-30)[:, None, :].astype(np.float32)           # colonne vide : reste à 0
+            Pn[Pn < PLANCHER] = 0; self.P[i] = Pn
+            if self.partage:
+                x = self.lpe[i, 0] + np.log(ell).sum(0); z = _lse(x)
+                self.lpe[i, 0] = x - z; self.cum[i, 0] += z + mx.sum()
+            else:
+                x = self.lpe[i] + np.log(ell); z = _lse(x)
+                self.lpe[i] = x - z[:, None]; self.cum[i] += z + mx
         self.k += 1
-        m_, lo, hi = resume_c(pc, g.c)
-        return dict(c=m_, bas=lo, haut=hi, eta=float(eta_m), eta_sd=float(eta_sd))
+        return self.resume(le)
+
+    def resume(self, le):
+        """c (moyenne, intervalle à 95 %) par ROI ; η de la trame (moyenne géométrique, sd(ln η)) ; poids des noyaux."""
+        w = self.poids(); pes = np.exp(self.lpe)                                   # (n_noyaux, groupes), (…, n_θ)
+        grp = np.zeros(self.M, int) if self.partage else np.arange(self.M)
+        pc = sum(w[i, grp, None] * np.einsum('mct,mt->mc', self.P[i], pes[i, grp].astype(np.float32))
+                 for i in range(len(self.K)))
+        m_i = pes @ le; v_i = np.einsum('kgt,kgt->kg', pes, (le[None, None, :] - m_i[..., None]) ** 2)
+        m = (w * m_i).sum(0); sd = np.sqrt(np.maximum((w * (v_i + m_i ** 2)).sum(0) - m ** 2, 0))
+        c_, lo, hi = resume_c(pc, self.g.c)
+        if self.partage:
+            return dict(c=c_, bas=lo, haut=hi, eta=float(np.exp(m[0])), eta_sd=float(sd[0]), poids=w[:, 0])
+        return dict(c=c_, bas=lo, haut=hi, eta=np.exp(m), eta_sd=sd, poids=w)
+
+
+def lisseur_derive(fl, formes, NB, NY, masse=1 - 1e-4, n_max=None, memoire=4e8):
+    """
+    Lissage hors ligne du modèle 1-2-3 pour une ROI (fl : FiltreTempsReel à 1 ROI, passé sur toutes les trames).
+    θ étant statique, p(c_k | tout) = Σ_noyau w Σ_θ p(θ | tout) p(c_k | θ, tout) : pour chaque noyau, on garde les θ
+    les plus probables jusqu'à la masse `masse` (au plus n_max, et ce que permet `memoire` octets), puis lissage
+    avant-arrière exact de c sachant θ. Les poids des noyaux sont ceux de toutes les trames. η : ln η_k(θ) est connu
+    pour chaque θ, sa loi lissée vient de p(θ | tout), sans troncature.
+    formes : (T, n_c) morceau « quand » ; NB, NY : (T,) totaux (fond déjà soustrait). Renvoie (p(c_k), moyenne de
+    ln η_k, sd, masse de θ gardée par noyau).
+    """
+    T, nc = formes.shape; w = fl.poids()[:, 0]; pes = np.exp(fl.lpe[:, 0])
+    n_max = n_max or max(1, int(memoire / (4 * T * nc)))
+    pc = np.zeros((T, nc)); garde = []
+    for i, K in enumerate(fl.K):
+        o = np.argsort(pes[i])[::-1]; cum = np.cumsum(pes[i][o])
+        sel = o[:min(n_max, int(np.searchsorted(cum, masse)) + 1)]; p_sel = pes[i][sel] / pes[i][sel].sum()
+        garde.append(float(pes[i][sel].sum()))
+        K64 = K.astype(np.float64); alpha = np.empty((T, nc, len(sel)), np.float32); a = None
+        for k in range(T):
+            lB, lY = logs_ratio_eta(fl.g, fl.le0[sel] + fl.beta[sel] * k / 1000.0)
+            L = formes[k][:, None] + NB[k] * lB + NY[k] * lY
+            pred = np.full((nc, len(sel)), 1.0 / nc) if a is None else K64 @ a
+            q = pred * np.exp(L - L.max()); a = q / np.maximum(q.sum(0), 1e-300); alpha[k] = a
+        post = a; pc[-1] += w[i] * (post @ p_sel)
+        for k in range(T - 2, -1, -1):
+            a = alpha[k].astype(np.float64); pred = K64 @ a
+            post = a * (K64.T @ (post / np.maximum(pred, 1e-300))); post /= np.maximum(post.sum(0), 1e-300)
+            pc[k] += w[i] * (post @ p_sel)
+    pe = np.einsum('k,kt->t', w, pes); le = fl.le0[None, :] + fl.beta[None, :] * np.arange(T)[:, None] / 1000.0
+    m = le @ pe; sd = np.sqrt(np.maximum(((le - m[:, None]) ** 2) @ pe, 0))
+    return pc, m, sd, garde

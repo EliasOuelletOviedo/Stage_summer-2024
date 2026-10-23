@@ -10,7 +10,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.modele import charger_params, charger_calibration, Senseur, isotherme, x_vers_c
 from src.filtre import (Grille, grille_c, grille_eta, portes_log, transition, filtre_lisseur, FiltreTempsReel,
-                        moyenne_de_modeles, resume_eta)
+                        moyenne_de_modeles, resume_c, resume_eta, grille_theta, noyaux_c, logs_ratio_eta, lisseur_derive)
 from src.simulation import trame_modele, Mesures
 
 P = charger_params(); CAL = charger_calibration(); F = P['filtre']
@@ -116,10 +116,9 @@ def fond_connu_retrouve_c():
 
 @test
 def filtre_temps_reel_retrouve_eta():
-    """10 ROI à 3 000 photons, c statique : η à mieux que 3 sd après 200 trames."""
+    """Filtre par défaut (1-2-3), 10 ROI à 3 000 photons, c statique, η constant : η à mieux que 3 sd après 200 trames."""
     rng = np.random.default_rng(3); M = 10
-    K = transition(np.log(G.c), F['s'], F['s_saut'], F['w'])
-    fl = FiltreTempsReel(G, M, K)
+    fl = FiltreTempsReel(G, M, F)
     cs = rng.uniform(6, 20, M)
     for _ in range(200):
         H = [trame_modele(S, c, 3000, rng, 1.25) for c in cs]
@@ -129,15 +128,86 @@ def filtre_temps_reel_retrouve_eta():
 
 @test
 def eta_jamais_fige():
-    """5 ROI, 10 000 photons, 150 trames : η reste mis à jour (sa distribution bouge encore à la dernière trame)."""
+    """5 ROI, 10 000 photons, 150 trames : θ reste mis à jour (sa distribution bouge encore à la dernière trame)."""
     rng = np.random.default_rng(4)
-    K = transition(np.log(G.c), F['s'], F['s_saut'], F['w'])
-    fl = FiltreTempsReel(G, 5, K)
+    fl = FiltreTempsReel(G, 5, F)
     for _ in range(150):
         avant = fl.pe().copy()
         H = [trame_modele(S, 10.0, 10000, rng, 1.25) for _ in range(5)]
         x = fl.mettre_a_jour(np.array([h[0] for h in H]), np.array([h[1] for h in H]))
     assert not hasattr(fl, 'eta_fige') and np.abs(fl.pe() - avant).max() > 0 and x['eta_sd'] < 0.01
+
+
+def _petit_probleme(n_c, T, M, graine):
+    """Une grille de c de n_c valeurs, 4-5 valeurs de η0, 3 dérives, 2 vitesses de c : de quoi tout calculer à la main."""
+    c = np.geomspace(3, 40, n_c); g = Grille(S, c, np.array([1.0]))
+    f = dict(F, s_c_candidats=[0.05, 0.2], eta0_min=0.9, eta0_max=1.3, n_eta0=5, derive_max=20.0, n_derive=3)
+    rng = np.random.default_rng(graine)
+    H = [[trame_modele(S, (8.0 + 12 * m) * (1 + 0.1 * k), 2000, rng, 1.1 + 0.01 * k) for m in range(M)] for k in range(T)]
+    return c, g, f, H
+
+
+@test
+def filtre_123_egal_a_la_force_brute():
+    """2 ROI : la factorisation p(θ) Π p(c_m | θ) et la moyenne sur les vitesses de c redonnent la loi conjointe
+    (c_1, c_2, θ) calculée directement, trame par trame (moyennes de c, η, poids des modèles)."""
+    c, g, f, H = _petit_probleme(12, 6, 2, 1); M, T = 2, 6
+    fl = FiltreTempsReel(g, M, f); out = [fl.mettre_a_jour(np.array([h[0] for h in Hk]), np.array([h[1] for h in Hk])) for Hk in H]
+    le0, beta = grille_theta(f); nt, nc = len(le0), len(c); cum, pcs, etas = [], [], []
+    for K in noyaux_c(c, f):
+        p = np.full((nc, nc, nt), 1.0 / (nc * nc * nt)); lev = 0.0; pk, ek, ck = [], [], []
+        for k in range(T):
+            le = le0 + beta * k / 1000; lB, lY = logs_ratio_eta(g, le)
+            L = [g.formes(*H[k][m])[:, None] + H[k][m][0].sum() * lB + H[k][m][1].sum() * lY for m in range(M)]
+            if k > 0:
+                p = np.einsum('ia,jb,abt->ijt', K, K, p)
+            q = p * np.exp(L[0][:, None, :] + L[1][None, :, :] - L[0].max() - L[1].max()); z = q.sum()
+            lev += np.log(z) + L[0].max() + L[1].max(); p = q / z
+            pk.append(np.stack([p.sum((1, 2)), p.sum((0, 2))])); ek.append((p.sum((0, 1)) * le).sum()); ck.append(lev)
+        cum.append(ck); pcs.append(pk); etas.append(ek)
+    cum = np.array(cum); w = np.exp(cum - cum.max(0)); w /= w.sum(0)
+    for k in range(T):
+        c_bf = resume_c(sum(w[i, k] * pcs[i][k] for i in range(2)), c)[0]
+        assert np.allclose(out[k]['c'], c_bf, rtol=1e-5), (k, out[k]['c'], c_bf)
+        assert abs(np.log(out[k]['eta']) - sum(w[i, k] * etas[i][k] for i in range(2))) < 1e-6
+        assert np.allclose(out[k]['poids'], w[:, k], atol=1e-6)
+
+
+@test
+def lisseur_derive_egal_a_la_force_brute():
+    """1 ROI : le lissage par θ (lisseur_derive) redonne l'avant-arrière sur la grille conjointe (c, θ)."""
+    c, g, f, H = _petit_probleme(15, 8, 1, 2); T = 8; H = [Hk[0] for Hk in H]
+    fl = FiltreTempsReel(g, 1, f); [fl.mettre_a_jour(B[None], Y[None]) for B, Y in H]
+    formes = np.array([g.formes(B, Y) for B, Y in H]); NB = np.array([B.sum() for B, _ in H]); NY = np.array([Y.sum() for _, Y in H])
+    pc, m, sd, garde = lisseur_derive(fl, formes, NB, NY)
+    le0, beta = grille_theta(f); nt, nc = len(le0), len(c); res, ev = [], []
+    for K in noyaux_c(c, f):
+        Ls = [formes[k][:, None] + NB[k] * logs_ratio_eta(g, le0 + beta * k / 1000)[0]
+              + NY[k] * logs_ratio_eta(g, le0 + beta * k / 1000)[1] for k in range(T)]
+        a = []; p = np.full((nc, nt), 1.0 / (nc * nt)); lev = 0.0
+        for k in range(T):
+            q = (p if k == 0 else K @ p) * np.exp(Ls[k] - Ls[k].max()); z = q.sum(); lev += np.log(z) + Ls[k].max(); p = q / z; a.append(p)
+        post = [None] * T; post[-1] = a[-1]
+        for k in range(T - 2, -1, -1):
+            post[k] = a[k] * (K.T @ (post[k + 1] / (K @ a[k]))); post[k] /= post[k].sum()
+        res.append(post); ev.append(lev)
+    w = np.exp(np.array(ev) - max(ev)); w /= w.sum()
+    pc_bf = np.array([sum(w[i] * res[i][k].sum(1) for i in range(2)) for k in range(T)])
+    assert np.abs(pc - pc_bf).max() < 1e-6 and min(garde) > 1 - 1e-4, np.abs(pc - pc_bf).max()
+
+
+@test
+def filtre_123_suit_une_derive():
+    """Filtre par défaut, 3 ROI à c constant (10 mM), 20 000 photons, η de 1 à 1,02 sur 600 trames : η final à moins de
+    1 % et de 3 sd, et la dérive est préférée à η constant."""
+    rng = np.random.default_rng(8); M, T = 3, 600; eta = np.linspace(1.0, 1.02, T)
+    fl = FiltreTempsReel(G, M, F)
+    for k in range(T):
+        H = [trame_modele(S, 10.0, 20000, rng, eta[k]) for _ in range(M)]
+        x = fl.mettre_a_jour(np.array([h[0] for h in H]), np.array([h[1] for h in H]))
+    e = np.log(x['eta'] / eta[-1]); pb = fl.pe().reshape(F['n_eta0'], F['n_derive']).sum(0)
+    beta = np.linspace(-F['derive_max'], F['derive_max'], F['n_derive'])
+    assert abs(e) < 0.01 and abs(e) < 3 * x['eta_sd'] and (pb * beta).sum() > 0.01, (x['eta'], x['eta_sd'], (pb * beta).sum())
 
 
 @test

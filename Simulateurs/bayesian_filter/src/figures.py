@@ -74,7 +74,8 @@ def exemple(D, titre, chemin, eta_lim=(0.95, 1.6)):
         b.plot(k, D.eta_lisse, color=BLEU, label='après coup')
     b.plot(k, D.eta_vrai, color=NOIR, lw=0.8, ls='--', label='vrai')
     w = D.attrs.get('poids_lisseur' if lisse else 'poids_filtre_final')
-    poids = '' if not w else (' — poids des modèles ' + ('(lissé)' if lisse else 'à la dernière trame') + ', s_η par trame : '
+    et = {'s_c': 'vitesse de c s_c', 's_eta': 's_η'}[D.attrs.get('etiquette_poids', 's_eta')]
+    poids = '' if not w else (' — poids des modèles ' + ('(lissé)' if lisse else 'à la dernière trame') + f', {et} par trame : '
                               + ', '.join(f'{100 * s:g} % : {x:.2f}'.replace('.', ',') for s, x in w.items() if x >= 0.005))
     b.set_ylim(*eta_lim); b.set_ylabel('η'); b.set_xlabel('trame'); b.legend(fontsize=8); b.set_title('b · η estimé' + poids, fontsize=10)
     fig.tight_layout(); fig.savefig(chemin, dpi=130); plt.close(fig)

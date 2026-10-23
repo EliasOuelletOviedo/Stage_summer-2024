@@ -7,6 +7,9 @@ run.py — la course : le filtre bayésien hybride (ratio + FLIM) sur des donné
   2. information   : bornes de Cramér-Rao (section 10) et leur vérification par 400 tirages ;
   3. exemple       : le soma de la section 15 (η = 1,25 inconnu, 5 000 photons/trame), filtre et lisseur ;
   4. temps réel    : le tableau de la section 14 (1 ROI, 10 ROI partageant η, η connu ; 1 000 à 10 000 photons) ;
+Le filtre est par défaut le modèle « 1-2-3 » ([filtre] dynamique_eta = "derive", derive_eta/README.md) : η en dérive
+paramétrique inconnue partagée par les ROI, vitesse de c apprise (moyenne de modèles). Les valeurs « document » ont été
+obtenues avec le modèle du document (η constant, s = 4 %) : elles servent de repère.
   5. amincissement : le filtre sur des trames tirées des histogrammes MESURÉS (fond et défauts du modèle réels),
                      puis la titration complète relue (le plancher de la calibration) ;
   6. robustesse    : les biais de la section 16 à 10 mM, plus le décalage d'horloge et le fond des données ;
@@ -23,8 +26,7 @@ import pandas as pd
 ICI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ICI)
 from src.modele import charger_params, chemin_params, charger_calibration, Senseur, x_vers_c
-from src.filtre import (Grille, grille_c, grille_eta, portes_log, transition, FiltreTempsReel,
-                        resume_c, resume_eta)
+from src.filtre import (Grille, grille_c, grille_eta, portes_log, transition, FiltreTempsReel, resume_c, resume_eta)
 from src.simulation import trame_modele, trajectoires_roi, Mesures, inconnu, fond_moyen
 from src.exemple import METHODES_EXEMPLE, course_exemple, bilan_exemple
 from src.information import bornes, sigma_eta
@@ -136,30 +138,23 @@ def exemple(S, g, p, rng):
 # ================================================================================================ 4. temps réel (section 14)
 def temps_reel(S, g_portes, g_cases, p, rng):
     q, f = p['temps_reel'], p['filtre']; T = q['trames']; M = q['n_roi']; deb = q['trame_debut_erreur']
-    Kc = transition(np.log(g_portes.c), f['s'], f['s_saut'], f['w'])
     reps = 1 if RAPIDE else q['repetitions']; lignes = []
     for N in q['photons']:
         for r in range(reps):
             C = trajectoires_roi(rng, M, T)
             H = [[trame_modele(S, C[m, k], N, rng, q['eta']) for m in range(M)] for k in range(T)]
-            variantes = {'1 ROI': [FiltreTempsReel(g_portes, 1, Kc) for _ in range(M)],
-                         f'{M} ROI partageant η': [FiltreTempsReel(g_portes, M, Kc)],
-                         'η connu d\'avance': [FiltreTempsReel(g_cases, M, Kc, eta_fixe=q['eta'])]}
-            for nom, filtres in variantes.items():
-                est = np.zeros((M, T)); duree = 0.0; etas = []
+            variantes = {'1 ROI': FiltreTempsReel(g_portes, M, f, partage=False),       # M filtres indépendants
+                         f'{M} ROI partageant η': FiltreTempsReel(g_portes, M, f),
+                         'η connu d\'avance': FiltreTempsReel(g_cases, M, f, eta_fixe=q['eta'])}
+            for nom, fl in variantes.items():
+                est = np.zeros((M, T)); duree = 0.0
                 for k in range(T):
                     B = np.array([H[k][m][0] for m in range(M)]); Y = np.array([H[k][m][1] for m in range(M)])
-                    t0 = time.perf_counter()
-                    if len(filtres) == M:
-                        res = [fl.mettre_a_jour(B[m:m + 1], Y[m:m + 1]) for m, fl in enumerate(filtres)]
-                        est[:, k] = [x['c'][0] for x in res]; etas = [(x['eta'], x['eta_sd']) for x in res]
-                    else:
-                        x = filtres[0].mettre_a_jour(B, Y); est[:, k] = x['c']; etas = [(x['eta'], x['eta_sd'])]
-                    duree += time.perf_counter() - t0
+                    t0 = time.perf_counter(); x = fl.mettre_a_jour(B, Y); duree += time.perf_counter() - t0
+                    est[:, k] = x['c']
                 rmse = np.sqrt(np.mean((est[:, deb:] - C[:, deb:]) ** 2))
-                lignes.append(dict(photons=N, repetition=r + 1, variante=nom, rmse_mM=rmse,
-                                   eta_moyen=np.mean([x[0] for x in etas]), eta_sd_pct=100 * np.mean([x[1] for x in etas]),
-                                   ms_par_roi_trame=1e3 * duree / T / M))
+                lignes.append(dict(photons=N, repetition=r + 1, variante=nom, rmse_mM=rmse, eta_moyen=np.mean(x['eta']),
+                                   eta_sd_pct=100 * np.mean(x['eta_sd']), ms_par_roi_trame=1e3 * duree / T / M))
     ecrire('temps_reel', lignes)
     D = pd.DataFrame(lignes).groupby(['photons', 'variante'], sort=False).mean(numeric_only=True).reset_index()
     doc = {(1000, 0): 2.6, (1000, 1): 2.5, (1000, 2): 1.7, (3000, 0): 1.5, (3000, 1): 1.4, (3000, 2): 1.1,
@@ -179,12 +174,11 @@ def amincissement(S, g, p, cal, rng):
     n_pal = len(q['paliers_mM']); lp = T // n_pal
     C = np.repeat(q['paliers_mM'], lp); C = np.concatenate([C, np.full(T - len(C), C[-1])])
     fb, fy = fond_moyen(cal); n = S.n_fen
-    Kc = transition(np.log(g.c), f['s'], f['s_saut'], f['w'])
     reps = 3 if RAPIDE else q['repetitions']; lignes = []; trace = None
     for r in range(reps):
         H = [mes.trame(C[k], q['photons'], rng, q['eta']) for k in range(T)]
         fonds = [(fb * B.sum() / n, fy * Y.sum() / n) for B, Y in H]
-        filtres = {'filtre, fond connu': FiltreTempsReel(g, 1, Kc), 'filtre, fond ignoré': FiltreTempsReel(g, 1, Kc)}
+        filtres = {'filtre, fond connu': FiltreTempsReel(g, 1, f), 'filtre, fond ignoré': FiltreTempsReel(g, 1, f)}
         est = {k: np.zeros(T) for k in ('ratio (η = 1)', 'durée de vie seule', *filtres)}; eta = {}
         for k, (B, Y) in enumerate(H):
             est['ratio (η = 1)'][k] = g.lire_ratio(B, Y, fond=fonds[k])
@@ -241,18 +235,23 @@ def titration_relue(S, p, cal):
 def eta_transition(S, g, p, rng):
     """
     Le score ℓ(η) ne recueille pas que l'information FLIM : il absorbe aussi l'écart entre la dynamique supposée de c
-    et la vraie. À 1 000 photons, 10 ROI : η final selon le noyau K, pour un c statique et des réponses (section 14).
+    et la vraie. À 1 000 photons, 10 ROI : η final selon le noyau K (η constant, comme le vrai), pour un c statique et
+    des réponses (section 14) ; puis la vitesse de c apprise (3), avec η constant et avec la dérive (1-2-3, le défaut).
     """
     q, f = p['temps_reel'], p['filtre']; M, T, N = q['n_roi'], q['trames'], q['photons'][0]
     lc = np.log(g.c); lignes = []
     K = {'document (s = 0,04, w = 0,03)': transition(lc, f['s'], f['s_saut'], f['w']),
          's = 0,04 sans sauts': transition(lc, f['s']), 's = 0,01 sans sauts': transition(lc, 0.01)}
+    sc = ' / '.join(f'{100 * s:g}' for s in f['s_c_candidats']).replace('.', ',')
+    modeles = {nom: (lambda Kc=Kc: FiltreTempsReel(g, M, f, derive=False, noyaux=[Kc])) for nom, Kc in K.items()}
+    modeles[f's_c appris ({sc} %)'] = lambda: FiltreTempsReel(g, M, f, derive=False)
+    modeles['1-2-3 (défaut) : + dérive de η'] = lambda: FiltreTempsReel(g, M, f)
     for r in range(1 if RAPIDE else 4):
         for mode in ('c statique (10 mM)', 'réponses (section 14)'):
             C = np.full((M, T), 10.0) if mode.startswith('c statique') else trajectoires_roi(rng, M, T)
             H = [[trame_modele(S, C[m, k], N, rng, q['eta']) for m in range(M)] for k in range(T)]
-            for nom, Kc in K.items():
-                fl = FiltreTempsReel(g, M, Kc)
+            for nom, cree in modeles.items():
+                fl = cree()
                 for k in range(T):
                     x = fl.mettre_a_jour(np.array([h[0] for h in H[k]]), np.array([h[1] for h in H[k]]))
                 lignes.append(dict(repetition=r + 1, trajectoire=mode, transition=nom, eta_final=x['eta'], eta_sd_pct=100 * x['eta_sd']))
@@ -260,7 +259,7 @@ def eta_transition(S, g, p, rng):
     D = pd.DataFrame(lignes).groupby(['trajectoire', 'transition'], sort=False).agg(
         eta=('eta_final', 'mean'), entre_rep=('eta_final', 'std'), sd=('eta_sd_pct', 'mean')).reset_index()
     for _, x in D.iterrows():
-        dire(f"  {x.trajectoire:<22s} {x.transition:<30s} η final {x.eta:.3f} (vrai {q['eta']}) ; sd a posteriori {x.sd:.1f} %"
+        dire(f"  {x.trajectoire:<22s} {x.transition:<32s} η final {x.eta:.3f} (vrai {q['eta']}) ; sd a posteriori {x.sd:.1f} %"
              + (f", entre répétitions {100 * x.entre_rep / x.eta:.1f} %" if np.isfinite(x.entre_rep) else ''))
 
 

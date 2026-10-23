@@ -30,10 +30,23 @@ n_eta = 61
 s = 0.04
 w = 0.03
 s_saut = 0.5
-# filtre et lisseur d'une ROI (exemple, section 15) : η peut évoluer, ln η_k = ln η_{k−1} + N(0, s_η²) par trame.
-# s_η n'est pas connu : un modèle par candidat (0 = η constant), moyennés selon leur vraisemblance marginale
-# (en temps réel : celle des trames passées ; lissé : celle de toute la course). Grille de η plus fine (pas de 0,46 %)
-# pour que la marche et la précision de η ne soient pas limitées par le pas de la grille.
+# Modèle par défaut « 1-2-3 » (src/filtre.py, FiltreTempsReel ; essais : derive_eta/README.md) :
+#   1. η dérive : ln η_k = ln η0 + β·k/1000, θ = (η0, β) statique et inconnu, a priori uniforme sur cette grille :
+#      η0 de eta0_min à eta0_max (n_eta0 valeurs, pas de 0,95 %), β de −derive_max à +derive_max en ln η par 1 000 trames ;
+#   2. θ partagé par les ROI d'un même champ (exact) ;
+#   3. vitesse de c inconnue : un filtre par s_c candidat (s ci-dessus n'est plus utilisé que par le modèle "marche" et
+#      les comparaisons de noyaux), moyennés selon leur vraisemblance marginale (temps réel : trames passées ; lissé :
+#      toute la course).
+# dynamique_eta = "marche" : l'ancien modèle d'une ROI (exemple, section 15) — η en marche aléatoire, s_η candidats, s fixe.
+dynamique_eta = "derive"
+eta0_min = 0.7
+eta0_max = 1.5
+n_eta0 = 81
+derive_max = 0.05
+n_derive = 31
+s_c_candidats = [0.004, 0.013, 0.04]
+# modèle "marche" : ln η_k = ln η_{k−1} + N(0, s_η²) par trame, s_η inconnu (0 = η constant), moyenne de modèles ;
+# grille de η plus fine (pas de 0,46 %) pour que la marche et la précision de η ne soient pas limitées par le pas.
 n_eta_lisseur = 241
 s_eta_candidats = [0.0, 1.0e-4, 3.0e-4, 1.0e-3, 3.0e-3]
 # section 14 : 16 portes temporelles (η n'est jamais figé : la bascule vers le ratio seul a été retirée)
