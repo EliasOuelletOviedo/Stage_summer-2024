@@ -5,6 +5,17 @@ Construit le 2026-10-22 d'après « Mesurer le chlore avec SuperClomeleon : FLIM
 2026-10-16 (8 [Cl⁻] de 0 à 131 mM, deux canaux, 80 MHz) : le ratio fait la mesure, la durée de vie apprend η, la
 transmission du jaune relative au bleu, propre à chaque tranche.
 
+**Modèle par défaut : « 1-2-3 »** (`[filtre] dynamique_eta = "derive"` ; essais et figures dans `derive_eta/`).
+1. η dérive : ln η_k = ln η0 + β·k/1000, avec θ = (η0, β) statique et inconnu sur une grille (η0 de 0,7 à 1,5, β de
+   −5 à +5 % par 1 000 trames).
+2. θ est partagé par les ROI d'un même champ, avec la factorisation exacte p(θ) Π p(c_m | θ).
+3. La vitesse de c n'est pas devinée : un filtre par vitesse candidate (s_c = 0,4, 1,3 et 4 % par trame), moyennés
+   selon leur vraisemblance marginale.
+
+Le filtre et son lisseur redonnent exactement le calcul par force brute de la loi conjointe (tests). Le document, lui,
+prend η constant et s = 4 % ; ses valeurs restent des repères. `dynamique_eta = "marche"` rétablit l'ancien modèle
+d'une ROI (η en marche aléatoire, s fixe).
+
 Écrit en Python, comme le module de calibration qui accompagne ces données (`sclm_hybride.py`, dans
 `../FLIM-FRET_2-channels/sorties/declins_purs_2026-10-16_SCLM_mCer3/`).
 
@@ -14,7 +25,7 @@ transmission du jaune relative au bleu, propre à chaque tranche.
 pip install -r requirements.txt            # numpy, scipy, pandas, matplotlib, sdtfile
 # une seule fois : ajuster la calibration sur les histogrammes mCer3 → calibration.json (~1 min)
 python3 step0_calibration.py
-# les vérifications (15)
+# les vérifications (18)
 python3 test/run_tests.py
 # la course complète (~2,5 min)
 python3 run.py                             # --rapide : moins de répétitions (~25 s)
@@ -54,21 +65,22 @@ leurs histogrammes sommés, versionnés par `step17_bruts_mCer3.jl` (`irf_bruts_
 
 | Fichier | Rôle | lignes |
 | --- | --- | --- |
-| `params.toml` | le seul endroit pour les constantes (données, grilles, transition, scénarios, graine, boxplots) ; SCLM_mCer3 | 135 |
-| `params_SCLM.toml` | les mêmes, pour la titration SCLM régulière à 800 nm | 97 |
+| `params.toml` | le seul endroit pour les constantes (données, grilles, modèle 1-2-3, transition, scénarios, graine, boxplots) ; SCLM_mCer3 | 148 |
+| `params_SCLM.toml` | les mêmes, pour la titration SCLM régulière à 800 nm | 110 |
 | `step0_calibration.py` | le pont unique avec les données : appelle le `sclm_hybride.py` du jeu, écrit sa calibration (`calibrer` sert aussi à boxplots.py) | 86 |
 | `calibration.json`, `calibration_SCLM.json` | la calibration ajustée (constantes, isothermes, IRF, fonds et décalages par acquisition) ; écrites par step0 | — |
 | `src/modele.py` | modèle direct μ_B, μ_Y (sections 3 à 7) : IRF ⊗ déclins périodiques, isothermes, η, A ; perturbations | 137 |
-| `src/filtre.py` | vraisemblance découpée ratio / FLIM (section 11), grille (c, η), transition, filtre et lisseur (13 ; η variable, moyenne de modèles de dynamique), temps réel à M ROI et portes (14 ; η jamais figé), lectures de référence | 238 |
+| `src/filtre.py` | vraisemblance découpée ratio / FLIM (section 11), grille, transition, portes, lectures de référence ; `FiltreTempsReel` (modèle 1-2-3 à M ROI, ou ROI indépendantes, η constant, η connu, noyaux imposés) et `lisseur_derive` ; l'ancien filtre-lisseur à η en marche aléatoire | 351 |
 | `src/information.py` | Fisher et Cramér-Rao, nuisances par complément de Schur (section 10) | 50 |
 | `src/simulation.py` | les deux générateurs (lit les colonnes voie1/voie2 de step17 et bleu/jaune de step16), les trajectoires des sections 14 et 15 | 97 |
-| `src/figures.py` | rendu | 187 |
+| `src/figures.py` | rendu | 192 |
 | `src/estimateurs.py` | les 4 lectures d'un échantillon (temps de vie unique, FLIM du système, ratio, hybride à η du contexte), en bloc | 98 |
 | `boxplots.py` | partage des .sdt, calibration sur une moitié, échantillons et contextes tirés de l'autre (η = 1 ou variable), boxplots | 173 |
-| `run.py` | la course en 8 parties ; un CSV par partie, `journal.txt`, 5 figures | 357 |
-| `src/exemple.py` | une course de la section 15 (trajectoire étirée, η constant ou par trame), partagée par run.py et exemples.py | 93 |
-| `exemples.py` | l'exemple de la section 15 sous 15 conditions (photons × η), filtre temps réel seul | 79 |
-| `test/run_tests.py` | 15 vérifications : calibration = annexe, découpage exact, portes (93,7 % de l'information FLIM gardée), η retrouvé, η jamais figé, couverture du lisseur, marche sur η (variance n·s²), dérive de η suivie, amincissement | 193 |
+| `run.py` | la course en 8 parties ; un CSV par partie, `journal.txt`, 5 figures | 356 |
+| `src/exemple.py` | une course de la section 15 (trajectoire étirée, η constant ou par trame ; modèle 1-2-3 ou « marche »), partagée par run.py et exemples.py | 128 |
+| `exemples.py` | l'exemple de la section 15 sous 15 conditions (photons × η), filtre temps réel seul | 105 |
+| `test/run_tests.py` | 18 vérifications : calibration = annexe, découpage exact, portes (93,7 % de l'information FLIM gardée), η retrouvé, θ jamais figé, filtre 1-2-3 et son lisseur égaux à la force brute, dérive de η suivie (1-2-3 et « marche »), couverture du lisseur, marche sur η (variance n·s²), amincissement | 263 |
+| `derive_eta/` | l'étude qui a mené au modèle 1-2-3 : 5 variantes sur 10 ROI à 1 000 photons, la combinaison de toutes les modifications des deux documents comparés, figures (`derive_eta/README.md`) | — |
 
 ## Sorties (`sorties/` pour SCLM_mCer3, `sorties_SCLM/` pour SCLM régulier)
 
