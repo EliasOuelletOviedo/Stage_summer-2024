@@ -25,7 +25,11 @@ incomplète ⊛ IRF, décalage de l'IRF fixé à celui du déclin global natif).
 
 `--figure` : refait la figure depuis resultats/temps_mort_logiciel.csv, sans mesurer.
 
-Sorties : resultats/temps_mort_logiciel.csv, figures/8_biais_temps_mort.png.
+Figure 9 : biais de τ et taux enregistré selon les photons au détecteur par impulsion,
+QC-104 au temps mort natif et à D' = 12,5 ns (une période laser), 150N au sien.
+
+Sorties : resultats/temps_mort_logiciel.csv, figures/8_biais_temps_mort.png,
+figures/9_biais_detecteur_corrige.png.
 Durée : ~10 min.
 """
 import csv
@@ -37,7 +41,7 @@ import numpy as np  # noqa: E402
 from scipy import ndimage as ndi  # noqa: E402
 
 from ajustement import Modele  # noqa: E402
-from config import (FIGURES, LISSAGE_PX, N_CANAUX, N_TRANCHES, PERIODE_NS, PIXEL_NS,  # noqa: E402
+from config import (F_LASER, FIGURES, LISSAGE_PX, N_CANAUX, N_TRANCHES, PERIODE_NS, PIXEL_NS,  # noqa: E402
                     RESULTATS, SERIES, SOLUTIONS, dossier_donnees, preparer)
 from lecture import irf, lire_spc, pixels  # noqa: E402
 from simulation import garder  # noqa: E402
@@ -186,12 +190,116 @@ def figure(mes):
     print("  -> 8_biais_temps_mort.png")
 
 
+D_CORRECTION = 12.5              # D' retenu : une période laser (12,49 ns)
+BORDS_DET = np.arange(0, 0.2501, 0.025)
+
+
+def temps_morts_natifs():
+    """Temps mort natif de chaque carte (canal 1) : QC-104 par les intervalles, 150N
+    effectif (1/r_TAC − 1/r_CFD) moyen par solution ; temps_morts.csv, étape 2."""
+    rows = list(csv.DictReader(open(RESULTATS / "temps_morts.csv")))
+    qc = float(next(r["temps_mort_ns"] for r in rows if r["carte"] == "SPC-QC-104" and r["canal"] == "1"))
+    n150 = {s: np.mean([float(r["temps_mort_ns"]) for r in rows
+                        if r["carte"] == "SPC-150N" and r["canal"] == "1" and r["solution"] == s])
+            for s in ("low", "high")}
+    return qc, n150
+
+
+def vers_detecteur(mu_enr, d_ns):
+    """ppp au détecteur depuis le ppp enregistré, formule non paralysable :
+    r_det = r_enr / (1 − r_enr · d)."""
+    return mu_enr / (1 - mu_enr * d_ns / PERIODE_NS)
+
+
+def par_classe(x, y, bords=BORDS_DET):
+    """(x moyen, y moyen, erreur-type) par classe de x, au moins 2 tranches."""
+    out = []
+    for a, b in zip(bords[:-1], bords[1:]):
+        m = (x >= a) & (x < b)
+        if m.sum() >= 2:
+            out.append((x[m].mean(), y[m].mean(), y[m].std() / np.sqrt(m.sum())))
+    return np.array(out)
+
+
+def figure_detecteur(mes):
+    """Figure 9 : biais de τ et taux enregistré selon les photons au détecteur par impulsion,
+    QC-104 au temps mort natif et à D' = 12,5 ns, 150N au sien. Données de MQAE seulement."""
+    d_qc, d_150 = temps_morts_natifs()
+    rows150 = [r for r in csv.DictReader(open(RESULTATS / "durees_de_vie.csv"))
+               if r["carte"] == "SPC-150N" and r["canal"] == "1" and r["serie"] == "spc" and r["tranche"] != "global"]
+    series = {}
+    for sol in ("low", "high"):
+        nat = [t for t in mes if t["solution"] == sol and t["D_ns"] == D_NATIF]
+        cor = {(t["puissance"], t["tranche"]): t for t in mes if t["solution"] == sol and t["D_ns"] == D_CORRECTION}
+        mu = np.array([t["ppp"] for t in nat])
+        det = vers_detecteur(mu, d_qc)
+        series[("natif", sol)] = (det, np.array([t["biais"] for t in nat]), mu)
+        c = [cor[(t["puissance"], t["tranche"])] for t in nat]
+        series[("12,5", sol)] = (det, np.array([t["biais"] for t in c]), mu * np.array([t["photons_gardes"] for t in c]))
+        rr = [r for r in rows150 if r["solution"] == sol]
+        m5 = np.array([float(r["mu_enr"]) for r in rr])
+        tau = np.array([float(r["tau_ns"]) for r in rr])
+        series[("150N", sol)] = (vers_detecteur(m5, d_150[sol]), tau / np.polyfit(m5, tau, 1)[1] - 1, m5)
+    styles = {"natif": ("SPC-QC-104, temps mort natif (7,5 ns)", "#86b6ef", "o", "--"),
+              "12,5": ("SPC-QC-104, temps mort 12,5 ns (= période laser)", "#104281", "o", "-"),
+              "150N": (f"SPC-150N, temps mort natif (~{np.mean(list(d_150.values())):.0f} ns)", "#eb6834", "s", "-")}
+
+    fig, axes = plt.subplots(1, 3, figsize=(17, 4.8), facecolor=SURFACE)
+    for ax in axes:
+        ax.set_facecolor(SURFACE)
+        ax.grid(True, color=GRID, linewidth=0.8)
+        ax.set_axisbelow(True)
+        for s in ("top", "right"):
+            ax.spines[s].set_visible(False)
+        for s in ("left", "bottom"):
+            ax.spines[s].set_color(GRID)
+        ax.tick_params(colors=INK_2, length=0)
+    for ax, sol in zip(axes[:2], ("low", "high")):
+        ax.axhspan(-1, 1, color=GRID, alpha=0.7, lw=0)
+        ax.axhline(0, color=INK_2, lw=0.8)
+        for cle_s, (lab, col, mk, ls) in styles.items():
+            det, b, _ = series[(cle_s, sol)]
+            pts = par_classe(det, 100 * b)
+            ax.fill_between(pts[:, 0], pts[:, 1] - pts[:, 2], pts[:, 1] + pts[:, 2], color=col, alpha=0.25, lw=0)
+            ax.plot(pts[:, 0], pts[:, 1], color=col, marker=mk, ms=5, lw=2, ls=ls, mec=SURFACE, mew=0.6, label=lab)
+        tau0 = next(t["tau0_ns"] for t in mes if t["solution"] == sol)
+        ax.set_title(f"{SOLUTIONS[sol]} (τ(0) ≈ {tau0:.2f} ns)".replace(".", ","), loc="left", fontsize=11.5)
+        ax.set_xlabel("photons au détecteur par pixel et par impulsion")
+        ax.set_ylabel("biais de τ mesuré (%)")
+        ax.set_xlim(0, 0.25)
+        ax.legend(fontsize=8, loc="lower left", frameon=False)
+    ax = axes[2]
+    for cle_s, (lab, col, mk, ls) in styles.items():
+        det, _, enr = series[(cle_s, "low")]
+        pts = par_classe(det, enr)
+        ax.plot(pts[:, 0] * F_LASER / 1e6, pts[:, 1] * F_LASER / 1e6, color=col, marker=mk, ms=5, lw=2, ls=ls,
+                mec=SURFACE, mew=0.6, label=lab.split(",")[0] + ("" if cle_s == "150N" else
+                                                                  (", natif" if cle_s == "natif" else ", 12,5 ns")))
+    ax.plot([0, 24], [0, 24], color=INK_2, lw=0.8, ls=":", label="sans perte")
+    ax.set_xlabel("taux au détecteur (MHz)")
+    ax.set_ylabel("taux enregistré (MHz)")
+    ax.set_title("Photons enregistrés (faible Cl⁻)", loc="left", fontsize=11.5)
+    ax.legend(fontsize=8, loc="upper left", frameon=False)
+    fig.suptitle("Données de MQAE : biais de τ et taux enregistré, à même flux de photons au détecteur",
+                 x=0.01, ha="left", fontsize=13)
+    fig.text(0.01, -0.04, "Tranches de taux local (8 par image), regroupées par classes de 0,025 ppp (au moins 2 tranches) ; moyenne ± "
+             "erreur-type. Biais = τ / τ(0) − 1, τ(0) extrapolé à ppp → 0 au temps mort natif de chaque carte. "
+             "τ : MLE, exponentielle incomplète ⊛ IRF mesurée.\nppp au détecteur = ppp enregistré / (1 − ppp "
+             "enregistré · temps mort / période) avec les temps morts mesurés (QC-104 : 7,5 ns ; 150N : 116 ns "
+             "faible Cl⁻, 120 ns fort Cl⁻). Bande grise : ± 1 %.", fontsize=8.5, color=INK_2)
+    fig.tight_layout()
+    fig.savefig(FIGURES / "9_biais_detecteur_corrige.png", dpi=170, facecolor=SURFACE, bbox_inches="tight")
+    plt.close(fig)
+    print("  -> 9_biais_detecteur_corrige.png")
+
+
 def main():
     import sys
     if "--figure" in sys.argv:
         mes = [{k: (v if k == "solution" else float(v)) for k, v in r.items()}
                for r in csv.DictReader(open(RESULTATS / "temps_mort_logiciel.csv"))]
         figure(mes)
+        figure_detecteur(mes)
         return
     D = dossier_donnees()
     preparer()
@@ -202,6 +310,7 @@ def main():
         for l in mes:
             w.writerow({c: (f"{v:.6g}" if isinstance(v, float) else v) for c, v in l.items()})
     figure(mes)
+    figure_detecteur(mes)
     for sol in ("low", "high"):
         for ppp, pts in classes(mes, sol).items():
             i0 = np.argmin(np.abs(pts[:, 0] - D_NATIF))
