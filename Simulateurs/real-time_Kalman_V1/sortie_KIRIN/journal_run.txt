@@ -1,0 +1,34 @@
+N =   300  σ_C à 20 mM : J/B 19.67, 5a p 60.62, q 620.41, p+q 60.33 mM
+  aucune       biais 30 s : J/B  +3.09  Kalman  +0.01 mM ; RMSE 4.64 ; P11/err² 0.60
+  rampe 5 %    biais 30 s : J/B  +7.05  Kalman  +0.24 mM ; RMSE 4.41 ; P11/err² 0.71
+  rampe 10 %   biais 30 s : J/B +12.27  Kalman  +0.46 mM ; RMSE 4.21 ; P11/err² 0.82
+  rampe 20 %   biais 30 s : J/B +24.31  Kalman  +0.99 mM ; RMSE 3.80 ; P11/err² 1.13
+  saut 5 %     biais 30 s : J/B  +8.17  Kalman  +0.19 mM ; RMSE 4.67 ; P11/err² 0.62
+N =  1000  σ_C à 20 mM : J/B 9.33, 5a p 29.61, q 317.33, p+q 29.48 mM
+  aucune       biais 30 s : J/B  +0.54  Kalman  +0.29 mM ; RMSE 2.69 ; P11/err² 1.44
+  rampe 5 %    biais 30 s : J/B  +3.74  Kalman  +0.41 mM ; RMSE 2.60 ; P11/err² 1.52
+  rampe 10 %   biais 30 s : J/B  +9.40  Kalman  +0.54 mM ; RMSE 2.57 ; P11/err² 1.55
+  rampe 20 %   biais 30 s : J/B +35.81  Kalman  +0.82 mM ; RMSE 2.56 ; P11/err² 1.61
+  saut 5 %     biais 30 s : J/B  +4.76  Kalman  +0.11 mM ; RMSE 3.00 ; P11/err² 1.14
+N =  3000  σ_C à 20 mM : J/B 5.13, 5a p 16.34, q 179.00, p+q 16.27 mM
+  aucune       biais 30 s : J/B  +0.12  Kalman  +0.12 mM ; RMSE 2.01 ; P11/err² 1.21
+  rampe 5 %    biais 30 s : J/B  +2.83  Kalman  +0.19 mM ; RMSE 1.94 ; P11/err² 1.32
+  rampe 10 %   biais 30 s : J/B  +7.23  Kalman  +0.26 mM ; RMSE 1.88 ; P11/err² 1.44
+  rampe 20 %   biais 30 s : J/B +37.45  Kalman  +0.40 mM ; RMSE 1.87 ; P11/err² 1.53
+  saut 5 %     biais 30 s : J/B  +3.66  Kalman  -0.11 mM ; RMSE 2.35 ; P11/err² 0.89
+N = 300 : σ_w,g de la table 1e-03, recommandé par cette course 3e-03
+N = 1000 : σ_w,g de la table 3e-03, recommandé par cette course 3e-02
+N = 3000 : σ_w,g de la table 3e-03, recommandé par cette course 3e-02
+écart relatif max sur p, avec diffusion (%)                3.9e-12                      < 0.5            oui
+écart relatif max sur q, avec diffusion (%)                2.6e-12                      < 0.5            oui
+non-régression sans diffusion, max |p̂ − p|, |q̂ − q|        1.3e-14                      < 1.0e-12        oui
+biais d'observable 5a, C = 20, N = 1000 (mM)               -2.730                       < 0.1            non
+biais d'observable 5a, C = 20, N = 300 (mM)                -10.100                      < 0.4            non
+σ de 5a, C = 20, N = 1000 (mM)                             30.29 (+129 %)               hausse ≤ 10 %    non
+biais d'inversion 5a, C = 20, N = 1000 (mM)                +1.65                        dans [2.5, 3.1]  non
+biais du Kalman de référence, 5 phases, N = 1000 (mM)      +0.29 / +0.41 / +0.54 / +0.82 / +0.11 tous sous ±0.3   non
+P₁₁/err², 5 phases, N = 1000                               1.44 / 1.52 / 1.55 / 1.61 / 1.14 dans [0.5, 2.0]  oui
+accord Fisher / Monte-Carlo, var J/B, var 5a, cov (%)      0.2 / 1.2 / 13.8             < 5.0            non
+échecs de 5a, C = 20, N = 300 (%)                          38.1                         à rapporter      —
+biais du Kalman à N = 300, dérive 0 / 5 / 10 / 20 % (mM)   +0.01 / +0.24 / +0.46 / +0.99 monotone         oui
+amplitudes sans diffusion : max |p̂ − p| = 7.4e-15, max |q̂ − q| = 1.3e-14

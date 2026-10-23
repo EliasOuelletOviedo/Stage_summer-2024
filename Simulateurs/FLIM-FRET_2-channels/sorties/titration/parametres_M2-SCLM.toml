@@ -1,0 +1,36 @@
+K_D = 19.452728214318782
+acquisition_arret_sur_temps = true
+acquisition_duree_s = [10.0]
+chi2_r_global = 2.7101435146809947
+chi2_r_libres_moyen = 2.3810581205120616
+date = "2026-10-15"
+intensite_relative_cv = 0.19635336097764441
+n = 1.2286625108484177
+phasor_distance_mediane = 0.003900950011448227
+phasor_tau_D0 = [0.3439460128186002, 0.48432452713490376]
+phasor_tau_DA = [0.9671150660767259, 0.1744125824517402]
+proteine = "M2-SCLM"
+source = "/Users/eliasouellet-oviedo/Documents/Maîtrise/Données/2026-07-20_SCLM/M2-SCLM, IRF /Users/eliasouellet-oviedo/Documents/Maîtrise/Données/2026-07-20_SCLM/irf_20260710_16x_sclm.sdt, fenêtre 14–242"
+t0 = -0.01642842100869827
+tau_D0 = 2.7488405211817617
+tau_D0_sigma = 0.0027260851305146235
+tau_DA = 0.37538976570342
+tau_DA_sigma = 0.0020388811852828244
+x0 = 0.5354867967264526
+x_sat = 0.25691072436715323
+
+[isotherme_n1]
+K_D = 19.457973789540485
+x0 = 0.5447115643416324
+x_sat = 0.24751168059031647
+
+[isotherme_sans_F]
+K_D = 19.285090403108303
+n = 1.2396439075215813
+x0 = 0.5352830510577878
+x_sat = 0.2581895799478488
+
+[test_intensite]
+E = 0.863437051800286
+mesure_sat_sur_0 = 2.3010835982141367
+predit_sat_sur_0 = 1.4473858312905183

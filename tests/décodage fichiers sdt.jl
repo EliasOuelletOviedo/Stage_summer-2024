@@ -6,10 +6,10 @@ using DelimitedFiles
 using ZipFile
 using Base.Filesystem
 # using JuliaDB
-using Plots
+# using Plots
 # using GR
 
-gr()
+# gr()
 
 struct FileHeader
     revision::Int16
@@ -49,20 +49,45 @@ filepath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-07
 # folderpath = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichiers_sdt"
 # folderpath2 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/2024-06-10/single"
 # folderpath2 = "/Users/eliasouellet-oviedo/Documents/Stage 2/Codes/Données/Fichiers_sdt"
+
+# filepath = "/Users/eliasouellet-oviedo/Documents/Stage2/Partie 2/Test_2_7/test_c00001.sdt"
+filepath = "/Users/eliasouellet-oviedo/Documents/Stage2/Partie 2/Puffs (5ms et 20ms à 40 Hz)/test6_c0001.sdt"
+
 open(filepath, "r") do io
+    # read(io)
     seek(io, 14)
-    header = read(io, 12)
+    header = read!(io, Vector{UInt8}(undef, 12))
+    
+    seek(io, header[12]*0x100 + header[11] + 82)
+    infos = read!(io, Vector{UInt8}(undef, 2))
+    histogram_resolution = infos[2]*0x100 + infos[1]
+    
+    seek(io, header[12]*0x100 + header[11] + 215)
+    infos_2 = read!(io, Vector{UInt8}(undef, 4))
+    time = reinterpret(Float32, infos_2)
 
-    seek(io, header[12]*16^2 + header[11])
-    time = read(io, 18)
-    println(time)
+    seek(io, header[2]*0x100 + header[1] + 22)
+    vector = read(io)
+    
+    n = div(length(vector), 2)
+    new_vector = reinterpret(UInt16, vector[1:2*n])
+    println(length(new_vector), "\n", histogram_resolution)
 
-    seek(io, header[12]*16^2 + header[11] + 82)
-    infos = read(io, 2)
-    histogram_resolution = infos[2]*16^2 + infos[1]
 
-    seek(io, header[2]*16^2 + header[1] + 2)
-    file_info = read(io, 20)
+
+    # seek(io, 14)
+    # header = read(io, 12)
+
+    # seek(io, header[12]*16^2 + header[11])
+    # time = read(io, 18)
+    # println(time)
+
+    # seek(io, header[12]*16^2 + header[11] + 82)
+    # infos = read(io, 2)
+    # histogram_resolution = infos[2]*16^2 + infos[1]
+
+    # seek(io, header[2]*16^2 + header[1] + 2)
+    # file_info = read(io, 20)
 
     # shift_1 = file_info[8]*16^6 + file_info[7]*16^4 + file_info[6]*16^2 + file_info[5] - file_info[2]*16^2 - file_info[1]
     # shift_2 = file_info[20]*16^6 + file_info[19]*16^4 + file_info[18]*16^2 + file_info[17]

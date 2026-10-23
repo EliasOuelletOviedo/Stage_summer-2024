@@ -1,0 +1,9 @@
+référence : η marche aléatoire, chaque ROI seule: rmse 4.0875, biais -3.3717, couverture 0.6353, η final 1.0120
+1011 s
+1 : dérive paramétrique de η, chaque ROI seule: rmse 3.6224, biais -2.8845, couverture 0.7469, η final 1.0336
+3304 s
+2 : η marche aléatoire, partagé par les 10 ROI: rmse 3.6711, biais -3.3737, couverture 0.5171, η final 1.0149
+3821 s
+1-2 : dérive paramétrique de η, partagée par les 10 ROI: rmse 3.0091, biais -2.6706, couverture 0.6969, η final 1.0366
+1-2-3 : dérive paramétrique partagée + dynamique de c apprise: rmse 1.6733, biais -1.1274, couverture 0.9360, η final 1.0752
+5997 s

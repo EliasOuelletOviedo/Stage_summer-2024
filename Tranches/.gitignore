@@ -1,0 +1,8 @@
+# Intermédiaires lourds des analyses, régénérables par leur pipeline à partir des données
+# brutes (celles-ci sont ignorées par le .gitignore de chaque dossier) : tableaux numpy,
+# images de projection, valeurs image par image ou bloc par bloc
+*.npz
+**/projections/*.tif
+**/results/ratio_temps.csv
+**/results/mesures_blocs.csv
+**/results/ratio_corrige_par_image.csv

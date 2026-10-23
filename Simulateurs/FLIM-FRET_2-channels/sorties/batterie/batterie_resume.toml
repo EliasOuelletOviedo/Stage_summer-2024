@@ -1,0 +1,36 @@
+chi2_r_reel = 1.9611161840453004
+date = "2026-10-15"
+irf_fwhm_ps = 130.3838467665028
+sigma_chi2_poisson = 0.018108633583569404
+
+[isotherme_t0_par_histogramme]
+K_D = 24.763934842104398
+chi2_r = 1.7927047477586153
+n = 1.1347898643505379
+tau_D0 = 3.69711707303814
+tau_DA = 0.1658907869857499
+x0 = 0.42848863866148307
+x_sat = 0.061898936764414506
+
+[signatures_reelles]
+dtau_mono_0 = -0.11255295455530175
+dtau_mono_rms = 0.07473259411427098
+dtau_mono_sat = 0.07239371105415564
+phasor_max = 0.0032279646892780923
+phasor_mediane = 0.0010668799293570407
+
+[t0_par_histogramme.H1]
+chi2_r = 0.9837126644886962
+dispersion_inter_ps = 0.22295206218124658
+dispersion_intra_ps = 0.5685503856655258
+p_permutation = 0.2449
+rho_spearman = -0.1767982784351456
+sigma_stat_ps = 0.5606886491687739
+
+[t0_par_histogramme.reel]
+chi2_r = 1.7927047477586153
+dispersion_inter_ps = 3.6094442177053203
+dispersion_intra_ps = 0.5814057940067733
+p_permutation = 0.33125
+rho_spearman = 0.3535965568702912
+sigma_stat_ps = 0.5547471704645702

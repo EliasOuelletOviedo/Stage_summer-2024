@@ -1,0 +1,41 @@
+repetition,trajectoire,transition,eta_final,eta_sd_pct
+1,c statique (10 mM),"document (s = 0,04, w = 0,03)",1.22847,0.791347
+1,c statique (10 mM),"s = 0,04 sans sauts",1.23399,0.783548
+1,c statique (10 mM),"s = 0,01 sans sauts",1.24595,0.782776
+1,c statique (10 mM),"s_c appris (0,4 / 1,3 / 4 %)",1.24271,0.792125
+1,c statique (10 mM),1-2-3 (défaut) : + dérive de η,1.24096,0.881806
+1,réponses (section 14),"document (s = 0,04, w = 0,03)",1.24072,0.771476
+1,réponses (section 14),"s = 0,04 sans sauts",1.27168,0.719698
+1,réponses (section 14),"s = 0,01 sans sauts",1.35835,0.652941
+1,réponses (section 14),"s_c appris (0,4 / 1,3 / 4 %)",1.24666,0.774538
+1,réponses (section 14),1-2-3 (défaut) : + dérive de η,1.24505,0.885462
+2,c statique (10 mM),"document (s = 0,04, w = 0,03)",1.23605,0.795423
+2,c statique (10 mM),"s = 0,04 sans sauts",1.241,0.787837
+2,c statique (10 mM),"s = 0,01 sans sauts",1.25486,0.783726
+2,c statique (10 mM),"s_c appris (0,4 / 1,3 / 4 %)",1.25168,0.794513
+2,c statique (10 mM),1-2-3 (défaut) : + dérive de η,1.25186,0.895105
+2,réponses (section 14),"document (s = 0,04, w = 0,03)",1.22824,0.777332
+2,réponses (section 14),"s = 0,04 sans sauts",1.25107,0.733867
+2,réponses (section 14),"s = 0,01 sans sauts",1.32927,0.679949
+2,réponses (section 14),"s_c appris (0,4 / 1,3 / 4 %)",1.23393,0.784136
+2,réponses (section 14),1-2-3 (défaut) : + dérive de η,1.23646,0.886684
+3,c statique (10 mM),"document (s = 0,04, w = 0,03)",1.23042,0.790946
+3,c statique (10 mM),"s = 0,04 sans sauts",1.2353,0.784084
+3,c statique (10 mM),"s = 0,01 sans sauts",1.24733,0.780355
+3,c statique (10 mM),"s_c appris (0,4 / 1,3 / 4 %)",1.24431,0.790388
+3,c statique (10 mM),1-2-3 (défaut) : + dérive de η,1.24382,0.89291
+3,réponses (section 14),"document (s = 0,04, w = 0,03)",1.22803,0.779102
+3,réponses (section 14),"s = 0,04 sans sauts",1.25142,0.737867
+3,réponses (section 14),"s = 0,01 sans sauts",1.32708,0.717851
+3,réponses (section 14),"s_c appris (0,4 / 1,3 / 4 %)",1.23402,0.783976
+3,réponses (section 14),1-2-3 (défaut) : + dérive de η,1.23302,0.894039
+4,c statique (10 mM),"document (s = 0,04, w = 0,03)",1.21813,0.789366
+4,c statique (10 mM),"s = 0,04 sans sauts",1.22364,0.780173
+4,c statique (10 mM),"s = 0,01 sans sauts",1.23682,0.777649
+4,c statique (10 mM),"s_c appris (0,4 / 1,3 / 4 %)",1.23221,0.790699
+4,c statique (10 mM),1-2-3 (défaut) : + dérive de η,1.23072,0.89015
+4,réponses (section 14),"document (s = 0,04, w = 0,03)",1.25408,0.776722
+4,réponses (section 14),"s = 0,04 sans sauts",1.28509,0.726147
+4,réponses (section 14),"s = 0,01 sans sauts",1.37709,0.665901
+4,réponses (section 14),"s_c appris (0,4 / 1,3 / 4 %)",1.25902,0.781412
+4,réponses (section 14),1-2-3 (défaut) : + dérive de η,1.25827,0.896164

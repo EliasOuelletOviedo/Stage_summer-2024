@@ -1,0 +1,161 @@
+acquisition	etape	dy / detail	dx	NCC	statut
+FOV1/950 nm-001	stim	aucune			
+FOV1/800 nm-001	stim	aucune			
+FOV1/stim-001	bloc 1-25	dy=+0	dx=+0	NCC=1.000	ok
+FOV1/stim-001	bloc 26-111	dy=+0	dx=+0	NCC=0.968	ok
+FOV1/stim-001	bloc 112-136	dy=+1	dx=+0	NCC=0.961	ok
+FOV1/stim-001	bloc 137-150	dy=+1	dx=+0	NCC=0.950	ok
+FOV1/stim-001	stim	images 30-90	t=29.7-90.9 s	C2 x3.6	bord/bruit=179
+FOV1/stim-002	bloc 1-25	dy=+0	dx=+0	NCC=1.000	ok
+FOV1/stim-002	bloc 26-72	dy=+0	dx=+0	NCC=0.976	ok
+FOV1/stim-002	bloc 73-88	dy=+0	dx=+0	NCC=0.964	ok
+FOV1/stim-002	stim	images 39-60	t=39.1-60.5 s	C2 x29.6	bord/bruit=3739
+FOV1/950 nm-001	FOV -> stim-001	dy=-1	dx=-1	NCC=0.243	ok
+FOV1/800 nm-001	FOV -> stim-001	dy=-2	dx=-2	NCC=0.501	ok
+FOV1/stim-001	FOV -> stim-001	dy=+0	dx=+0	NCC=1.000	ref
+FOV1/stim-002	FOV -> stim-001	dy=+3	dx=+0	NCC=0.943	ok
+FOV2/950-001	stim	aucune			
+FOV2/800-001	stim	aucune			
+FOV2/stim_VIS-001	bloc 1-25	dy=+0	dx=+0	NCC=1.000	ok
+FOV2/stim_VIS-001	bloc 26-110	dy=+0	dx=+0	NCC=0.940	ok
+FOV2/stim_VIS-001	bloc 111-135	dy=+0	dx=+0	NCC=0.936	ok
+FOV2/stim_VIS-001	bloc 136-150	dy=+1	dx=+0	NCC=0.918	ok
+FOV2/stim_VIS-001	stim	images 30-89	t=29.9-90.1 s	C2 x2.3	bord/bruit=54
+FOV2/1064-001	stim	aucune			
+FOV2/stim_IR-001	bloc 1-25	dy=+0	dx=+0	NCC=1.000	ok
+FOV2/stim_IR-001	bloc 26-110	dy=+0	dx=+0	NCC=0.940	ok
+FOV2/stim_IR-001	bloc 111-135	dy=+0	dx=+0	NCC=0.937	ok
+FOV2/stim_IR-001	bloc 136-150	dy=+1	dx=+0	NCC=0.918	ok
+FOV2/stim_IR-001	stim	images 30-89	t=29.8-90.0 s	C2 x1.7	bord/bruit=264
+FOV2/stim_max-001	bloc 1-25	dy=+0	dx=+0	NCC=1.000	ok
+FOV2/stim_max-001	bloc 26-111	dy=+0	dx=+0	NCC=0.928	ok
+FOV2/stim_max-001	bloc 112-136	dy=+0	dx=+0	NCC=0.922	ok
+FOV2/stim_max-001	bloc 137-150	dy=+0	dx=+0	NCC=0.899	ok
+FOV2/stim_max-001	stim	images 30-90	t=29.9-91.1 s	C2 x23.3	bord/bruit=2744
+FOV2/950-001	FOV -> stim_VIS-001	dy=-2	dx=+0	NCC=0.400	ok
+FOV2/800-001	FOV -> stim_VIS-001	dy=-1	dx=+0	NCC=0.948	ok
+FOV2/stim_VIS-001	FOV -> stim_VIS-001	dy=+0	dx=+0	NCC=1.000	ref
+FOV2/1064-001	FOV -> stim_VIS-001	dy=+0	dx=-1	NCC=0.208	ok
+FOV2/stim_IR-001	FOV -> stim_VIS-001	dy=+1	dx=+0	NCC=0.962	ok
+FOV2/stim_max-001	FOV -> stim_VIS-001	dy=+10	dx=-2	NCC=0.617	ok
+FOV3/800-001	stim	aucune			
+FOV3/950-001	stim	aucune			
+FOV3/1064-001	stim	aucune			
+FOV3/stim_VIS_10-001	bloc 1-25	dy=+0	dx=+0	NCC=1.000	ok
+FOV3/stim_VIS_10-001	bloc 26-111	dy=+0	dx=-1	NCC=0.969	ok
+FOV3/stim_VIS_10-001	bloc 112-136	dy=+0	dx=-1	NCC=0.963	ok
+FOV3/stim_VIS_10-001	bloc 137-150	dy=+0	dx=-1	NCC=0.952	ok
+FOV3/stim_VIS_10-001	stim	images 29-89	t=28.6-89.8 s	C2 x1.1	bord/bruit=28
+FOV3/stim_VIS_50-001	bloc 1-25	dy=+0	dx=+0	NCC=1.000	ok
+FOV3/stim_VIS_50-001	bloc 26-111	dy=+0	dx=-1	NCC=0.951	ok
+FOV3/stim_VIS_50-001	bloc 112-136	dy=+0	dx=-1	NCC=0.936	ok
+FOV3/stim_VIS_50-001	bloc 137-150	dy=+1	dx=-2	NCC=0.921	ok
+FOV3/stim_VIS_50-001	stim	images 29-89	t=28.8-90.0 s	C2 x1.7	bord/bruit=118
+FOV3/stim_IR-001	bloc 1-25	dy=+0	dx=+0	NCC=1.000	ok
+FOV3/stim_IR-001	bloc 26-111	dy=+0	dx=+0	NCC=0.975	ok
+FOV3/stim_IR-001	bloc 112-136	dy=+0	dx=+0	NCC=0.973	ok
+FOV3/stim_IR-001	bloc 137-150	dy=+0	dx=+0	NCC=0.964	ok
+FOV3/stim_IR-001	stim	images 30-90	t=29.9-91.1 s	C2 x8.6	bord/bruit=872
+FOV3/800-001	FOV -> stim_VIS_10-001	dy=+0	dx=+1	NCC=0.933	ok
+FOV3/950-001	FOV -> stim_VIS_10-001	dy=+1	dx=+1	NCC=0.424	ok
+FOV3/1064-001	FOV -> stim_VIS_10-001	dy=+3	dx=+2	NCC=0.170	ok
+FOV3/stim_VIS_10-001	FOV -> stim_VIS_10-001	dy=+0	dx=+0	NCC=1.000	ref
+FOV3/stim_VIS_50-001	FOV -> stim_VIS_10-001	dy=+0	dx=-1	NCC=0.934	ok
+FOV3/stim_IR-001	FOV -> stim_VIS_10-001	dy=+1	dx=-3	NCC=0.864	ok
+FOV4/800-001	stim	aucune			
+FOV4/950-001	stim	aucune			
+FOV4/stim_VIS_10-001	bloc 1-25	dy=+0	dx=+0	NCC=1.000	ok
+FOV4/stim_VIS_10-001	bloc 26-110	dy=+1	dx=+0	NCC=0.844	ok
+FOV4/stim_VIS_10-001	bloc 111-135	dy=+1	dx=+0	NCC=0.840	ok
+FOV4/stim_VIS_10-001	bloc 136-150	dy=+1	dx=+0	NCC=0.805	ok
+FOV4/stim_VIS_10-001	stim	images 30-89	t=29.8-90.0 s	C2 x1.6	bord/bruit=155
+FOV4/stim_VIS_50-001	bloc 1-25	dy=+0	dx=+0	NCC=1.000	ok
+FOV4/stim_VIS_50-001	bloc 26-110	dy=+1	dx=+0	NCC=0.823	ok
+FOV4/stim_VIS_50-001	bloc 111-135	dy=+1	dx=+0	NCC=0.822	ok
+FOV4/stim_VIS_50-001	bloc 136-150	dy=+1	dx=+0	NCC=0.781	ok
+FOV4/stim_VIS_50-001	stim	images 30-89	t=29.9-90.0 s	C2 x4.1	bord/bruit=380
+FOV4/stim_IR-001	bloc 1-25	dy=+0	dx=+0	NCC=1.000	ok
+FOV4/stim_IR-001	bloc 26-111	dy=+0	dx=+0	NCC=0.838	ok
+FOV4/stim_IR-001	bloc 112-136	dy=+0	dx=-1	NCC=0.834	ok
+FOV4/stim_IR-001	bloc 137-150	dy=+1	dx=+0	NCC=0.784	ok
+FOV4/stim_IR-001	stim	images 29-89	t=28.8-90.2 s	C2 x12.4	bord/bruit=1161
+FOV4/800-001	FOV -> stim_VIS_10-001	dy=-1	dx=+1	NCC=0.913	ok
+FOV4/950-001	FOV -> stim_VIS_10-001	dy=-1	dx=+0	NCC=0.256	ok
+FOV4/stim_VIS_10-001	FOV -> stim_VIS_10-001	dy=+0	dx=+0	NCC=1.000	ref
+FOV4/stim_VIS_50-001	FOV -> stim_VIS_10-001	dy=+5	dx=+0	NCC=0.792	ok
+FOV4/stim_IR-001	FOV -> stim_VIS_10-001	dy=+7	dx=-1	NCC=0.772	ok
+FOV5/800-001	stim	aucune			
+FOV5/950-001	stim	aucune			
+FOV5/stim_VIS_1-001	bloc 1-25	dy=+0	dx=+0	NCC=1.000	ok
+FOV5/stim_VIS_1-001	bloc 26-110	dy=+0	dx=+0	NCC=0.916	ok
+FOV5/stim_VIS_1-001	bloc 111-135	dy=+1	dx=+0	NCC=0.840	ok
+FOV5/stim_VIS_1-001	bloc 136-160	dy=+1	dx=+0	NCC=0.803	ok
+FOV5/stim_VIS_1-001	bloc 161-180	dy=+1	dx=+0	NCC=0.770	ok
+FOV5/stim_VIS_1-001	stim	images 30-89	t=29.9-90.1 s	C2 x1.0	bord/bruit=9
+FOV5/stim_VIS_10-001	bloc 1-25	dy=+0	dx=+0	NCC=1.000	ok
+FOV5/stim_VIS_10-001	bloc 26-111	dy=+3	dx=+3	NCC=0.951	ok
+FOV5/stim_VIS_10-001	bloc 112-136	dy=+4	dx=+4	NCC=0.930	ok
+FOV5/stim_VIS_10-001	bloc 137-161	dy=+4	dx=+4	NCC=0.910	ok
+FOV5/stim_VIS_10-001	bloc 162-180	dy=+6	dx=+7	NCC=0.884	ok
+FOV5/stim_VIS_10-001	stim	images 30-90	t=29.9-91.1 s	C2 x1.2	bord/bruit=40
+FOV5/stim_VIS_50-001	bloc 1-25	dy=+0	dx=+0	NCC=1.000	ok
+FOV5/stim_VIS_50-001	bloc 26-111	dy=+2	dx=+2	NCC=0.963	ok
+FOV5/stim_VIS_50-001	bloc 112-136	dy=+2	dx=+2	NCC=0.952	ok
+FOV5/stim_VIS_50-001	bloc 137-161	dy=+3	dx=+2	NCC=0.940	ok
+FOV5/stim_VIS_50-001	bloc 162-180	dy=+3	dx=+2	NCC=0.925	ok
+FOV5/stim_VIS_50-001	stim	images 30-90	t=29.9-91.1 s	C2 x1.9	bord/bruit=232
+FOV5/800-001	FOV -> stim_VIS_1-001	dy=+0	dx=+1	NCC=0.601	ok
+FOV5/950-001	FOV -> stim_VIS_1-001	dy=-1	dx=+2	NCC=0.545	ok
+FOV5/stim_VIS_1-001	FOV -> stim_VIS_1-001	dy=+0	dx=+0	NCC=1.000	ref
+FOV5/stim_VIS_10-001	FOV -> stim_VIS_1-001	dy=+1	dx=+0	NCC=0.854	ok
+FOV5/stim_VIS_50-001	FOV -> stim_VIS_1-001	dy=+8	dx=+8	NCC=0.681	ok
+FOV6/800-001	stim	aucune			
+FOV6/950-001	stim	aucune			
+FOV6/stim_VIS_1-001	bloc 1-25	dy=+0	dx=+0	NCC=1.000	ok
+FOV6/stim_VIS_1-001	bloc 26-110	dy=+0	dx=+0	NCC=0.870	ok
+FOV6/stim_VIS_1-001	bloc 111-135	dy=+0	dx=+0	NCC=0.829	ok
+FOV6/stim_VIS_1-001	bloc 136-160	dy=+1	dx=+0	NCC=0.794	ok
+FOV6/stim_VIS_1-001	bloc 161-180	dy=+2	dx=+2	NCC=0.741	ok
+FOV6/stim_VIS_1-001	stim	images 30-89	t=29.9-90.0 s	C2 x1.1	bord/bruit=18
+FOV6/stim_VIS_10-001	bloc 1-25	dy=+0	dx=+0	NCC=1.000	ok
+FOV6/stim_VIS_10-001	bloc 26-111	dy=+0	dx=+0	NCC=0.886	ok
+FOV6/stim_VIS_10-001	bloc 112-136	dy=+0	dx=+0	NCC=0.863	ok
+FOV6/stim_VIS_10-001	bloc 137-161	dy=+0	dx=+0	NCC=0.837	ok
+FOV6/stim_VIS_10-001	bloc 162-180	dy=+0	dx=+0	NCC=0.801	ok
+FOV6/stim_VIS_10-001	stim	images 30-90	t=29.9-91.2 s	C2 x1.5	bord/bruit=128
+FOV6/stim_VIS_50-001	bloc 1-25	dy=+0	dx=+0	NCC=1.000	ok
+FOV6/stim_VIS_50-001	bloc 26-111	dy=+0	dx=+0	NCC=0.895	ok
+FOV6/stim_VIS_50-001	bloc 112-136	dy=+0	dx=+0	NCC=0.883	ok
+FOV6/stim_VIS_50-001	bloc 137-161	dy=+0	dx=-1	NCC=0.865	ok
+FOV6/stim_VIS_50-001	bloc 162-180	dy=+0	dx=-1	NCC=0.835	ok
+FOV6/stim_VIS_50-001	stim	images 30-90	t=29.8-91.0 s	C2 x3.4	bord/bruit=466
+FOV6/800-001	FOV -> stim_VIS_1-001	dy=-2	dx=-2	NCC=0.439	ok
+FOV6/950-001	FOV -> stim_VIS_1-001	dy=-3	dx=-1	NCC=0.456	ok
+FOV6/stim_VIS_1-001	FOV -> stim_VIS_1-001	dy=+0	dx=+0	NCC=1.000	ref
+FOV6/stim_VIS_10-001	FOV -> stim_VIS_1-001	dy=+2	dx=+2	NCC=0.814	ok
+FOV6/stim_VIS_50-001	FOV -> stim_VIS_1-001	dy=+2	dx=+2	NCC=0.574	ok
+FOV7/800-001	stim	aucune			
+FOV7/950-001	stim	aucune			
+FOV7/stim_VIS_10-001	bloc 1-25	dy=+0	dx=+0	NCC=1.000	ok
+FOV7/stim_VIS_10-001	bloc 26-111	dy=+0	dx=+0	NCC=0.975	ok
+FOV7/stim_VIS_10-001	bloc 112-136	dy=+1	dx=+0	NCC=0.973	ok
+FOV7/stim_VIS_10-001	bloc 137-161	dy=+1	dx=+0	NCC=0.973	ok
+FOV7/stim_VIS_10-001	bloc 162-180	dy=+1	dx=+0	NCC=0.969	ok
+FOV7/stim_VIS_10-001	stim	images 30-90	t=29.8-91.0 s	C2 x1.1	bord/bruit=34
+FOV7/stim_VIS_50-001	bloc 1-25	dy=+0	dx=+0	NCC=1.000	ok
+FOV7/stim_VIS_50-001	bloc 26-111	dy=+0	dx=+0	NCC=0.970	ok
+FOV7/stim_VIS_50-001	bloc 112-136	dy=+1	dx=+0	NCC=0.967	ok
+FOV7/stim_VIS_50-001	bloc 137-161	dy=+1	dx=+0	NCC=0.967	ok
+FOV7/stim_VIS_50-001	bloc 162-180	dy=+1	dx=+0	NCC=0.964	ok
+FOV7/stim_VIS_50-001	stim	images 30-90	t=29.9-91.1 s	C2 x1.6	bord/bruit=155
+FOV7/stim_VIS_100-001	bloc 1-25	dy=+0	dx=+0	NCC=1.000	ok
+FOV7/stim_VIS_100-001	bloc 26-110	dy=+0	dx=+0	NCC=0.970	ok
+FOV7/stim_VIS_100-001	bloc 111-135	dy=+1	dx=+0	NCC=0.966	ok
+FOV7/stim_VIS_100-001	bloc 136-160	dy=+1	dx=+0	NCC=0.969	ok
+FOV7/stim_VIS_100-001	bloc 161-180	dy=+1	dx=+0	NCC=0.967	ok
+FOV7/stim_VIS_100-001	stim	images 30-89	t=30.0-90.3 s	C2 x2.2	bord/bruit=401
+FOV7/800-001	FOV -> stim_VIS_10-001	dy=-3	dx=+2	NCC=0.690	ok
+FOV7/950-001	FOV -> stim_VIS_10-001	dy=-2	dx=+2	NCC=0.590	ok
+FOV7/stim_VIS_10-001	FOV -> stim_VIS_10-001	dy=+0	dx=+0	NCC=1.000	ref
+FOV7/stim_VIS_50-001	FOV -> stim_VIS_10-001	dy=+1	dx=+0	NCC=0.987	ok
+FOV7/stim_VIS_100-001	FOV -> stim_VIS_10-001	dy=+2	dx=+0	NCC=0.970	ok

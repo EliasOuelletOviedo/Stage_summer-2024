@@ -1,0 +1,8 @@
+budget_vise = 10000.0
+date = "2026-10-16"
+donnees = "Data/2026-10-16/KIRIN"
+essai = false
+fond = "niveau avant le pic des IRF (pas de tampon seul)"
+gagnante_850nm_100000 = "5d"
+
+[puissance_mW]

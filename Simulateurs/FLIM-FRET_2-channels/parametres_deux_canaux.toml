@@ -1,0 +1,13 @@
+# Paramètres de l'analyse à deux canaux (step15_analyse_deux_canaux.jl).
+
+# Budget de photons bleus auquel les règles de décision désignent une gagnante.
+budget_vise = 1e4
+
+# Tirages par point pour le blanchiment injecté (les tirages intacts : 400 sous 10³
+# photons, 200 au-dessus, comme le demande le document).
+tirages_blanchiment = 200
+
+# Puissance laser au plan de l'échantillon, mesurée au wattmètre avant la série (mW).
+# Tant qu'elle manque, la comparaison des longueurs d'onde à temps égal reste
+# conditionnelle (elle mélange rendement et puissance). Exemple : 800 = 12.5
+[puissance_mW]
