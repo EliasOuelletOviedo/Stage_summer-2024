@@ -36,30 +36,30 @@ que de repère.
 3. Exemple complet, trame par trame (section 15)
   trame 1 : N_B = 714, N_Y = 4223, R = 5.91 (R₁(0) = 6.05) ; ratio à η = 1 → 0.7 mM ; FLIM seul → 4.3 mM
   ligne du ratio : η 1.10 → 4.1 mM ; η 1.20 → 7.8 mM ; η 1.25 → 9.2 mM ; η 1.29 → 11.0 mM ; η 1.39 → 14.4 mM
-  trame   1 : vrai   8.0 | filtre   4.5 [  0.5 –  17.1] η 1.103 ± 11.4 % | lissé   7.8 [  6.1 –   9.7]
-  trame  10 : vrai   8.0 | filtre   3.1 [  0.6 –   7.4] η 1.092 ±  5.2 % | lissé   7.6 [  6.1 –   9.0]
-  trame  50 : vrai   8.0 | filtre   6.6 [  4.2 –   9.2] η 1.238 ±  2.9 % | lissé   7.3 [  5.8 –   8.8]
-  trame  70 : vrai  20.5 | filtre  17.6 [ 14.4 –  21.3] η 1.231 ±  2.4 % | lissé  18.9 [ 16.7 –  21.3]
-  trame 100 : vrai  22.0 | filtre  19.3 [ 15.5 –  23.0] η 1.226 ±  2.1 % | lissé  20.6 [ 18.4 –  23.0]
-  trame 240 : vrai  10.2 | filtre   9.8 [  7.8 –  12.1] η 1.240 ±  1.6 % | lissé   9.5 [  7.9 –  11.2]
-  répétition 1 (la trace ci-dessus) : η final temps réel 1.242 ± 1.5 %, lissé 1.239 (vrai 1.25) ; 30.3 ms par trame (grille complète, avec lissage)
+  trame   1 : vrai   8.0 | filtre   4.2 [  0.5 –  14.7] η 1.095 ± 10.2 % | lissé   7.8 [  6.5 –   9.2]
+  trame  10 : vrai   8.0 | filtre   3.1 [  0.6 –   7.6] η 1.094 ±  5.3 % | lissé   7.7 [  6.5 –   9.0]
+  trame  50 : vrai   8.0 | filtre   7.1 [  4.5 –   9.7] η 1.244 ±  2.8 % | lissé   7.6 [  6.4 –   9.0]
+  trame  70 : vrai  20.5 | filtre  17.4 [ 14.4 –  20.8] η 1.238 ±  2.3 % | lissé  19.8 [ 16.7 –  21.9]
+  trame 100 : vrai  22.0 | filtre  20.1 [ 16.3 –  23.0] η 1.233 ±  2.0 % | lissé  21.4 [ 19.8 –  23.0]
+  trame 240 : vrai  10.2 | filtre  10.2 [  8.6 –  11.8] η 1.243 ±  1.4 % | lissé   9.9 [  8.6 –  11.2]
+  répétition 1 (la trace ci-dessus) : η final temps réel 1.247 ± 1.3 %, lissé 1.245 (vrai 1.25) ; 49.6 ms par trame (grille complète, avec lissage)
   bilan, répétition 1 | moyenne ± sd sur 20 répétitions | (document)
   ratio avec la calibration (η = 1)      biais  -9.55 |  -9.49 ± 0.11 (-11.5) ; erreur typique  9.77 |  9.72 ± 0.11 (11.8) mM
   durée de vie seule, trame par trame    biais  +1.68 |  +1.90 ± 0.68 (—) ; erreur typique 11.21 | 10.95 ± 0.65 (41.0) mM
-  filtre hybride, temps réel             biais  -0.88 |  -0.26 ± 0.78 (+0.3) ; erreur typique  1.54 |  1.46 ± 0.32 (1.4) mM
-  filtre hybride, lissé après coup       biais  -0.44 |  -0.22 ± 0.67 (-0.5) ; erreur typique  0.82 |  0.87 ± 0.30 (1.0) mM
-  η final temps réel 1.244 ± 0.017, lissé 1.244 ; couverture à 95 % : filtre 97 %, lissé 97 % (minimum 78 %)
+  filtre hybride, temps réel             biais  -0.70 |  -0.13 ± 0.80 (+0.3) ; erreur typique  1.42 |  1.39 ± 0.31 (1.4) mM
+  filtre hybride, lissé après coup       biais  -0.21 |  -0.08 ± 0.67 (-0.5) ; erreur typique  0.70 |  0.82 ± 0.28 (1.0) mM
+  η final temps réel 1.248 ± 0.016, lissé 1.247 ; couverture à 95 % : filtre 96 %, lissé 95 % (minimum 56 %)
 
 4. Version temps réel (section 14)
-    1000 photons, 1 ROI                  RMSE  2.30 mM (document 2.6) | η 1.228 ± 2.5 % | 0.60 ms/ROI/trame
-    1000 photons, 10 ROI partageant η    RMSE  1.81 mM (document 2.5) | η 1.227 ± 0.8 % | 0.55 ms/ROI/trame
-    1000 photons, η connu d'avance       RMSE  1.71 mM (document 1.7) | η 1.250 ± 0.0 % | 0.10 ms/ROI/trame
-    3000 photons, 1 ROI                  RMSE  1.54 mM (document 1.5) | η 1.241 ± 1.5 % | 0.77 ms/ROI/trame
-    3000 photons, 10 ROI partageant η    RMSE  1.20 mM (document 1.4) | η 1.242 ± 0.6 % | 0.68 ms/ROI/trame
-    3000 photons, η connu d'avance       RMSE  1.12 mM (document 1.1) | η 1.250 ± 0.0 % | 0.10 ms/ROI/trame
-   10000 photons, 1 ROI                  RMSE  0.89 mM (document 1.5) | η 1.246 ± 0.8 % | 0.94 ms/ROI/trame
-   10000 photons, 10 ROI partageant η    RMSE  0.73 mM (document 0.9) | η 1.248 ± 0.0 % | 0.86 ms/ROI/trame
-   10000 photons, η connu d'avance       RMSE  0.73 mM (document 0.8) | η 1.250 ± 0.0 % | 0.13 ms/ROI/trame
+    1000 photons, 1 ROI                  RMSE  2.20 mM (document 2.6) | η 1.232 ± 2.6 % | 15.29 ms/ROI/trame
+    1000 photons, 10 ROI partageant η    RMSE  1.65 mM (document 2.5) | η 1.234 ± 0.9 % | 9.02 ms/ROI/trame
+    1000 photons, η connu d'avance       RMSE  1.65 mM (document 1.7) | η 1.250 ± 0.0 % | 0.10 ms/ROI/trame
+    3000 photons, 1 ROI                  RMSE  1.53 mM (document 1.5) | η 1.245 ± 1.5 % | 8.23 ms/ROI/trame
+    3000 photons, 10 ROI partageant η    RMSE  1.13 mM (document 1.4) | η 1.249 ± 0.6 % | 3.82 ms/ROI/trame
+    3000 photons, η connu d'avance       RMSE  1.09 mM (document 1.1) | η 1.250 ± 0.0 % | 0.04 ms/ROI/trame
+   10000 photons, 1 ROI                  RMSE  0.86 mM (document 1.5) | η 1.249 ± 0.9 % | 7.33 ms/ROI/trame
+   10000 photons, 10 ROI partageant η    RMSE  0.68 mM (document 0.9) | η 1.250 ± 0.4 % | 3.36 ms/ROI/trame
+   10000 photons, η connu d'avance       RMSE  0.69 mM (document 0.8) | η 1.250 ± 0.0 % | 0.05 ms/ROI/trame
 
 5. Trames tirées des histogrammes mesurés (amincissement)
   trames tirées des histogrammes mesurés : 5000 photons, η = 1.25 inconnu, fond mesuré 3.8 % du bleu, 20 répétitions ; erreur sur la seconde moitié de chaque palier
@@ -69,12 +69,12 @@ que de repère.
   durée de vie seule        10 mM : biais  +1.30 mM, sd  7.88 mM
   durée de vie seule        40 mM : biais  -1.19 mM, sd 14.28 mM
   durée de vie seule        20 mM : biais  -0.25 mM, sd 10.71 mM
-  filtre, fond connu        10 mM : biais  +0.01 mM, sd  0.59 mM | η final 1.229 (entre répétitions ± 0.9 %)
-  filtre, fond connu        40 mM : biais  -1.26 mM, sd  1.37 mM | η final 1.229 (entre répétitions ± 0.9 %)
-  filtre, fond connu        20 mM : biais  -1.36 mM, sd  0.85 mM | η final 1.229 (entre répétitions ± 0.9 %)
-  filtre, fond ignoré       10 mM : biais  +2.35 mM, sd  0.65 mM | η final 1.248 (entre répétitions ± 0.8 %)
-  filtre, fond ignoré       40 mM : biais  +1.92 mM, sd  1.48 mM | η final 1.248 (entre répétitions ± 0.8 %)
-  filtre, fond ignoré       20 mM : biais  +0.73 mM, sd  0.92 mM | η final 1.248 (entre répétitions ± 0.8 %)
+  filtre, fond connu        10 mM : biais  +0.20 mM, sd  0.40 mM | η final 1.233 (entre répétitions ± 0.9 %)
+  filtre, fond connu        40 mM : biais  -0.99 mM, sd  0.58 mM | η final 1.233 (entre répétitions ± 0.9 %)
+  filtre, fond connu        20 mM : biais  -1.17 mM, sd  0.36 mM | η final 1.233 (entre répétitions ± 0.9 %)
+  filtre, fond ignoré       10 mM : biais  +2.51 mM, sd  0.40 mM | η final 1.250 (entre répétitions ± 0.8 %)
+  filtre, fond ignoré       40 mM : biais  +2.10 mM, sd  0.63 mM | η final 1.250 (entre répétitions ± 0.8 %)
+  filtre, fond ignoré       20 mM : biais  +0.85 mM, sd  0.39 mM | η final 1.250 (entre répétitions ± 0.8 %)
    titration complète relue (plancher de la calibration)
   fond ajusté           ratio (η = 1) : écart max  2.74 mM | η du FLIM : 1.021 1.026 1.001 1.005 0.991 0.976 0.983 0.988  (à 0, 2.5, 5, 10, 20, 40, 80, 131 mM)
   part moyenne du fond  ratio (η = 1) : écart max  3.60 mM | η du FLIM : 1.028 1.028 1.004 1.006 0.994 0.971 0.966 0.972  (à 0, 2.5, 5, 10, 20, 40, 80, 131 mM)
@@ -94,11 +94,15 @@ que de repère.
   inconnu mesuré : N_B = 1.87e+06, N_Y = 5.17e+06, R = 2.764 | ratio (η = 1) 43.3 mM | FLIM bleu 31.7, 2 canaux 35.9 mM | hybride 36.7 [36.8 – 36.8] mM, η = 0.931 ± 0.2 %
 
 8. η selon le modèle de transition (1 000 photons, 10 ROI)
-  c statique (10 mM)     document (s = 0,04, w = 0,03)  η final 1.228 (vrai 1.25) ; sd a posteriori 0.8 %, entre répétitions 0.6 %
-  c statique (10 mM)     s = 0,04 sans sauts            η final 1.234 (vrai 1.25) ; sd a posteriori 0.8 %, entre répétitions 0.6 %
-  c statique (10 mM)     s = 0,01 sans sauts            η final 1.246 (vrai 1.25) ; sd a posteriori 0.8 %, entre répétitions 0.6 %
-  réponses (section 14)  document (s = 0,04, w = 0,03)  η final 1.237 (vrai 1.25) ; sd a posteriori 0.7 %, entre répétitions 1.0 %
-  réponses (section 14)  s = 0,04 sans sauts            η final 1.264 (vrai 1.25) ; sd a posteriori 0.6 %, entre répétitions 1.4 %
-  réponses (section 14)  s = 0,01 sans sauts            η final 1.346 (vrai 1.25) ; sd a posteriori 0.8 %, entre répétitions 1.8 %
+  c statique (10 mM)     document (s = 0,04, w = 0,03)    η final 1.228 (vrai 1.25) ; sd a posteriori 0.8 %, entre répétitions 0.6 %
+  c statique (10 mM)     s = 0,04 sans sauts              η final 1.233 (vrai 1.25) ; sd a posteriori 0.8 %, entre répétitions 0.6 %
+  c statique (10 mM)     s = 0,01 sans sauts              η final 1.246 (vrai 1.25) ; sd a posteriori 0.8 %, entre répétitions 0.6 %
+  c statique (10 mM)     s_c appris (0,4 / 1,3 / 4 %)     η final 1.243 (vrai 1.25) ; sd a posteriori 0.8 %, entre répétitions 0.6 %
+  c statique (10 mM)     1-2-3 (défaut) : + dérive de η   η final 1.242 (vrai 1.25) ; sd a posteriori 0.9 %, entre répétitions 0.7 %
+  réponses (section 14)  document (s = 0,04, w = 0,03)    η final 1.238 (vrai 1.25) ; sd a posteriori 0.8 %, entre répétitions 1.0 %
+  réponses (section 14)  s = 0,04 sans sauts              η final 1.265 (vrai 1.25) ; sd a posteriori 0.7 %, entre répétitions 1.3 %
+  réponses (section 14)  s = 0,01 sans sauts              η final 1.348 (vrai 1.25) ; sd a posteriori 0.7 %, entre répétitions 1.8 %
+  réponses (section 14)  s_c appris (0,4 / 1,3 / 4 %)     η final 1.243 (vrai 1.25) ; sd a posteriori 0.8 %, entre répétitions 1.0 %
+  réponses (section 14)  1-2-3 (défaut) : + dérive de η   η final 1.243 (vrai 1.25) ; sd a posteriori 0.9 %, entre répétitions 0.9 %
 
-terminé en 328 s
+terminé en 431 s
