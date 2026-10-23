@@ -141,7 +141,8 @@ def eta_jamais_fige():
 def _petit_probleme(n_c, T, M, graine):
     """Une grille de c de n_c valeurs, 4-5 valeurs de η0, 3 dérives, 2 vitesses de c : de quoi tout calculer à la main."""
     c = np.geomspace(3, 40, n_c); g = Grille(S, c, np.array([1.0]))
-    f = dict(F, s_c_candidats=[0.05, 0.2], eta0_min=0.9, eta0_max=1.3, n_eta0=5, derive_max=20.0, n_derive=3)
+    f = dict(F, s_c_candidats=[0.05, 0.2], eta0_min=0.9, eta0_max=1.3, n_eta0=5, derive_max=20.0, n_derive=3,
+             adaptatif=False, elaguer_noyaux=False)                 # numba reste : il doit être exact
     rng = np.random.default_rng(graine)
     H = [[trame_modele(S, (8.0 + 12 * m) * (1 + 0.1 * k), 2000, rng, 1.1 + 0.01 * k) for m in range(M)] for k in range(T)]
     return c, g, f, H
@@ -205,9 +206,22 @@ def filtre_123_suit_une_derive():
     for k in range(T):
         H = [trame_modele(S, 10.0, 20000, rng, eta[k]) for _ in range(M)]
         x = fl.mettre_a_jour(np.array([h[0] for h in H]), np.array([h[1] for h in H]))
-    e = np.log(x['eta'] / eta[-1]); pb = fl.pe().reshape(F['n_eta0'], F['n_derive']).sum(0)
-    beta = np.linspace(-F['derive_max'], F['derive_max'], F['n_derive'])
-    assert abs(e) < 0.01 and abs(e) < 3 * x['eta_sd'] and (pb * beta).sum() > 0.01, (x['eta'], x['eta_sd'], (pb * beta).sum())
+    e = np.log(x['eta'] / eta[-1]); b = (fl.pe() * fl.beta).sum()
+    assert abs(e) < 0.01 and abs(e) < 3 * x['eta_sd'] and b > 0.01, (x['eta'], x['eta_sd'], b)
+
+
+@test
+def accelerations_proches_du_filtre_exact():
+    """Grille adaptative + noyaux élagués + numba (le défaut) contre le filtre sans accélération : 5 ROI, 3 000 photons,
+    200 trames, η de 1 à 1,01 — c à 0,1 mM près, η à 0,2 % près, à chaque trame."""
+    rng = np.random.default_rng(9); M, T = 5, 200; eta = np.linspace(1.0, 1.01, T); cs = rng.uniform(6, 25, M)
+    H = [[trame_modele(S, cs[m] * (1.5 if 80 <= k < 140 else 1.0), 3000, rng, eta[k]) for m in range(M)] for k in range(T)]
+    vite = FiltreTempsReel(G, M, F); exact = FiltreTempsReel(G, M, F, adaptatif=False, elaguer_noyaux=False, numba=False)
+    for Hk in H:
+        B, Y = np.array([h[0] for h in Hk]), np.array([h[1] for h in Hk])
+        a, b = vite.mettre_a_jour(B, Y), exact.mettre_a_jour(B, Y)
+        assert np.abs(a['c'] - b['c']).max() < 0.1 and abs(np.log(a['eta'] / b['eta'])) < 0.002, (a['c'], b['c'], a['eta'], b['eta'])
+    assert vite.n_regrilles > 0
 
 
 @test

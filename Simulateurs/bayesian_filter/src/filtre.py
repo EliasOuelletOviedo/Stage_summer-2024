@@ -240,25 +240,6 @@ def _lse(x, axis=-1):
     return np.squeeze(m, axis) + np.log(np.exp(x - m).sum(axis))
 
 
-class NoyauStructure:
-    """
-    (6) K @ P pour un noyau de c « bande + rang faible » : la bande |i − j| ≤ largeur (la marche) en matrice creuse, le
-    reste (les sauts, lisses) par une SVD tronquée à `tol` de sa plus grande valeur singulière. Approché à ~tol près.
-    """
-    def __init__(self, K, largeur=15, tol=1e-7):
-        import scipy.sparse as sp
-        n = K.shape[0]; i, j = np.indices(K.shape); bande = np.where(np.abs(i - j) <= largeur, K, 0.0)
-        U, s, Vt = np.linalg.svd(K - bande); r = max(1, int((s > tol * s[0]).sum()))
-        self.B = sp.csr_matrix(bande.astype(np.float32)); self.U = (U[:, :r] * s[:r]).astype(np.float32)
-        self.V = Vt[:r].astype(np.float32); self.rang = r
-
-    def __matmul__(self, P):
-        out = np.matmul(self.U, np.matmul(self.V, P))
-        for m in range(P.shape[0]):
-            out[m] += self.B @ P[m]
-        return out
-
-
 try:                                                       # (5) mise à jour fusionnée, si numba est installé
     from numba import njit, prange
 
@@ -301,31 +282,23 @@ class FiltreTempsReel:
     Options : derive=False → β = 0 (η constant) ; eta_fixe → η connu d'avance (θ réduit à ce point, β = 0) ;
     noyaux → liste de noyaux de c imposée ; partage=False → chaque ROI a son propre θ et sa propre moyenne de modèles
     (M filtres indépendants, calculés ensemble).
-    Accélérations ([filtre] ou arguments ; README, « Accélérations ») :
-      elaguer_theta    θ dont la probabilité relative tombe sous seuil_theta (pour tous les noyaux et groupes) retirés ;
-      elaguer_noyaux   noyaux de c dont le poids tombe sous seuil_noyaux retirés ;
-      numba            mise à jour fusionnée (une passe au lieu de cinq) ;
-      noyau_structure  K @ P par bande creuse + rang faible ;
-      adaptatif        grille de θ recentrée à ±6 sd (θ partagé seulement) ;
-      trames           durée prévue : la grille de β est réduite à n_derive·trames/3000 valeurs (au moins 5).
+    Accélérations, toutes causales ([filtre] ou arguments ; README, « Accélérations ») :
+      adaptatif        grille de θ recentrée à ±6 sd de la loi courante (θ partagé seulement) ; quasi exact ;
+      elaguer_noyaux   noyaux de c dont le poids causal tombe sous seuil_noyaux retirés (définitivement) ;
+      numba            mise à jour fusionnée (une passe au lieu de cinq), ROI réparties sur les cœurs ; exact.
     """
-    def __init__(self, grille, n_roi, f, eta_fixe=None, derive=True, noyaux=None, partage=True, trames=None, **acc):
+    def __init__(self, grille, n_roi, f, eta_fixe=None, derive=True, noyaux=None, partage=True, **acc):
         self.g, self.M, self.partage, self.f = grille, n_roi, partage, f
         o = lambda k, d: acc[k] if k in acc else f.get(k, d)
-        self.elaguer_theta, self.seuil_theta = o('elaguer_theta', False), o('seuil_theta', PLANCHER)
         self.elaguer_noyaux, self.seuil_noyaux = o('elaguer_noyaux', False), o('seuil_noyaux', 1e-12)
         self.numba = o('numba', False) and NUMBA
         self.adaptatif = o('adaptatif', False) and partage and eta_fixe is None and derive
         Ks = noyaux if noyaux is not None else noyaux_c(grille.c, f)
         self.K = [np.where(np.asarray(K) < PLANCHER, 0, K).astype(np.float32) for K in Ks]
-        self.op = [NoyauStructure(K) for K in self.K] if o('noyau_structure', False) else list(self.K)
         if eta_fixe is not None:
             self.le0, self.beta = np.array([np.log(float(eta_fixe))]), np.zeros(1)
         else:
-            fd = dict(f)
-            if trames and derive:                           # (8) moins de dérives pour une course courte
-                fd['n_derive'] = int(max(5, min(f['n_derive'], 2 * np.ceil(f['n_derive'] * trames / 6000) + 1)))
-            self.le0, self.beta = grille_theta(fd, derive)
+            self.le0, self.beta = grille_theta(f, derive)
             self.a_vals = np.unique(self.le0); self.b_vals = np.unique(self.beta); self.tau = 0.0
         nk, nc, nt, ng = len(self.K), len(grille.c), len(self.le0), (1 if partage else n_roi); self.n_noyaux = nk
         self.P = np.full((nk, n_roi, nc, nt), 1.0 / nc, np.float32)
@@ -363,7 +336,7 @@ class FiltreTempsReel:
             NB, NY = g._sous_fond(B[m], Y[m], fond)
             L = g.formes(B[m], Y[m], fond)[:, None] + NB * lB + NY * lY          # float64 : |ln L| ~ 1e5 à 1e5 photons
             mx[m] = L.max(); L -= mx[m]; L[L < np.log(PLANCHER)] = -np.inf; E[m] = np.exp(L)
-        for i, K in enumerate(self.op):
+        for i, K in enumerate(self.K):
             P = (K @ self.P[i]) if self.k > 0 else self.P[i].copy()
             ell = _maj_numba(P, E, np.float32(PLANCHER)) if self.numba else _maj_numpy(P, E, PLANCHER)
             self.P[i] = P                                                         # colonne vide : reste à 0
@@ -381,15 +354,10 @@ class FiltreTempsReel:
         if self.elaguer_noyaux and len(self.K) > 1:
             garde = np.flatnonzero((self.poids() >= self.seuil_noyaux).any(1))
             if len(garde) < len(self.K):
-                self.K = [self.K[i] for i in garde]; self.op = [self.op[i] for i in garde]; self.ids = self.ids[garde]
+                self.K = [self.K[i] for i in garde]; self.ids = self.ids[garde]
                 self.P, self.lpe, self.cum = self.P[garde], self.lpe[garde], self.cum[garde]
         if self.adaptatif:
             self._regriller_si_besoin()
-        elif self.elaguer_theta and len(self.le0) > 1:
-            vivant = (self.lpe - self.lpe.max(-1, keepdims=True) >= np.log(self.seuil_theta)).any((0, 1))
-            if vivant.sum() < 0.8 * len(vivant):
-                self.le0, self.beta = self.le0[vivant], self.beta[vivant]
-                self.P, self.lpe = np.ascontiguousarray(self.P[..., vivant]), self.lpe[..., vivant]
 
     def _regriller_si_besoin(self, NA=41, NB=31):
         """(2) θ = (a, b), ln η_k = a + b·(k − τ)/1000 ; nouvelle grille à ±6 sd quand le pas dépasse 0,6 sd, que (a, b)

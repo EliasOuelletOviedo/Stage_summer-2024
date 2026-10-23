@@ -3,3 +3,4 @@ scipy
 pandas
 matplotlib
 sdtfile
+numba        # facultatif : mise à jour du filtre plus rapide

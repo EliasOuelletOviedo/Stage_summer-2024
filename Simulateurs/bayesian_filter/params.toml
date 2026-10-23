@@ -45,6 +45,13 @@ n_eta0 = 81
 derive_max = 0.05
 n_derive = 31
 s_c_candidats = [0.004, 0.013, 0.04]
+# accélérations, toutes causales (README, « Accélérations ») : grille de θ recentrée à ±6 sd de la loi courante (41 × 31
+# points, quasi exacte) ; vitesses de c au poids < seuil_noyaux retirées ; mise à jour fusionnée numba (exacte, si numba
+# est installé)
+adaptatif = true
+elaguer_noyaux = true
+seuil_noyaux = 1.0e-12
+numba = true
 # modèle "marche" : ln η_k = ln η_{k−1} + N(0, s_η²) par trame, s_η inconnu (0 = η constant), moyenne de modèles ;
 # grille de η plus fine (pas de 0,46 %) pour que la marche et la précision de η ne soient pas limitées par le pas.
 n_eta_lisseur = 241

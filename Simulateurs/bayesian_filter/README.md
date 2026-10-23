@@ -22,13 +22,13 @@ d'une ROI (η en marche aléatoire, s fixe).
 ## Lancer
 
 ```bash
-pip install -r requirements.txt            # numpy, scipy, pandas, matplotlib, sdtfile
+pip install -r requirements.txt            # numpy, scipy, pandas, matplotlib, sdtfile, numba (facultatif, plus rapide)
 # une seule fois : ajuster la calibration sur les histogrammes mCer3 → calibration.json (~1 min)
 python3 step0_calibration.py
-# les vérifications (18)
+# les vérifications (19)
 python3 test/run_tests.py
 # la course complète (~2,5 min)
-python3 run.py                             # --rapide : moins de répétitions (~25 s)
+python3 run.py                             # --rapide : moins de répétitions ; --processus N : parties en parallèle
 
 # le second jeu : SCLM régulier (800 nm) → calibration_SCLM.json, sorties_SCLM/ (~2 + 2,5 min)
 python3 step0_calibration.py --params params_SCLM.toml
@@ -40,8 +40,28 @@ python3 boxplots.py
 python3 boxplots.py --eta
 
 # l'exemple de la section 15 : 5 nombres de photons × 3 scénarios de η, 3 000 trames → sorties_exemples/ (~3 min)
-python3 exemples.py
+python3 exemples.py                        # --processus N : les 15 conditions en parallèle
 ```
+
+`--processus N` donne exactement les mêmes résultats qu'en séquentiel (chaque partie ou condition a sa graine). Avec
+plusieurs processus, mettre `OMP_NUM_THREADS=1` (et `NUMBA_NUM_THREADS=1`) pour ne pas surcharger les cœurs.
+
+### Accélérations
+
+Toutes causales, donc utilisables en temps réel. Les trois premières sont actives par défaut (`[filtre]`).
+
+| | gain mesuré (1 ROI / 10 ROI, 1 fil) | effet sur les résultats |
+| --- | --- | --- |
+| `adaptatif` : grille de θ recentrée à ±6 sd de la loi courante (41 × 31 points au lieu de 81 × 31) | ×2,3 / ×1,5 | c à 0,003 mM rms près, η à 0,004 % |
+| `elaguer_noyaux` : une vitesse de c au poids causal < 10⁻¹² est retirée, définitivement | ×1 sur 300-400 trames ; jusqu'à ×3 sur de longues courses | nul tant que la dynamique de c ne change pas de nature |
+| `numba` : mise à jour fusionnée, ROI réparties sur les cœurs | ×1,1 / ×1,2 sur 1 fil, plus avec plusieurs cœurs | exact |
+| `--processus N` (hors ligne) : courses indépendantes en parallèle | ×2,6 sur 4 cœurs (`exemples.py --rapide`) | exact |
+
+Essayées puis retirées :
+- **noyau de c « bande + rang faible » :** ×0,6, plus lent que le produit dense ;
+- **grille de β réduite selon la durée :** ×5 sur 300-400 trames, mais aucun gain sur les longues courses ;
+- **élagage des θ improbables :** remplacé par la grille adaptative.
+
 
 Un jeu de données = un fichier de paramètres : seul le bloc `[donnees]` diffère entre `params.toml` (SCLM_mCer3) et
 `params_SCLM.toml` (SCLM régulier) ; filtre, scénarios et graines sont les mêmes, pour comparer les deux senseurs.
@@ -79,7 +99,7 @@ leurs histogrammes sommés, versionnés par `step17_bruts_mCer3.jl` (`irf_bruts_
 | `run.py` | la course en 8 parties ; un CSV par partie, `journal.txt`, 5 figures | 356 |
 | `src/exemple.py` | une course de la section 15 (trajectoire étirée, η constant ou par trame ; modèle 1-2-3 ou « marche »), partagée par run.py et exemples.py | 128 |
 | `exemples.py` | l'exemple de la section 15 sous 15 conditions (photons × η), filtre temps réel seul | 105 |
-| `test/run_tests.py` | 18 vérifications : calibration = annexe, découpage exact, portes (93,7 % de l'information FLIM gardée), η retrouvé, θ jamais figé, filtre 1-2-3 et son lisseur égaux à la force brute, dérive de η suivie (1-2-3 et « marche »), couverture du lisseur, marche sur η (variance n·s²), amincissement | 263 |
+| `test/run_tests.py` | 19 vérifications : accélérations proches du filtre exact, calibration = annexe, découpage exact, portes (93,7 % de l'information FLIM gardée), η retrouvé, θ jamais figé, filtre 1-2-3 et son lisseur égaux à la force brute, dérive de η suivie (1-2-3 et « marche »), couverture du lisseur, marche sur η (variance n·s²), amincissement | 263 |
 | `derive_eta/` | l'étude qui a mené au modèle 1-2-3 : 5 variantes sur 10 ROI à 1 000 photons, la combinaison de toutes les modifications des deux documents comparés, figures (`derive_eta/README.md`) | — |
 
 ## Sorties (`sorties/` pour SCLM_mCer3, `sorties_SCLM/` pour SCLM régulier)
