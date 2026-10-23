@@ -17,7 +17,8 @@ obtenues avec le modèle du document (η constant, s = 4 %) : elles servent de r
   8. η et le modèle de transition : ce que la dynamique supposée de c fait à l'estimation de η.
 Sorties dans le dossier [donnees] sorties (sorties/, sorties_SCLM/) : un CSV par partie, les figures, journal.txt.
 
-Lancer depuis ce dossier (après step0_calibration.py) :  python3 run.py  [--params f.toml] [--rapide]   (~2,5 min ; --rapide ~25 s)
+Lancer depuis ce dossier (après step0_calibration.py) :  python3 run.py  [--params f.toml] [--rapide] [--processus N]
+--processus N : les parties tournent en parallèle sur N processus (mêmes graines, mêmes résultats qu'en séquentiel).
 """
 import os, sys, time
 import numpy as np
@@ -35,11 +36,22 @@ from src import figures
 P = charger_params(chemin_params(sys.argv))
 SORTIES = os.path.join(ICI, P['donnees']['sorties'])
 RAPIDE = '--rapide' in sys.argv
+PROCESSUS = int(sys.argv[sys.argv.index('--processus') + 1]) if '--processus' in sys.argv else 1
 JOURNAL = []
+MUET = False                                   # dans un processus de travail : le journal est rendu au processus principal
 
 
 def dire(*a):
-    s = ' '.join(str(x) for x in a); print(s); JOURNAL.append(s)
+    s = ' '.join(str(x) for x in a); JOURNAL.append(s)
+    if not MUET:
+        print(s, flush=True)
+
+
+def _partie(fn, args):
+    """Une partie dans un processus de travail : son résultat et ses lignes de journal."""
+    global MUET
+    MUET = True; JOURNAL.clear()
+    return fn(*args), list(JOURNAL)
 
 
 def ecrire(nom, lignes):
@@ -330,15 +342,30 @@ def main():
     dire(f"{p['donnees']['nom']} — calibration : {cal['source']} ; déviance/ddl {cal['deviance'] / cal['ddl']:.3f}" + (' ; --rapide' if RAPIDE else ''))
     dire("\nLes valeurs « document » sont celles du PDF, calibré sur SCLM_mCer3 : pour un autre senseur, elles ne servent"
          "\nque de repère.")
-    dire("\n1. Vérifications (exemples chiffrés du document)"); verifications(S, g)
-    dire("\n2. Information de Fisher et borne de Cramér-Rao (section 10)"); cr = information(S, g, p, rng(2))
-    dire("\n3. Exemple complet, trame par trame (section 15)"); ex = exemple(S, g, p, rng(3))
-    dire("\n4. Version temps réel (section 14)"); tr = temps_reel(S, gp, g, p, rng(4))
-    dire("\n5. Trames tirées des histogrammes mesurés (amincissement)"); am, trace = amincissement(S, g, p, cal, rng(5))
-    dire("   titration complète relue (plancher de la calibration)"); titration_relue(S, p, cal)
-    dire("\n6. Robustesse à 10 mM (section 16) : biais calculé (document)"); robustesse(S, p, cal)
-    dire("\n7. Échantillon inconnu mesuré le 2026-10-16"); echantillon_inconnu(S, g, p, cal)
-    dire("\n8. η selon le modèle de transition (1 000 photons, 10 ROI)"); eta_transition(S, g, p, rng(8))
+    parties = [("\n1. Vérifications (exemples chiffrés du document)", verifications, (S, g)),
+               ("\n2. Information de Fisher et borne de Cramér-Rao (section 10)", information, (S, g, p, rng(2))),
+               ("\n3. Exemple complet, trame par trame (section 15)", exemple, (S, g, p, rng(3))),
+               ("\n4. Version temps réel (section 14)", temps_reel, (S, gp, g, p, rng(4))),
+               ("\n5. Trames tirées des histogrammes mesurés (amincissement)", amincissement, (S, g, p, cal, rng(5))),
+               ("   titration complète relue (plancher de la calibration)", titration_relue, (S, p, cal)),
+               ("\n6. Robustesse à 10 mM (section 16) : biais calculé (document)", robustesse, (S, p, cal)),
+               ("\n7. Échantillon inconnu mesuré le 2026-10-16", echantillon_inconnu, (S, g, p, cal)),
+               ("\n8. η selon le modèle de transition (1 000 photons, 10 ROI)", eta_transition, (S, g, p, rng(8)))]
+    if PROCESSUS > 1:                          # les parties ont chacune leur graine : résultats identiques au séquentiel
+        from concurrent.futures import ProcessPoolExecutor
+        with ProcessPoolExecutor(PROCESSUS) as ex_:
+            futurs = [ex_.submit(_partie, fn, args) for _, fn, args in parties]
+            resultats = []
+            for (titre, _, _), fu in zip(parties, futurs):
+                r, lignes = fu.result(); dire(titre)
+                for l in lignes:
+                    dire(l)
+                resultats.append(r)
+    else:
+        resultats = []
+        for titre, fn, args in parties:
+            dire(titre); resultats.append(fn(*args))
+    cr, ex, tr, (am, trace) = resultats[1], resultats[2], resultats[3], resultats[4]
     mes = Mesures(os.path.join(ICI, p['donnees']['dossier']), p['donnees']['titration'], cal)
     figures.donnees(S, mes, cal, p, rng(7), os.path.join(SORTIES, 'fig_donnees.png'))
     e = p['exemple']

@@ -13,7 +13,7 @@ exemple_<scénario>_<photons>.csv.gz (la table par trame), resume.csv, fig_resum
 
 Avec --figures : redessine les figures à partir des tables par trame déjà écrites, sans refaire les courses.
 
-Lancer depuis ce dossier :  python3 exemples.py  [--rapide | --figures]      (~40 min ; --rapide : 300 trames, 2 nombres de photons)
+Lancer depuis ce dossier :  python3 exemples.py  [--rapide | --figures] [--processus N]      (~40 min ; --rapide : 300 trames, 2 nombres de photons)
 """
 import os, sys, time
 import numpy as np
@@ -28,6 +28,7 @@ from src import figures
 
 RAPIDE = '--rapide' in sys.argv
 FIGURES = '--figures' in sys.argv
+PROCESSUS = int(sys.argv[sys.argv.index('--processus') + 1]) if '--processus' in sys.argv else 1
 JOURNAL = []
 
 
@@ -55,6 +56,31 @@ def redessiner(p):
             print(f"fig_exemple_{nom}.png")
 
 
+def _course(args):
+    """Une condition (scénario i, nombre de photons j) : table, figure, bilan et ligne de journal."""
+    S, g, f, e0, q, sortie, i, j, sc, N = args
+    T = e0['trames']; eta = np.linspace(sc['eta_debut'], sc['eta_fin'], T); e = dict(e0, photons=N)
+    D, _, duree = course_exemple(S, g, f, e, np.random.default_rng(q['graine'] + 100 * i + j), eta, lisser=False)
+    nom = f"{sc['nom']}_{N}"
+    D.to_csv(os.path.join(sortie, f'exemple_{nom}.csv.gz'), index=False, float_format='%.6g')
+    figures.exemple(D, titre_figure(N, T, sc), os.path.join(sortie, f'fig_exemple_{nom}.png'), eta_lim=(0.8, 1.3))
+    b = bilan_exemple(D)
+    fin = slice(T - T // 10, T)                          # le dernier dixième : η appris, c sur son plateau final
+    b.update(scenario=sc['nom'], photons=N, trames=T,
+             eta_vrai_final=eta[-1], eta_filtre_final_sd_pct=100 * D.eta_filtre_sd.iloc[-1],
+             **{f'{col}_erreur_dernier_dixieme': np.sqrt(np.mean((D[col][fin] - D.c_vrai[fin]) ** 2))
+                for _, col in METHODES_EXEMPLE if col in D},
+             secondes_filtre=duree)
+    et = D.attrs['etiquette_poids']
+    ligne = (f"  {N:6d} photons : erreur typique (mM) ratio η = 1 {b['c_ratio_eta1_erreur']:6.2f} | durée de vie seule "
+             f"{b['c_flim_erreur']:6.2f} | filtre temps réel {b['c_filtre_erreur']:5.2f} (biais {b['c_filtre_biais']:+.2f}) ; "
+             f"η final {b['eta_filtre_final']:.3f} (vrai {eta[-1]:.3f}) ± {b['eta_filtre_final_sd_pct']:.1f} %, η à "
+             f"{b['erreur_eta_filtre_rms_pct']:.1f} % près sur la course ; {et} moyen à la dernière trame "
+             f"{100 * b[f'{et}_poids_filtre_final_moyen']:.3f} %/trame ; couverture 95 % {100 * b['couverture_filtre']:.0f} % ; "
+             f"{duree:.0f} s")
+    return b, ligne
+
+
 def main():
     t0 = time.time()
     p = charger_params(); q, f = p['exemples'], p['filtre']
@@ -68,30 +94,20 @@ def main():
     dire(f"{T} trames : {e0['c_base_mM']:g} mM, montée vers {e0['c_haut_mM']:g} mM à la trame {e0['trame_montee']} "
          f"(τ {e0['tau_montee_trames']:g} trames), retour vers {e0['c_fin_mM']:g} mM à la trame {e0['trame_descente']} "
          f"(τ {e0['tau_descente_trames']:g} trames) ; A {100 * e0['derive_A']:+.0f} %")
-    lignes = []
-    for i, sc in enumerate(q['scenarios']):
-        eta = np.linspace(sc['eta_debut'], sc['eta_fin'], T)
-        dire(f"\n{sc['titre']}")
-        for j, N in enumerate(q['photons'][:2] if RAPIDE else q['photons']):
-            e = dict(e0, photons=N)
-            D, _, duree = course_exemple(S, g, f, e, np.random.default_rng(q['graine'] + 100 * i + j), eta, lisser=False)
-            nom = f"{sc['nom']}_{N}"
-            D.to_csv(os.path.join(sortie, f'exemple_{nom}.csv.gz'), index=False, float_format='%.6g')
-            figures.exemple(D, titre_figure(N, T, sc), os.path.join(sortie, f'fig_exemple_{nom}.png'), eta_lim=(0.8, 1.3))
-            b = bilan_exemple(D)
-            fin = slice(T - T // 10, T)                          # le dernier dixième : η appris, c sur son plateau final
-            b.update(scenario=sc['nom'], photons=N, trames=T,
-                     eta_vrai_final=eta[-1], eta_filtre_final_sd_pct=100 * D.eta_filtre_sd.iloc[-1],
-                     **{f'{col}_erreur_dernier_dixieme': np.sqrt(np.mean((D[col][fin] - D.c_vrai[fin]) ** 2))
-                        for _, col in METHODES_EXEMPLE if col in D},
-                     secondes_filtre=duree)
-            lignes.append(b); et = D.attrs['etiquette_poids']
-            dire(f"  {N:6d} photons : erreur typique (mM) ratio η = 1 {b['c_ratio_eta1_erreur']:6.2f} | durée de vie seule "
-                 f"{b['c_flim_erreur']:6.2f} | filtre temps réel {b['c_filtre_erreur']:5.2f} (biais {b['c_filtre_biais']:+.2f}) ; "
-                 f"η final {b['eta_filtre_final']:.3f} (vrai {eta[-1]:.3f}) ± {b['eta_filtre_final_sd_pct']:.1f} %, η à "
-                 f"{b['erreur_eta_filtre_rms_pct']:.1f} % près sur la course ; {et} moyen à la dernière trame "
-                 f"{100 * b[f'{et}_poids_filtre_final_moyen']:.3f} %/trame ; couverture 95 % {100 * b['couverture_filtre']:.0f} % ; "
-                 f"{duree:.0f} s")
+    taches = [(i, j, sc, N) for i, sc in enumerate(q['scenarios'])
+              for j, N in enumerate(q['photons'][:2] if RAPIDE else q['photons'])]
+    args = [(S, g, f, e0, q, sortie, i, j, sc, N) for i, j, sc, N in taches]
+    if PROCESSUS > 1:                          # chaque course a sa graine : mêmes résultats qu'en séquentiel
+        from concurrent.futures import ProcessPoolExecutor
+        with ProcessPoolExecutor(PROCESSUS) as ex:
+            sorties = list(ex.map(_course, args))
+    else:
+        sorties = map(_course, args)
+    lignes = []; precedent = None
+    for (i, j, sc, N), (b, ligne) in zip(taches, sorties):
+        if i != precedent:
+            dire(f"\n{sc['titre']}"); precedent = i
+        lignes.append(b); dire(ligne)
     R = pd.DataFrame(lignes)
     R = R[['scenario', 'photons', 'trames'] + [c for c in R.columns if c not in ('scenario', 'photons', 'trames')]]
     R.to_csv(os.path.join(sortie, 'resume.csv'), index=False, float_format='%.6g')

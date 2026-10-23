@@ -70,13 +70,13 @@ def _derive(g, f, H, NB, NY, D, lisser):
         pc, m, sd, garde = lisseur_derive(fl, formes, NB, NY)
         lm, llo, lhi = resume_c(pc, g.c)
         D = D.assign(c_lisse=lm, lisse_bas=llo, lisse_haut=lhi, eta_lisse=np.exp(m), eta_lisse_sd=sd)
-        D.attrs['poids_lisseur'] = dict(zip(sc, fl.poids()[:, 0]))
+        D.attrs['poids_lisseur'] = dict(zip(sc, fl.poids_complets()[:, 0]))
         D.attrs['masse_theta_gardee'] = dict(zip(sc, garde))
     for i, s in enumerate(sc):                                             # poids de chaque vitesse de c
         D[f'poids_filtre_s_c_{s:g}'] = wf[:, i]
     D.attrs['etiquette_poids'] = 's_c'
     D.attrs['poids_filtre_final'] = dict(zip(sc, wf[-1]))
-    D.attrs['ln_evidence'] = dict(zip(sc, fl.cum[:, 0]))
+    D.attrs['ln_evidence'] = {sc[i]: x for i, x in zip(fl.ids, fl.cum[:, 0])}
     return D
 
 
