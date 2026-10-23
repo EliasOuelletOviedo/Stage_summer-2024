@@ -62,28 +62,45 @@ class Modele:
             t = np.where(yy > 0, yy * np.log(yy / m), 0.0)
         return float(np.sum(t - yy + m))
 
+    @staticmethod
+    def _erreur_tau(f, N, tau, s, b):
+        """Erreur-type de τ : inverse de la hessienne de −log-vraisemblance (= f · N) en
+        (τ, b), le fond étant ajusté avec τ (ils sont très corrélés quand le déclin est
+        long). Fond à sa borne 0 : courbure en τ seule. Décalage s : tenu fixe."""
+        L = lambda t, bb: f(t, s, bb) * N
+        ht = 1e-3 * tau
+        Ltt = (L(tau + ht, b) - 2 * L(tau, b) + L(tau - ht, b)) / ht ** 2
+        if b < 2e-4:
+            return float(np.sqrt(1 / Ltt)) if Ltt > 0 else np.nan
+        hb = 1e-4
+        Lbb = (L(tau, b + hb) - 2 * L(tau, b) + L(tau, b - hb)) / hb ** 2
+        Ltb = (L(tau + ht, b + hb) - L(tau + ht, b - hb) - L(tau - ht, b + hb) + L(tau - ht, b - hb)) / (4 * ht * hb)
+        det = Ltt * Lbb - Ltb ** 2
+        return float(np.sqrt(Lbb / det)) if det > 0 and Lbb > 0 else np.nan
+
     def ajuster(self, y, s=None, tau0=3.0):
         """(τ, s, b, déviance réduite, erreur-type de τ). `s` donné : décalage fixé."""
         y = np.asarray(y, float)
         N = max(y[self.lo:self.hi].sum(), 1.0)
         f = lambda tau, s_, b: self.deviance(y, self.attendu(y, tau, s_, b)) / N
         bornes_tau = (0.1, 60.0)
+        # f est par photon (~1e-4) : le critère d'arrêt de L-BFGS-B, relatif à max(|f|, 1),
+        # est alors absolu et trop lâche ; tolérances resserrées pour que τ ne dépende pas
+        # du point de départ (écarts jusqu'à 0,4 % sinon).
+        opt = {"ftol": 1e-15, "gtol": 1e-12, "maxiter": 2000}
         if s is None:
             # Le décalage a des minima locaux : grille grossière, puis affinage libre.
             grille = [(f(tau0, si, 0.02), si) for si in np.arange(-20, 20.5, 1.0)]
             s0 = min(grille)[1]
             r = minimize(lambda p: f(p[0], p[1], p[2]), [tau0, s0, 0.02], method="L-BFGS-B",
-                         bounds=[bornes_tau, (-25, 25), (0, 1)])
+                         bounds=[bornes_tau, (-25, 25), (0, 1)], options=opt)
             tau, s, b = r.x
             libres = 3
         else:
             r = minimize(lambda p: f(p[0], s, p[1]), [tau0, 0.02], method="L-BFGS-B",
-                         bounds=[bornes_tau, (0, 1)])
+                         bounds=[bornes_tau, (0, 1)], options=opt)
             tau, b = r.x
             libres = 2
-        # Erreur-type de τ : courbure de −log-vraisemblance (= f · N) en τ, b fixé.
-        h = 1e-3 * tau
-        d2 = (f(tau + h, s, b) - 2 * f(tau, s, b) + f(tau - h, s, b)) * N / h ** 2
-        err = float(np.sqrt(1 / d2)) if d2 > 0 else np.nan
+        err = self._erreur_tau(f, N, tau, s, b)
         dof = max(self.n_fen - libres, 1)
         return float(tau), float(s), float(b), 2 * r.fun * N / dof, err

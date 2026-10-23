@@ -60,6 +60,41 @@ def simuler(gab, mu_det, temps_mort_ns, mode="photon", photons=1_500_000, graine
     return h, len(gardes) / n_imp, n / n_imp
 
 
+def flux_poisson(gab, mu_det, photons=1_500_000, graine=0):
+    """(temps absolus en ns, canal, nombre d'impulsions) des photons arrivant au détecteur,
+    triés : le même flux sert à comparer plusieurs temps morts (courbes lisses en D)."""
+    rng = np.random.default_rng(graine)
+    n_imp = max(int(photons / mu_det), 1)
+    n = rng.poisson(mu_det * n_imp)
+    k = np.sort(rng.integers(0, n_imp, n))
+    canal = rng.choice(N_CANAUX, size=n, p=gab)
+    T = k * PERIODE_NS + (canal + rng.random(n)) * PERIODE_NS / N_CANAUX
+    ordre = np.argsort(T, kind="stable")
+    return T[ordre], canal[ordre], n_imp
+
+
+def garder(T, temps_mort_ns, T_liste=None):
+    """Photons enregistrés avec un temps mort non paralysable compté depuis chaque photon
+    enregistré (masque). Un photon à plus de D du précédent est toujours gardé : seuls ceux
+    qui en sont plus proches sont examinés un à un. `T_liste` : T.tolist(), à passer quand
+    le même flux sert à plusieurs D (la conversion coûte plus que la boucle)."""
+    Tl = T.tolist() if T_liste is None else T_liste
+    garde = np.ones(len(Tl), bool)
+    proches = (np.flatnonzero(np.diff(T) < temps_mort_ns) + 1).tolist()
+    jetes = []
+    dernier, precedent = 0.0, -2
+    for i in proches:
+        if i - 1 != precedent:            # le photon d'avant était loin du sien : gardé
+            dernier = Tl[i - 1]
+        if Tl[i] - dernier < temps_mort_ns:
+            jetes.append(i)
+        else:
+            dernier = Tl[i]
+        precedent = i
+    garde[jetes] = False
+    return garde
+
+
 def temps_mort_effectif(mu_enr, mu_det):
     """Temps mort de la formule non paralysable, 1/r_enr − 1/r_det, en ns."""
     return (1 / mu_enr - 1 / mu_det) * PERIODE_NS
