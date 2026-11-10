@@ -42,6 +42,8 @@ python3 step7_calibration.py ../<jeu>                     # ~1 min : isothermes,
 python3 step8_cinetiques.py ../<jeu>                      # ~30 s : cinétiques des changements de solution
 python3 step9_flim_deux_canaux.py ../<jeu>                # ~2 min : modèle FLIM à deux canaux de bayesian_filter, soma par soma
 python3 step9_flim_deux_canaux.py ../<jeu> --transfert 1  # la même avec un seul temps de transfert (sorties *_1t)
+python3 step10_validation_croisee.py ../<jeu>             # ~10 min : validation croisée, ROIs tirés au hasard
+python3 step10_validation_croisee.py ../<jeu> --par-fov   # ~10 min : validation croisée, un FOV de chaque condition par pli
 ```
 
 Seule l'étape 2 a besoin de Cellpose. Après un tri manuel (étape 3), relancer les étapes 5
@@ -111,6 +113,12 @@ donnent la vraisemblance des **formes** ; le rapport des amplitudes, comparé à
 (→ τ(c) des déclins de calibration), FLIM du système (η libre par soma), ratio (η = 1), **hybride** (η partagé
 par le FOV, profilé sur ses somas, comme θ dans le filtre). Comparées au τ mono-exponentiel de l'étape 6.
 
+**10 — validation croisée.** Cinq plis, de deux façons : ROIs tirés au hasard dans chaque condition (par
+défaut : nouvelles cellules des mêmes champs), ou `--par-fov` : le pli k retire le k-ième FOV de chaque [Cl⁻] imposée, recalibre les
+isothermes de l'étape 7 et le modèle de l'étape 9 (2 et 1 population) sur les autres FOV, et lit les FOV retirés ;
+le basal est lu par chaque pli. Critère : erreur de la médiane de chaque FOV lu hors calibration par rapport à la
+[Cl⁻] imposée (erreur quadratique moyenne par condition), dispersion entre somas, part hors courbe.
+
 ## Canaux (2026-11-09)
 
 | Entrée QC-104 | Image Bliq | Fluorophore | Établi par |
@@ -133,4 +141,4 @@ chaque nouveau jeu (`config.ENTREE`).
 | `mesures.py` | comptes corrigés du temps mort, lectures de la durée de vie CFP |
 | `deux_canaux.py` | modèle FLIM à deux canaux de bayesian_filter : IRF paramétrique, calibration conjointe, lecture d'un soma |
 | `figures.py` | style commun des figures |
-| `step1` … `step9` | les étapes |
+| `step1` … `step10` | les étapes |

@@ -19,6 +19,8 @@ python3 step7_calibration.py ../SCLM_calibration_2026-11-09
 python3 step8_cinetiques.py ../SCLM_calibration_2026-11-09
 python3 step9_flim_deux_canaux.py ../SCLM_calibration_2026-11-09
 python3 step9_flim_deux_canaux.py ../SCLM_calibration_2026-11-09 --transfert 1   # un seul temps de transfert
+python3 step10_validation_croisee.py ../SCLM_calibration_2026-11-09              # tirage aléatoire des ROIs
+python3 step10_validation_croisee.py ../SCLM_calibration_2026-11-09 --par-fov    # un FOV par pli
 ```
 
 **Les résultats portent sur tous les ROIs de Cellpose (`--tout`), sans tri visuel.** Après un
@@ -195,6 +197,73 @@ Avec un seul temps de transfert, les lectures FLIM sont **plus resserrées** jus
 entre FOV plus petits, moins de somas hors courbe) mais **biaisées vers le bas en haut de gamme** (60 mM au lieu
 de 131) : le modèle ne décrit pas la forme des déclins à 131 mM. Le basal ne bouge presque pas (1–4 mM).
 
+### Validation croisée : quelle lecture est la plus juste ? (étape 10)
+
+Cinq plis : le pli k retire le k-ième FOV de chaque [Cl⁻] imposée, recalibre (isothermes de l'étape 7, modèle de
+l'étape 9 en 2 et en 1 population) sur les 4 autres FOV de chaque condition, et lit les 3 FOV retirés ; le basal est
+lu par chaque pli. Critère fixé d'avance : erreur de la médiane de chaque FOV lu par rapport à la [Cl⁻] imposée
+(erreur quadratique moyenne sur les 5 FOV ; `results/validation_croisee_resume.csv`, `validation_croisee.png`).
+
+| Lecture | 0 mM | 20 mM | 131 mM | basal (médiane des plis [min ; max]) |
+|---|---|---|---|---|
+| rapport brut (isotherme) | 2,9 | 30,6 | ∞ | 3,9 [3,1 ; 5,9] |
+| τ mono (isotherme) | 1,6 | 10,7 | ∞ | 4,6 [3,4 ; 5,2] |
+| τm (isotherme) | 2,2 | **8,4** | ∞ | 9,6 [7,5 ; 10,3] |
+| τ 3 populations (isotherme) | 1,7 | 10,7 | ∞ | 4,6 [3,4 ; 5,3] |
+| temps de vie unique | 6,1 | 13,8 | 76 | −1,1 [−1,5 ; 0,0] |
+| ratio, η = 1 | 3,2 | 30,0 | ∞ | 3,8 [2,7 ; 4,8] |
+| FLIM du système, 2 pop. | 0,8 | 26,3 | 717 | 2,2 [1,1 ; 2,4] |
+| **FLIM du système, 1 pop.** | **0,7** | 11,6 | 82 | 1,3 [0,6 ; 1,6] |
+| hybride, 2 pop. | 3,6 | 25,0 | 296 | 3,0 [1,9 ; 3,6] |
+| hybride, 1 pop. | 2,6 | 17,0 | 95 | 2,6 [1,5 ; 2,7] |
+
+(erreur quadratique moyenne des médianes de FOV, en mM ; « ∞ » : au moins un FOV dont la médiane est hors courbe.)
+
+- **À 0 mM**, tout marche (erreur ≤ 3 mM sauf le temps de vie unique) ; le FLIM du système fait le mieux (0,7 mM).
+- **À 20 mM**, l'erreur vient de deux FOV : fov3 et fov5, les deux FOV pâles, sont lus de 29 à 75 mM par toutes les
+  lectures quand ils sont hors calibration. Les lectures fondées sur le **rapport** en souffrent le plus (rapport,
+  ratio : 30 mM d'erreur ; ces deux FOV à 58–75 mM) ; celles fondées sur la **durée de vie** et le FLIM du système à
+  une population, le moins (8 à 12 mM ; ces FOV à 29–37 mM). L'écart entre champs est donc surtout dans le rapport.
+- **À 131 mM, aucune lecture n'est juste** (erreur ≥ 64 mM, ou FOV hors courbe) : le haut de gamme n'est pas
+  lisible en tranche avec cette calibration.
+- **Meilleure lecture pour le domaine utile (0–20 mM) : le FLIM du système à une population** (0,7 et 11,6 mM,
+  biais −0,1 et −1,7 mM), suivie des lectures de durée de vie par isotherme (τ mono, τ 3 populations, τm). Le
+  modèle à une population, moins bon pour décrire les déclins (déviance/ddl 182 contre 48), lit mieux sous 20 mM ;
+  il échoue au-dessus (biais −42 mM à 131 mM).
+- **[Cl⁻]i basale** : 1 à 5 mM selon la lecture (τm à part, 9,6 mM ; temps de vie unique ~0) ; le FLIM du système à
+  une population donne 1,3 mM [0,6 ; 1,6], le τ mono 4,6 mM [3,4 ; 5,2].
+
+Réserves : 5 FOV par condition seulement, et l'erreur à 20 mM tient à deux d'entre eux ; les τ communes du modèle
+« 3 populations » (étape 5) et l'IRF paramétrique sont ajustées sur tous les FOV (fuite faible vers les plis).
+
+### Validation croisée par tirage aléatoire des ROIs (étape 10, mode par défaut)
+
+Dans chaque [Cl⁻] imposée, les ROIs sont mélangés (graine fixe) et répartis en 5 plis ; chaque pli calibre sur les
+4/5 des ROIs et lit le 1/5 restant (η de l'hybride : par FOV, sur les ROIs lus). Critère : médiane des ROIs lus de
+chaque pli contre la [Cl⁻] imposée (erreur quadratique moyenne sur les 5 plis ; `results/validation_aleatoire_*`).
+
+| Lecture | 0 mM | 20 mM | 131 mM | basal (médiane des plis [min ; max]) |
+|---|---|---|---|---|
+| rapport brut (isotherme) | 0,4 | 1,8 | 22 | 4,4 [4,3 ; 4,6] |
+| τ mono (isotherme) | 0,5 | 2,2 | ∞ | 4,3 [3,9 ; 4,4] |
+| τm (isotherme) | 0,7 | 1,5 | 123 | 8,9 [8,6 ; 9,3] |
+| ratio, η = 1 (2 pop.) | 0,9 | 3,0 | 21 | 3,8 [3,7 ; 4,0] |
+| FLIM du système, 2 pop. | 0,3 | 2,7 | 126 | 1,9 [1,5 ; 2,3] |
+| FLIM du système, 1 pop. | 0,4 | 6,3 (biais −6,2) | 64 | 1,2 [0,9 ; 1,4] |
+| hybride, 2 pop. | 1,5 | 1,1 | 139 | 2,9 [2,7 ; 3,0] |
+| hybride, 1 pop. | 1,2 | 2,6 | 75 | 2,4 [2,2 ; 2,6] |
+
+- **Les erreurs sont bien plus petites qu'en retirant des FOV** (rapport brut 1,8 mM contre 30,6 mM par FOV) : les champs servent à la fois à calibrer et à
+  lire, et la médiane d'un cinquième des somas pris au hasard ressemble à celle des quatre autres cinquièmes. L'écart
+  entre les deux validations mesure ce que coûte un **nouveau champ** : c'est l'écart entre champs, pas
+  l'échantillonnage des cellules, qui domine l'erreur.
+- Ici, les lectures par **isotherme sur les médianes** (rapport, τ mono, τm) sont les plus justes à 0 et 20 mM : par
+  construction, leur courbe passe par les médianes, et c'est la médiane qui est jugée. Les lectures du modèle à deux
+  canaux sont calibrées sur les déclins réunis, dominés par les somas brillants : le FLIM du système à 1 population
+  y garde un biais à 20 mM, alors qu'il était le meilleur en retirant des FOV.
+- À 131 mM, le rapport et le ratio sont les moins mauvais (erreur ~17–22 mM) ; le modèle à deux canaux reste faux.
+- [Cl⁻]i basale stable d'un pli à l'autre : 1,2 à 4,4 mM selon la lecture (τm à part, 7–9 mM).
+
 ### Réserves
 
 1. **Les champs diffèrent autant que les conditions.** À 20 mM, les médianes des FOV vont de 2,0
@@ -236,3 +305,5 @@ de 131) : le modèle ne décrit pas la forme des déclins à 131 mM. Le basal ne
 | `results/calibration.png`, `basal.png`, `rapport_vs_tau.png`, `temps_mort.png` | figures |
 | `results/transitions_*.csv`, `results/transition_<nom>.png` | cinétiques |
 | `results/deux_canaux_*` | FLIM à deux canaux : calibration (json), lectures par soma, η par FOV, figures |
+| `results/validation_croisee_*` | validation croisée par FOV (étape 10, `--par-fov`) |
+| `results/validation_aleatoire_*` | validation croisée par tirage aléatoire des ROIs (étape 10) |
