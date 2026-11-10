@@ -21,6 +21,7 @@ python3 step9_flim_deux_canaux.py ../SCLM_calibration_2026-11-09
 python3 step9_flim_deux_canaux.py ../SCLM_calibration_2026-11-09 --transfert 1   # un seul temps de transfert
 python3 step10_validation_croisee.py ../SCLM_calibration_2026-11-09              # tirage aléatoire des ROIs
 python3 step10_validation_croisee.py ../SCLM_calibration_2026-11-09 --par-fov    # un FOV par pli
+python3 step11_fond.py ../SCLM_calibration_2026-11-09
 ```
 
 **Les résultats portent sur tous les ROIs de Cellpose (`--tout`), sans tri visuel.** Après un
@@ -264,6 +265,26 @@ chaque pli contre la [Cl⁻] imposée (erreur quadratique moyenne sur les 5 plis
 - À 131 mM, le rapport et le ratio sont les moins mauvais (erreur ~17–22 mM) ; le modèle à deux canaux reste faux.
 - [Cl⁻]i basale stable d'un pli à l'autre : 1,2 à 4,4 mM selon la lecture (τm à part, 7–9 mM).
 
+### D'où vient l'écart entre champs ? (étape 11)
+
+Hypothèse testée : un fond non lié au capteur, plus lourd dans les champs pâles, abaisse leur rapport
+(`step11_fond.py`, `results/fond.png`, `fond_fovs.csv`, `fond_validation.csv`).
+
+- **Le fond uniforme ajusté à l'étape 9 est petit** : 1,5 à 6 % des photons, plus grand en part dans les FOV pâles
+  (ρ −0,79 pour la CFP), mais pas constant en photons par pixel (0,04 à 0,39 par cycle dans le bleu) : ce n'est pas
+  un simple bruit de détecteur. Le retirer change le rapport de 1 à 2 % ; la validation par FOV ne bouge pas (à
+  20 mM, 29,8 → 30,5 mM d'erreur). **Hypothèse rejetée.**
+- **L'écart n'est pas un effet de luminosité.** À intensité égale (somas de 10 à 40 photons/px/cycle), fov3 et fov5
+  à 20 mM restent à un rapport de 2,0–2,1 et un τ CFP de 1,65–1,67 ns, contre 3,1–3,5 et 1,52–1,60 ns dans les
+  trois autres FOV. Dans un même FOV, les somas brillants ont un rapport un peu plus haut (ρ +0,1 à +0,55 sous
+  20 mM), mais cet effet est bien plus petit que l'écart entre champs.
+- **Les deux lectures du FRET s'accordent** : dans ces champs, le rapport est plus bas *et* le donneur vit plus
+  longtemps, c'est-à-dire moins de FRET. Un artefact optique (fond, diffusion selon la longueur d'onde) ne changerait
+  pas la durée de vie. Ces deux champs ont donc vraiment moins de FRET : [Cl⁻]i plus haute que la consigne (clamp
+  incomplet ? cellules en moins bon état ?) ou un autre facteur qui éteint le FRET (pH). L'analyse ne peut pas
+  trancher ; c'est une propriété des champs, à contrôler à l'acquisition (suivre chaque champ jusqu'au plateau,
+  noter la profondeur).
+
 ### Réserves
 
 1. **Les champs diffèrent autant que les conditions.** À 20 mM, les médianes des FOV vont de 2,0
@@ -307,3 +328,4 @@ chaque pli contre la [Cl⁻] imposée (erreur quadratique moyenne sur les 5 plis
 | `results/deux_canaux_*` | FLIM à deux canaux : calibration (json), lectures par soma, η par FOV, figures |
 | `results/validation_croisee_*` | validation croisée par FOV (étape 10, `--par-fov`) |
 | `results/validation_aleatoire_*` | validation croisée par tirage aléatoire des ROIs (étape 10) |
+| `results/fond*` | le fond explique-t-il l'écart entre champs ? (étape 11) |
