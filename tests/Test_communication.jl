@@ -187,33 +187,73 @@ end
 # command = "C Z\n"
 # command *= "A 0 TO $r $(r/m) $(t/pi/m) 0 0\n"
 
-f = 16.67
-n = 512
+# ------------------------------------------------------------------ scan d'images continu
+# Paramètres du scan. Tensions dans les unités des commandes AO / AW de la boîte (±1000 dans
+# les essais précédents).
+t = 10.0                     # durée du scan (s)
+n = 100                     # lignes par image
+f = n/t                     # fréquence des lignes (Hz) : une rampe de l'axe rapide par ligne
+# Vxmin, Vxmax = 1150, -1250  # axe rapide, sortie analogique 1 : de Vxmin à Vxmax à chaque ligne
+# Vymin, Vymax = -350, 950  # axe lent, sortie analogique 2 : de Vymin à Vymax à chaque image
+Vxmin, Vxmax = 1150, -1250  # axe rapide, sortie analogique 1 : de Vxmin à Vxmax à chaque ligne
+Vymin, Vymax = -1000, 1650  # axe lent, sortie analogique 2 : de Vymin à Vymax à chaque image
 
-# command = "C Z\n"
-# command *= "S 1 D 1 R 1\n"
-# command *= "S 2 D 1 R 1\n"
-
-# command *= "A 1 AW 1 $(f) -1000 1000\n"
-# command *= "A 2 AW 2 $(f/n) -1000 1000\n"
-
-# command *= "A 0 DP 1 $f 10\n"
-# command *= "A 0 DP 2 $(f/n) $(10)\n"
-
-
+f_image = 1/t
 
 command = "C Z\n"
-command *= "S 1 D 1 R 1\n"
-command *= "S 2 D 1 R 1\n"
-
-# command *= "A 1 WT $(100)\n"
-command *= "A 1 AW 1 $f 1000 -1000\n"
-
-command *= "A 2 AW 2 $(f/n) -1000 1000\n"
-command *= "A 2 TD $(n-1)\n"
+command *= "A 0 AW 1 $f $(round(Int, Vxmin)) $(round(Int, Vxmax))\n"
+command *= "A 0 AW 2 $f_image $(round(Int, Vymin)) $(round(Int, Vymax))\n"
 
 response = send_command(serial, command)
-println("Response: ", response)
+println("Réponse : ", response)
+
+# command = "C Z\n"
+# command *= "A 0 AO 1 $Vxmin\n"
+# command *= "A 0 AO 2 $Vymin\n"
+# # command *= "A 0 AO 1 $Vxmax\n"
+# # command *= "A 0 AO 2 $Vymax\n"
+
+# response = send_command(serial, command)
+# println("Réponse : ", response)
+
+
+
+# """
+#     scan_continu(serial, t, n, f, Vxmin, Vxmax, Vymin, Vymax)
+
+# Scan d'images en continu pendant `t` secondes : l'axe rapide (sortie 1) fait une rampe de
+# Vxmin à Vxmax à chaque ligne, à `f` Hz ; l'axe lent (sortie 2) une rampe de Vymin à Vymax à
+# chaque image de `n` lignes, à `f/n` Hz. Les deux séquences démarrent ensemble et tournent en
+# boucle (`S k D 1 R 1`, comme avant) ; c'est l'ordinateur qui compte `t` puis arrête la boîte
+# (`C Z`) et ramène les galvos à 0. La durée est donc précise à quelques dizaines de ms.
+# """
+# function scan_continu(serial, t, n, f, Vxmin, Vxmax, Vymin, Vymax)
+#     f_image = f / n
+#     n_images = floor(Int, t * f_image)
+#     println("Scan : $n lignes à $f Hz, une image toutes les $(round(1 / f_image, digits=3)) s ; " *
+#             "$n_images image(s) complète(s) en $t s")
+#     n_images == 0 && @warn "t est plus court qu'une image ($(round(1 / f_image, digits=3)) s)"
+
+#     command = "C Z\n"
+#     command *= "S 1 D 1 R 1\n"
+#     command *= "S 2 D 1 R 1\n"
+#     command *= "A 1 AW 1 $f $(round(Int, Vxmin)) $(round(Int, Vxmax))\n"
+#     command *= "A 2 AW 2 $f_image $(round(Int, Vymin)) $(round(Int, Vymax))\n"
+#     command *= "A 2 TD $(n - 1)\n"
+
+#     t0 = time()
+#     response = send_command(serial, command)          # attend déjà 0,1 s après l'envoi
+#     println("Réponse : ", response)
+#     try
+#         occursin("ERR", response) && error("La boîte a refusé le scan : $response")
+#         sleep(max(0.0, t - (time() - t0)))
+#     finally                                           # arrêt même sur erreur ou Ctrl-C
+#         response = send_command(serial, "C Z\nA 0 AO 1 0\nA 0 AO 2 0\n")
+#         println("Arrêt après $(round(time() - t0, digits=2)) s ; réponse : ", response)
+#     end
+# end
+
+# scan_continu(serial, t, n, f, Vxmin, Vxmax, Vymin, Vymax)
 
 # for (m, i) in enumerate(range(-1000, 1000, n))
 #     # println(n, i)

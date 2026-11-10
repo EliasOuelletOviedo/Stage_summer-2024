@@ -11,6 +11,8 @@ python3 step4_declins.py ../SCLM+eNpHR_2026-10-08
 python3 step5_analyse.py ../SCLM+eNpHR_2026-10-08
 python3 step6_ratio_corrige.py ../SCLM+eNpHR_2026-10-08
 python3 step7_retour.py ../SCLM+eNpHR_2026-10-08
+python3 step8_filtre_bayesien.py ../SCLM+eNpHR_2026-10-08   # filtre bayésien (~2 min)
+python3 step9_redescente.py ../SCLM+eNpHR_2026-10-08         # redescente de la [Cl⁻] (quelques s)
 ```
 
 Les figures de présentation (fond noir) ont leur propre script, dans leur dossier :
@@ -170,6 +172,67 @@ cette différence est à éclaircir. Le témoin qui trancherait : le même proto
 tranche SCLm sans eNpHR (ou une stim qui n'excite pas la YFP), pour mesurer ce que la
 lumière seule fait au FRET.
 
+### Filtre bayésien hybride (étape 8) : le sens des réponses, pas la [Cl⁻] absolue
+
+Le filtre de `Simulateurs/bayesian_filter` (ratio + FLIM, η appris du champ) sur les 34
+somas, en tranches de 3 s. Méthode et réserves générales : README de `../sclm_flim/`.
+
+**La calibration en solution ne transfère pas** (`qc/filtre_transfert.png`). Avec ses
+durées de vie, le modèle s'écarte des déclins des somas de 20 % avant la montée et de
+10 % sur la queue (déviance/ddl 102) et lit η = 1,64, c de 30 à 300 mM. En réajustant les
+durées de vie en tranche : déviance/ddl 17, τ = 0,042 / 0,417 / 2,05 / 2,64 ns (solution :
+0,063 / 0,723 / 2,72 / 3,26), un fond de 7,5 % (bleu) et 6,3 % (jaune) des photons, et c de
+17 à 253 mM d'un soma à l'autre (médiane 42 mM) — pas plausible pour des neurones. Libres,
+trois exponentielles décrivent pourtant bien le bleu (0,105 / 0,707 / 3,05 ns,
+déviance/ddl 13) : les populations sont là, mais leurs proportions ne tombent sur aucun
+point des isothermes. La YFP directe (eNpHR) n'est retenue que pour 4 somas sur 34.
+
+**Les réponses** (c lissé, médiane des somas ; `results/filtre_reponses.png`) :
+
+| | Δc (mM) | somas en hausse | p |
+|---|---|---|---|
+| stims 1–4 | +0,32, +0,47, +0,39, +0,56 | 30 à 32 / 34 | 10⁻⁸ à 10⁻⁹ |
+| témoins 1–4 | +0,21, +0,09, +0,12, +0,24 | 27 à 31 / 34 | 10⁻⁵ à 10⁻⁸ |
+
+Par soma, stims +0,46 contre témoins +0,23 mM (p = 4·10⁻⁴) ; en temps réel, +0,68 contre
++0,30 (p = 8·10⁻⁴). Une hausse de c après chaque stim, au-dessus de la montée lente que
+font aussi les témoins : c'est la baisse du ratio de l'étape 5 relue en mM, et Δc la suit
+soma par soma (ρ = −0,82 avec ΔR/R0). Le Δc d'un soma croît avec son c de base (jusqu'à +13 mM
+pour les somas lus au-delà de 100 mM, où R₁(c) s'aplatit) : à comparer en relatif.
+
+η (`results/filtre_bayesien.png`) monte de 1,07 à 1,13 pendant les 200 premières
+secondes, le temps que le FLIM s'en dégage, puis se fige à ± 0,01 %, 16 fois plus étroit
+que la borne de Fisher pour ces photons : un modèle faux et 175 millions de photons
+rendent le filtre trop sûr de lui. Le lisseur fait dériver η de 1,139 à 1,129 sur la
+session : la descente graduelle du ratio est donc lue presque toute comme une hausse de c
+(les témoins), pas comme une dérive optique. La vitesse de c la plus lente (0,4 % par
+tranche) prend tout le poids.
+
+### Redescente de la [Cl⁻] (étape 9) : ~15 s, comme le ratio
+
+Le c lissé des somas monte de 3,3 %/100 s entre les stims (médiane) : autant qu'une
+réponse en une minute. Une fois cette dérive retirée soma par soma (comme à l'étape 6),
+la hausse de chaque stim redescend (`results/filtre_redescente.png`) :
+
+| | stim 1 | stim 2 | stim 3 | stim 4 | somas, moyenne de leurs stims | ratio (étape 7) |
+|---|---|---|---|---|---|---|
+| hausse A (mM, médiane des somas) | +0,05 | +0,16 | +0,29 | +0,42 | — | — |
+| τ (s) | 8 ± 23 | 16 ± 11 | ~260 (plateau) | 13 ± 2 | **15** (quartiles 12–18 ; 26 / 34 mesurables) | **13** (11 à 18 selon la stim) |
+
+- **Le temps de redescente de la [Cl⁻] est celui du ratio** : 15 s soma par soma contre
+  13 s pour le ratio des somas réunis (`results/filtre_redescente_somas.png`). Le filtre
+  n'ajoute ni ne retire de dynamique, bien qu'il ne lise que des tranches de 3 s.
+- La stim 1 ne fait presque rien sur la médiane (+0,05 mM) ; après la stim 3, c reste
+  ~0,1 mM au-dessus de sa base jusqu'à la stim suivante.
+- Ajustée sur la médiane de la moyenne des stims, la redescente sort plus courte (5 ± 2 s) :
+  cette médiane mêle des formes différentes, le τ soma par soma est plus sûr.
+- Les somas ne réagissent pas tous de la même façon (carte de gauche). Sept (ROIs 1 et 3
+  à 7, et 9) montent de 2 à 10 mM dans les 10 s et restent hauts ; ils sont lus en général
+  à c plus élevé (38 à 253 mM, contre 41 mM pour la médiane des somas), où un même ΔR/R0
+  fait plus de mM. Les autres bougent de moins d'1 mM, et plusieurs finissent sous leur base.
+- En temps réel, la redescente est noyée dans le retard du filtre causal (τ de 47 et 61 s
+  aux stims 3 et 4, rien de mesurable aux deux premières).
+
 ## Sorties
 
 | Fichier | Contenu |
@@ -204,3 +267,10 @@ lumière seule fait au FRET.
 | `présentation/duree_de_vie_redescente_2exp_canal2.png` | la même chose pour le canal 2 (YFP, qui contient aussi la YFP de eNpHR). Avant la 1re stim : τ1 = 3,30 ns, τ2 = 1,11 ns, τ moyen = 2,85 ns ; a1 = 0,55 sur toute la session. Pendant les stims, la fuite du 1064 nm allonge τ1 de ~300 ps et τ moyen de ~150 ps : ce n'est pas une réponse. Après chaque stim, la YFP descend légèrement puis remonte, à l'inverse de la CFP : τ moyen −13, −9, −1, −6 ps, τ1 −33, −15, −18, −16 ps (τ commun ≈ 14 ± 15 s) ; τ2 change de signe. Bosse de ~+50 ps sur τ moyen vers 235 s, hors stim, d'origine inconnue (`presentation.py`) |
 | `présentation/correlation_ratio_duree_de_vie.png` | ratio et durée de vie CFP, par soma : à la ligne de base, R₀ contre τ₀ (Spearman ρ = −0,72, p = 2·10⁻⁶) ; en réponse aux stims (moyenne des 4, étape 5), ΔR/R₀ contre Δτ (ρ = −0,44, p = 0,01), contre ρ = 0,00 (p = 0,98) pour les témoins des mêmes cellules ; droites de Theil-Sen (`presentation.py`) |
 | `results/temps_de_remontee.csv` | A, τ, erreur type, équilibre : somas réunis, chaque soma, chaque soma × stim |
+| `qc/filtre_transfert.png`, `.json`, `_somas.csv` | étape 8 : la calibration en solution sur la somme des somas, avec ses durées de vie et avec celles réajustées en tranche ; paramètres partagés, et c, YFP directe, fonds, déviance par soma |
+| `results/filtre_bayesien.png` | étape 8 : [Cl⁻] de chaque soma, lissée et en temps réel, et η du champ |
+| `results/filtre_reponses.png`, `filtre_reponses.csv`, `filtre_resume.csv` | étape 8 : Δc par soma × stim (et témoins), résumé par stim, Δc contre ΔR/R0 |
+| `results/filtre_par_trame.csv` | étape 8 : c (et intervalle à 95 %) par soma et par tranche, η (non versionné) |
+| `results/filtre_redescente.png` | étape 9 : c corrigé de sa dérive sur la session, puis Δc aligné sur la fin de chaque stim (somas, médiane, temps réel) et C + A·exp(−t/τ) |
+| `results/filtre_redescente_somas.png` | étape 9 : carte des somas (Δc, moyenne des stims), τ par stim contre celui du ratio (étape 7), distribution des τ des somas |
+| `results/filtre_redescente.csv` | étape 9 : A, τ, équilibre et dérive, pour la médiane des somas (par stim) et pour chaque soma, lissé et en temps réel |

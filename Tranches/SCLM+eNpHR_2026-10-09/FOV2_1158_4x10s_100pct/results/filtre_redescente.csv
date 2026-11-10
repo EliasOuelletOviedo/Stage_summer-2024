@@ -1,0 +1,135 @@
+lecture,niveau,roi,stim,A_mM,tau_s,tau_se_s,equilibre_mM,mesurable,derive_pct_100s
+lissé,médiane des somas,somas,1,,,,,False,
+lissé,médiane des somas,somas,2,,,,,False,
+lissé,médiane des somas,somas,3,,,,,False,
+lissé,médiane des somas,somas,4,,,,,False,
+lissé,médiane des somas,somas,moyenne,,,,,False,
+lissé,soma,1,moyenne,,,,,False,0.0
+lissé,soma,2,moyenne,,,,,False,0.0
+lissé,soma,3,moyenne,,,,,False,0.0
+lissé,soma,4,moyenne,,,,,False,0.0
+lissé,soma,5,moyenne,,,,,False,0.0
+lissé,soma,6,moyenne,,,,,False,0.0
+lissé,soma,7,moyenne,,,,,False,0.0
+lissé,soma,8,moyenne,,,,,False,0.0
+lissé,soma,9,moyenne,,,,,False,0.0
+lissé,soma,10,moyenne,,,,,False,0.0
+lissé,soma,11,moyenne,,,,,False,0.0
+lissé,soma,12,moyenne,,,,,False,0.0
+lissé,soma,13,moyenne,,,,,False,0.0
+lissé,soma,14,moyenne,,,,,False,0.0
+lissé,soma,15,moyenne,,,,,False,0.0
+lissé,soma,16,moyenne,,,,,False,0.0
+lissé,soma,17,moyenne,,,,,False,0.0
+lissé,soma,18,moyenne,,,,,False,0.0
+lissé,soma,19,moyenne,,,,,False,0.0
+lissé,soma,20,moyenne,,,,,False,0.0
+lissé,soma,21,moyenne,,,,,False,0.0
+lissé,soma,22,moyenne,,,,,False,0.0
+lissé,soma,23,moyenne,,,,,False,0.0
+lissé,soma,24,moyenne,,,,,False,0.0
+lissé,soma,25,moyenne,,,,,False,0.0
+lissé,soma,26,moyenne,,,,,False,0.0
+lissé,soma,27,moyenne,,,,,False,0.0
+lissé,soma,28,moyenne,,,,,False,0.0
+lissé,soma,29,moyenne,,,,,False,0.0
+lissé,soma,30,moyenne,,,,,False,0.0
+lissé,soma,31,moyenne,,,,,False,0.0
+lissé,soma,32,moyenne,,,,,False,0.0
+lissé,soma,33,moyenne,,,,,False,0.0
+lissé,soma,34,moyenne,,,,,False,0.0
+lissé,soma,35,moyenne,,,,,False,0.0
+lissé,soma,36,moyenne,,,,,False,0.0
+lissé,soma,37,moyenne,,,,,False,0.0
+lissé,soma,38,moyenne,,,,,False,0.0
+lissé,soma,39,moyenne,,,,,False,0.0
+lissé,soma,40,moyenne,,,,,False,0.0
+lissé,soma,41,moyenne,,,,,False,0.0
+lissé,soma,42,moyenne,,,,,False,0.0
+lissé,soma,43,moyenne,,,,,False,0.0
+lissé,soma,44,moyenne,,,,,False,0.0
+lissé,soma,45,moyenne,,,,,False,0.0
+lissé,soma,46,moyenne,,,,,False,0.0
+lissé,soma,47,moyenne,,,,,False,0.0
+lissé,soma,48,moyenne,,,,,False,0.0
+lissé,soma,49,moyenne,,,,,False,0.0
+lissé,soma,50,moyenne,,,,,False,0.0
+lissé,soma,51,moyenne,,,,,False,0.0
+lissé,soma,52,moyenne,,,,,False,0.0
+lissé,soma,53,moyenne,,,,,False,0.0
+lissé,soma,54,moyenne,,,,,False,0.0
+lissé,soma,55,moyenne,,,,,False,0.0
+lissé,soma,56,moyenne,,,,,False,0.0
+lissé,soma,57,moyenne,,,,,False,0.0
+lissé,soma,58,moyenne,,,,,False,0.0
+lissé,soma,59,moyenne,,,,,False,0.0
+lissé,soma,60,moyenne,,,,,False,0.0
+lissé,soma,61,moyenne,,,,,False,0.0
+lissé,soma,62,moyenne,,,,,False,0.0
+temps réel,médiane des somas,somas,1,,,,,False,
+temps réel,médiane des somas,somas,2,,,,,False,
+temps réel,médiane des somas,somas,3,,,,,False,
+temps réel,médiane des somas,somas,4,,,,,False,
+temps réel,médiane des somas,somas,moyenne,,,,,False,
+temps réel,soma,1,moyenne,,,,,False,0.0
+temps réel,soma,2,moyenne,,,,,False,0.0
+temps réel,soma,3,moyenne,,,,,False,0.0
+temps réel,soma,4,moyenne,,,,,False,0.0
+temps réel,soma,5,moyenne,,,,,False,0.0
+temps réel,soma,6,moyenne,,,,,False,0.0
+temps réel,soma,7,moyenne,,,,,False,0.0
+temps réel,soma,8,moyenne,,,,,False,0.0
+temps réel,soma,9,moyenne,,,,,False,0.0
+temps réel,soma,10,moyenne,,,,,False,0.0
+temps réel,soma,11,moyenne,,,,,False,0.0
+temps réel,soma,12,moyenne,,,,,False,0.0
+temps réel,soma,13,moyenne,,,,,False,0.0
+temps réel,soma,14,moyenne,,,,,False,0.0
+temps réel,soma,15,moyenne,,,,,False,0.0
+temps réel,soma,16,moyenne,,,,,False,0.0
+temps réel,soma,17,moyenne,,,,,False,0.0
+temps réel,soma,18,moyenne,,,,,False,0.0
+temps réel,soma,19,moyenne,,,,,False,0.0
+temps réel,soma,20,moyenne,,,,,False,0.0
+temps réel,soma,21,moyenne,,,,,False,0.0
+temps réel,soma,22,moyenne,,,,,False,0.0
+temps réel,soma,23,moyenne,,,,,False,0.0
+temps réel,soma,24,moyenne,,,,,False,0.0
+temps réel,soma,25,moyenne,,,,,False,0.0
+temps réel,soma,26,moyenne,,,,,False,0.0
+temps réel,soma,27,moyenne,,,,,False,0.0
+temps réel,soma,28,moyenne,,,,,False,0.0
+temps réel,soma,29,moyenne,,,,,False,0.0
+temps réel,soma,30,moyenne,,,,,False,0.0
+temps réel,soma,31,moyenne,,,,,False,0.0
+temps réel,soma,32,moyenne,,,,,False,0.0
+temps réel,soma,33,moyenne,,,,,False,0.0
+temps réel,soma,34,moyenne,,,,,False,0.0
+temps réel,soma,35,moyenne,,,,,False,0.0
+temps réel,soma,36,moyenne,,,,,False,0.0
+temps réel,soma,37,moyenne,,,,,False,0.0
+temps réel,soma,38,moyenne,,,,,False,0.0
+temps réel,soma,39,moyenne,,,,,False,0.0
+temps réel,soma,40,moyenne,,,,,False,0.0
+temps réel,soma,41,moyenne,,,,,False,0.0
+temps réel,soma,42,moyenne,,,,,False,0.0
+temps réel,soma,43,moyenne,,,,,False,0.0
+temps réel,soma,44,moyenne,,,,,False,0.0
+temps réel,soma,45,moyenne,,,,,False,0.0
+temps réel,soma,46,moyenne,,,,,False,0.0
+temps réel,soma,47,moyenne,,,,,False,0.0
+temps réel,soma,48,moyenne,,,,,False,0.0
+temps réel,soma,49,moyenne,,,,,False,0.0
+temps réel,soma,50,moyenne,,,,,False,0.0
+temps réel,soma,51,moyenne,,,,,False,0.0
+temps réel,soma,52,moyenne,,,,,False,0.0
+temps réel,soma,53,moyenne,,,,,False,0.0
+temps réel,soma,54,moyenne,,,,,False,0.0
+temps réel,soma,55,moyenne,,,,,False,0.0
+temps réel,soma,56,moyenne,,,,,False,0.0
+temps réel,soma,57,moyenne,,,,,False,0.0
+temps réel,soma,58,moyenne,,,,,False,0.0
+temps réel,soma,59,moyenne,,,,,False,0.0
+temps réel,soma,60,moyenne,,,,,False,0.0
+temps réel,soma,61,moyenne,,,,,False,0.0
+temps réel,soma,62,moyenne,,,,,False,0.0

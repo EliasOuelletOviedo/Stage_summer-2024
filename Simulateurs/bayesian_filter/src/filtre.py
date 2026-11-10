@@ -282,12 +282,18 @@ class FiltreTempsReel:
     Options : derive=False → β = 0 (η constant) ; eta_fixe → η connu d'avance (θ réduit à ce point, β = 0) ;
     noyaux → liste de noyaux de c imposée ; partage=False → chaque ROI a son propre θ et sa propre moyenne de modèles
     (M filtres indépendants, calculés ensemble).
+    Données réelles : `grille` peut être une liste d'une Grille par ROI (même grille de c, formes et totaux propres à
+    chaque ROI, par exemple une YFP directe différente d'une cellule à l'autre), et `fond` de mettre_a_jour un tableau
+    (M, 2), un fond par ROI.
     Accélérations, toutes causales ([filtre] ou arguments ; README, « Accélérations ») :
       adaptatif        grille de θ recentrée à ±6 sd de la loi courante (θ partagé seulement) ; quasi exact ;
       elaguer_noyaux   noyaux de c dont le poids causal tombe sous seuil_noyaux retirés (définitivement) ;
       numba            mise à jour fusionnée (une passe au lieu de cinq), ROI réparties sur les cœurs ; exact.
     """
     def __init__(self, grille, n_roi, f, eta_fixe=None, derive=True, noyaux=None, partage=True, **acc):
+        self.gs = list(grille) if isinstance(grille, (list, tuple)) else [grille] * n_roi
+        assert len(self.gs) == n_roi, "une Grille par ROI"
+        grille = self.gs[0]
         self.g, self.M, self.partage, self.f = grille, n_roi, partage, f
         o = lambda k, d: acc[k] if k in acc else f.get(k, d)
         self.elaguer_noyaux, self.seuil_noyaux = o('elaguer_noyaux', False), o('seuil_noyaux', 1e-12)
@@ -325,16 +331,20 @@ class FiltreTempsReel:
         return p[0] if self.partage else p
 
     def mettre_a_jour(self, B, Y, fond=None):
-        """B, Y : (M, n_cases) ou (M, n_portes) pour la trame. Renvoie un dict de résumés par ROI."""
+        """B, Y : (M, n_cases) ou (M, n_portes) pour la trame ; fond : (bleu, jaune) ou (M, 2) par ROI.
+        Renvoie un dict de résumés par ROI."""
         g = self.g
         if self.k >= 10 and self.k % 10 == 0:
             self._entretien()
         B, Y = g.regrouper(np.atleast_2d(B)), g.regrouper(np.atleast_2d(Y))
         le = self.ln_eta(self.k); lB, lY = logs_ratio_eta(g, le)
+        par_roi = fond is not None and np.ndim(fond) == 2
         E = np.empty(self.P.shape[1:], np.float32); mx = np.empty(self.M)
         for m in range(self.M):
-            NB, NY = g._sous_fond(B[m], Y[m], fond)
-            L = g.formes(B[m], Y[m], fond)[:, None] + NB * lB + NY * lY          # float64 : |ln L| ~ 1e5 à 1e5 photons
+            gm, fm = self.gs[m], (fond[m] if par_roi else fond)
+            lBm, lYm = (lB, lY) if gm is g else logs_ratio_eta(gm, le)
+            NB, NY = gm._sous_fond(B[m], Y[m], fm)
+            L = gm.formes(B[m], Y[m], fm)[:, None] + NB * lBm + NY * lYm        # float64 : |ln L| ~ 1e5 à 1e5 photons
             mx[m] = L.max(); L -= mx[m]; L[L < np.log(PLANCHER)] = -np.inf; E[m] = np.exp(L)
         for i, K in enumerate(self.K):
             P = (K @ self.P[i]) if self.k > 0 else self.P[i].copy()
@@ -415,9 +425,11 @@ class FiltreTempsReel:
         return dict(c=c_, bas=lo, haut=hi, eta=np.exp(m), eta_sd=sd, poids=wc)
 
 
-def lisseur_derive(fl, formes, NB, NY, masse=1 - 1e-4, n_max=None, memoire=4e8):
+def lisseur_derive(fl, formes, NB, NY, masse=1 - 1e-4, n_max=None, memoire=4e8, grille=None):
     """
     Lissage hors ligne du modèle 1-2-3 pour une ROI (fl : FiltreTempsReel à 1 ROI, passé sur toutes les trames).
+    Avec θ partagé, il s'applique aussi à chaque ROI d'un filtre à M ROI : sachant θ, les ROI sont indépendantes, et
+    p(θ | tout) est celle du champ. `grille` : la Grille de cette ROI si elles diffèrent (fl.g sinon).
     θ étant statique, p(c_k | tout) = Σ_noyau w Σ_θ p(θ | tout) p(c_k | θ, tout) : pour chaque noyau, on garde les θ
     les plus probables jusqu'à la masse `masse` (au plus n_max, et ce que permet `memoire` octets), puis lissage
     avant-arrière exact de c sachant θ. Les poids des noyaux sont ceux de toutes les trames. η : ln η_k(θ) est connu
@@ -434,7 +446,7 @@ def lisseur_derive(fl, formes, NB, NY, masse=1 - 1e-4, n_max=None, memoire=4e8):
         garde.append(float(pes[i][sel].sum()))
         K64 = K.astype(np.float64); alpha = np.empty((T, nc, len(sel)), np.float32); a = None
         for k in range(T):
-            lB, lY = logs_ratio_eta(fl.g, fl.le0[sel] + fl.beta[sel] * k / 1000.0)
+            lB, lY = logs_ratio_eta(grille or fl.g, fl.le0[sel] + fl.beta[sel] * k / 1000.0)
             L = formes[k][:, None] + NB[k] * lB + NY[k] * lY
             pred = np.full((nc, len(sel)), 1.0 / nc) if a is None else K64 @ a
             q = pred * np.exp(L - L.max()); a = q / np.maximum(q.sum(0), 1e-300); alpha[k] = a

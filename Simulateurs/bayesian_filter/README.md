@@ -90,7 +90,7 @@ leurs histogrammes sommés, versionnés par `step17_bruts_mCer3.jl` (`irf_bruts_
 | `step0_calibration.py` | le pont unique avec les données : appelle le `sclm_hybride.py` du jeu, écrit sa calibration (`calibrer` sert aussi à boxplots.py) | 86 |
 | `calibration.json`, `calibration_SCLM.json` | la calibration ajustée (constantes, isothermes, IRF, fonds et décalages par acquisition) ; écrites par step0 | — |
 | `src/modele.py` | modèle direct μ_B, μ_Y (sections 3 à 7) : IRF ⊗ déclins périodiques, isothermes, η, A ; perturbations | 137 |
-| `src/filtre.py` | vraisemblance découpée ratio / FLIM (section 11), grille, transition, portes, lectures de référence ; `FiltreTempsReel` (modèle 1-2-3 à M ROI, ou ROI indépendantes, η constant, η connu, noyaux imposés) et `lisseur_derive` ; l'ancien filtre-lisseur à η en marche aléatoire | 351 |
+| `src/filtre.py` | vraisemblance découpée ratio / FLIM (section 11), grille, transition, portes, lectures de référence ; `FiltreTempsReel` (modèle 1-2-3 à M ROI, ou ROI indépendantes, η constant, η connu, noyaux imposés ; une Grille et un fond par ROI pour les données réelles) et `lisseur_derive` ; l'ancien filtre-lisseur à η en marche aléatoire | 460 |
 | `src/information.py` | Fisher et Cramér-Rao, nuisances par complément de Schur (section 10) | 50 |
 | `src/simulation.py` | les deux générateurs (lit les colonnes voie1/voie2 de step17 et bleu/jaune de step16), les trajectoires des sections 14 et 15 | 97 |
 | `src/figures.py` | rendu | 192 |
@@ -386,11 +386,26 @@ Erreur typique sur toute la course (mM), ratio lu à η = 1 / filtre temps réel
    dérive) et la couverture tombe à 53–88 % : c'est le point 1 de « Ce que la simulation apprend », plus fort ici avec
    600 trames de ligne de base statique ; trop peu d'information FLIM par trame pour que η s'en dégage.
 
+## Sur des tranches (`Tranches/sclm_flim/step8_filtre_bayesien.py`)
+
+Le filtre tourne sur les somas des sessions FLIMApp SCLM+eNpHR du 2026-10-08 et du 2026-10-09 (méthode dans le
+README de `Tranches/sclm_flim/`, résultats dans ceux des deux jeux), avec la calibration SCLM à 800 nm transférée
+à chaque session (IRF de la QC-104, décalages d'horloge, fond et YFP de eNpHR par soma). Ce qu'il en ressort pour le
+filtre :
+
+- **la calibration en solution ne décrit pas les déclins en tranche** : déviance/ddl 23 à 102 sur la somme des somas
+  avec ses durées de vie, 3,5 à 17 en les réajustant ; les proportions des trois populations du bleu ne tombent sur
+  aucun point des isothermes. La [Cl⁻] absolue dépend alors du modèle (1,4 ou 63 mM pour la même session) ;
+- le sens des réponses aux stims est celui du ratio (Δc suit ΔR/R0 soma par soma, ρ de −0,34 à −0,82) ;
+- avec un modèle faux et des centaines de millions de photons, la loi de η devient bien plus étroite que la borne
+  de Fisher (± 0,01 % au 2026-10-08) : le point 1 plus haut, en pire.
+
 ## Pas fait
 
 - L'autofluorescence n'est pas modélisée dans le filtre (le document la donne corrigée « si on la modélise ») : la
   colonne « hybride » de la partie 6 en montre l'effet sans modèle, avec des formes d'autofluorescence illustratives.
-- Ni la ré-estimation des durées de vie en tranche, ni l'estimation du décalage d'horloge par le filtre, ni le temps mort.
+- Ni une calibration valable en tranche (durées de vie et proportions mesurées dans le tissu, autofluorescence ; la
+  ré-estimation des seules durées de vie ne suffit pas, voir plus haut), ni l'estimation du décalage d'horloge par le filtre, ni le temps mort.
 - Le remède au point 1 (apprendre η sur une ligne de base avec une transition ajustée) reste à choisir. Sans la
   bascule, le filtre temps réel coûte 2 à 5 fois plus de calcul à 10 ROI ; un filtre léger ne reviendrait qu'avec un
   critère qui tienne compte du biais de η, pas seulement de sa sd a posteriori.

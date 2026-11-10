@@ -36,6 +36,8 @@ python3 step4_declins.py ../<jeu>                         # ~2 min : déclins pa
 python3 step5_analyse.py ../<jeu>                         # ~30 s : durées de vie, réponses, figures
 python3 step6_ratio_corrige.py ../<jeu>                   # quelques s : ratio image par image corrigé de sa dérive
 python3 step7_retour.py ../<jeu>                          # ~10 s : retour à l'équilibre, temps de remontée
+python3 step8_filtre_bayesien.py ../<jeu>                 # 1 à 20 min (somas, taille) : filtre bayésien de Simulateurs/bayesian_filter
+python3 step9_redescente.py ../<jeu> [../<jeu2> …]        # quelques s : redescente de la [Cl⁻] après les stims (étape 8)
 ```
 
 Les figures de présentation (fond noir) sont produites par un script rangé avec elles,
@@ -100,6 +102,25 @@ soma × stim. La distribution entre cellules est comparée à un **témoin « br
 chaque soma resimulé avec le τ commun et ses propres résidus décalés circulairement, puis
 réajusté — ce qu'on observerait si toutes les cellules revenaient à la même vitesse.
 
+**8 — filtre bayésien hybride** (ratio + FLIM, `Simulateurs/bayesian_filter`, modèle
+1-2-3) sur chaque soma, en tranches de ~3 s. La calibration de la titration SCLM à 800 nm
+est transférée à la session par un ajustement de Poisson conjoint des somas (IRF de la
+QC-104, décalages d'horloge, fond et YFP de eNpHR par soma, durées de vie réajustées) ;
+puis c en temps réel (causal) et lissé, η partagé par le champ, et Δc avant / après chaque
+stim et témoin comme à l'étape 5. **Réserve** : la calibration en solution ne décrit pas
+les déclins en tranche (déviance/ddl 3,5 à 102) ; la [Cl⁻] absolue dépend du modèle, seuls
+le sens et la forme des variations se lisent.
+
+**9 — redescente de la [Cl⁻]**, sur les c de l'étape 8 (le filtre n'est pas relancé).
+c monte lentement entre les stims (la descente graduelle du ratio, relue en mM) : elle
+est retirée soma par soma comme à l'étape 6 (ln c = a_k + β·t, un niveau libre par
+intervalle). Δc est aligné sur la fin de chaque stim, relatif aux 10 s d'avant, et
+C + A·exp(−t/τ) est ajusté sur la fenêtre de l'étape 7 : sur la médiane des somas (par
+stim et moyenne des stims) et sur chaque soma ; le τ du ratio (étape 7) est reporté à
+côté. Le c lissé voit les tranches suivantes et ses tranches sont corrélées (erreurs
+types optimistes) ; le c en temps réel est causal mais en retard. Avec plusieurs
+sessions d'un même jeu, une figure les met côte à côte.
+
 ## Canaux
 
 ch1 = IN1 = **CFP** (donneur, τ ~1,2 ns, raccourci par le FRET) ; ch2 = IN2 = **YFP**
@@ -123,5 +144,5 @@ Deux pièges propres à ce montage :
 | `spc.py` | décodage des `.spc` et rangement des photons (vectorisé, un passage) |
 | `flim_fit.py` | ajustement des durées de vie (une, ou deux comme les calibrations), temps moyen |
 | `figures.py` | style commun des figures |
-| `step1` … `step7` | les étapes |
+| `step1` … `step9` | les étapes |
 | `<jeu>/présentation/presentation.py` | (dans chaque jeu) figures sur fond noir : images avec et sans ROIs, photons et ratio image par image, ratio corrigé, retour à l'équilibre, temps de remontée. Calculs importés d'ici ; couleurs, polices, tailles et tous les textes réglables en tête du script |
