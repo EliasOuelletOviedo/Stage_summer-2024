@@ -2,6 +2,8 @@
 
 Usage :  python3 step3_select.py <dossier> [acquisition]
          python3 step3_select.py <dossier> --tout   (sans fenêtre : garde tous les ROIs)
+         python3 step3_select.py <dossier> --top-photons 50   (sans fenêtre : dans chaque acquisition, les
+             ROIs dont le total de photons CFP + YFP est dans les 50 % les plus élevés)
 
 Commandes
   clic sur un ROI  garder / rejeter
@@ -135,6 +137,17 @@ def main():
             n = int(np.load(D["masks"] / f"{a['nom']}_masks.npy").max())
             ecrire(D, a["nom"], n, {l: True for l in range(1, n + 1)})
         print(f"  {len(A)} acquisitions : tous les ROIs gardés (sélection par défaut)")
+        return
+    if "--top-photons" in sys.argv[1:]:
+        pct = float(sys.argv[sys.argv.index("--top-photons") + 1])
+        for a in A:
+            masks = np.load(D["masks"] / f"{a['nom']}_masks.npy")
+            n = int(masks.max())
+            somme = np.load(D["projections"] / f"{a['nom']}.npz")["somme"].sum(0)      # CFP + YFP, cycles gardés
+            ph = np.bincount(masks.ravel(), weights=somme.ravel(), minlength=n + 1)[1:]
+            seuil = np.percentile(ph, 100 - pct)
+            ecrire(D, a["nom"], n, {l: bool(ph[l - 1] >= seuil) for l in range(1, n + 1)})
+            print(f"  {a['nom']:>12} : {int((ph >= seuil).sum())}/{n} ROIs gardés (photons ≥ {seuil:.0f})")
         return
     noms = [a["nom"] for a in A]
     demande = [x for x in sys.argv[1:] if x in noms]

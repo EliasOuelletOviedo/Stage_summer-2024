@@ -229,14 +229,15 @@ def figures(D, S, CAL, BAS, AUTO, boot, conds):
         G.style(ax)
         for cond in [c for c in conds if c != "basal"]:
             v = AUTO[(AUTO.lecture == col) & (AUTO.condition == cond)].cl_relu_mM
-            v = np.clip(v[np.isfinite(v)], bins[0], bins[-1])
-            ax.hist(v, bins=bins, histtype="step", lw=1.3, color=C.COULEUR_CONDITION[cond],
-                    label=f"{cond} relus : médiane {np.median(v):.1f}, IQR {np.subtract(*np.percentile(v, [75, 25])):.1f} mM")
+            v = v[np.isfinite(v)]                       # statistiques sur toutes les valeurs, négatives comprises
+            lab = f"{cond} relus : médiane {np.median(v):.1f}, IQR {np.subtract(*np.percentile(v, [75, 25])):.1f} mM"
+            ax.hist(np.clip(v, bins[0], bins[-1]), bins=bins, histtype="step", lw=1.3, color=C.COULEUR_CONDITION[cond], label=lab)
         v = BAS[BAS.lecture == col].cl_mM
-        v = np.clip(v[np.isfinite(v)], bins[0], bins[-1])
-        ax.hist(v, bins=bins, color=C.COULEUR_CONDITION["basal"], alpha=0.55,
-                label=f"basal : médiane {np.median(v):.1f}, IQR {np.subtract(*np.percentile(v, [75, 25])):.1f} mM")
-        ax.set_xlabel("[Cl⁻] lue par la calibration (mM ; bornée à [−20, 160])", color=G.INK)
+        v = v[np.isfinite(v)]
+        lab = f"basal : médiane {np.median(v):.1f}, IQR {np.subtract(*np.percentile(v, [75, 25])):.1f} mM"
+        ax.hist(np.clip(v, bins[0], bins[-1]), bins=bins, color=C.COULEUR_CONDITION["basal"], alpha=0.55, label=lab)
+        ax.set_xlabel("[Cl⁻] lue par la calibration (mM ; affichage borné à [−20, 160], statistiques sur toutes les valeurs)",
+                      color=G.INK)
         ax.set_ylabel("somas", color=G.INK)
         ax.legend(frameon=False, fontsize=8)
         G.titre(ax, f"Lecture cellule par cellule — {nom}",

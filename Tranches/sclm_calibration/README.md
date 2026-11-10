@@ -34,11 +34,14 @@ Depuis ce dossier, le jeu de données en argument :
 python3 step1_decode.py ../<jeu>                          # ~6 min (9 Go) : photons, dérive, plan focal, contrôles
 ~/.venvs/cellpose/bin/python step2_cellpose.py ../<jeu>   # ~1 min : somas de chaque acquisition
 python3 step3_select.py ../<jeu>                          # tri manuel (fenêtre, ← → entre acquisitions) ; --tout = tout garder
+                                                          # --top-photons 50 = les 50 % de ROIs les plus brillants de chaque acquisition
 python3 step4_declins.py ../<jeu>                         # ~4 min : déclins par ROI, cycle et canal
 python3 step5_irf.py ../<jeu>                             # ~30 s : contrôles de l'IRF, τ communes du déclin CFP
 python3 step6_somas.py ../<jeu>                           # ~30 s : mesures par soma dans les FOV fixes
 python3 step7_calibration.py ../<jeu>                     # ~1 min : isothermes, [Cl⁻]i basale, auto-cohérence
 python3 step8_cinetiques.py ../<jeu>                      # ~30 s : cinétiques des changements de solution
+python3 step9_flim_deux_canaux.py ../<jeu>                # ~2 min : modèle FLIM à deux canaux de bayesian_filter, soma par soma
+python3 step9_flim_deux_canaux.py ../<jeu> --transfert 1  # la même avec un seul temps de transfert (sorties *_1t)
 ```
 
 Seule l'étape 2 a besoin de Cellpose. Après un tri manuel (étape 3), relancer les étapes 5
@@ -64,7 +67,8 @@ point — et écarté. Un cycle interrompu de moins de 3 s est écarté.
 **2 — Cellpose** (`cpsam`) sur la racine de la somme des photons CFP + YFP de chaque
 acquisition, diamètre 30 px (~15 µm), réglages des tranches 2026-08-17.
 
-**3 — tri manuel**, acquisition par acquisition (clic = garder/rejeter, `b` = fond, `←`/`→`).
+**3 — tri manuel**, acquisition par acquisition (clic = garder/rejeter, `b` = fond, `←`/`→`) ; ou sans fenêtre :
+`--tout`, ou `--top-photons P` (les P % de ROIs au plus grand total de photons CFP + YFP, dans chaque acquisition).
 
 **4 — déclins.** Second passage sur les photons : un déclin de 256 canaux par ROI, par
 cycle et par canal, le neuropile (hors somas dilatés de 10 px, au-dessus du 25e centile),
@@ -96,6 +100,17 @@ X(t) = X∞ + (X₀ − X∞)·exp(−t/τ_éq) avec t = 0 au changement de solu
 exponentielles pour basal→0. Fraction de la transition accomplie quand les FOV de la
 condition d'arrivée ont commencé.
 
+**9 — FLIM à deux canaux** (`deux_canaux.py`, modèle de `Simulateurs/bayesian_filter`, fonctions de son
+`sclm_hybride.py`). IRF paramétrique (gaussienne ⊗ traînes exponentielles + fond) ajustée sur l'IRF mesurée ;
+calibration par ajustement de Poisson conjoint des déclins bleus et jaunes réunis de tous les somas de chaque
+[Cl⁻] imposée (τ1, τ2, τD, τA, λ, G, g2, κ, k0 partagés ; A, f1, f2, fonds, décalages par condition ; η = 1),
+puis isothermes de f1 et f2. Chaque soma est lu par maximum de vraisemblance sur une grille de c, **sans filtre
+temporel**, avec un fond libre par canal : pour chaque c, amplitude et fond de chaque canal (Newton, Poisson)
+donnent la vraisemblance des **formes** ; le rapport des amplitudes, comparé à η·R₁(c), donne la **quantité**
+(le découpage formes + totaux de la section 11). Quatre lectures, comme `estimateurs.py` : temps de vie unique
+(→ τ(c) des déclins de calibration), FLIM du système (η libre par soma), ratio (η = 1), **hybride** (η partagé
+par le FOV, profilé sur ses somas, comme θ dans le filtre). Comparées au τ mono-exponentiel de l'étape 6.
+
 ## Canaux (2026-11-09)
 
 | Entrée QC-104 | Image Bliq | Fluorophore | Établi par |
@@ -116,5 +131,6 @@ chaque nouveau jeu (`config.ENTREE`).
 | `recalage.py` | corrélation de phase, NCC |
 | `flim.py` | modèles de déclin (mono, n exponentielles, amplitudes à τ fixées), temps moyen |
 | `mesures.py` | comptes corrigés du temps mort, lectures de la durée de vie CFP |
+| `deux_canaux.py` | modèle FLIM à deux canaux de bayesian_filter : IRF paramétrique, calibration conjointe, lecture d'un soma |
 | `figures.py` | style commun des figures |
-| `step1` … `step8` | les étapes |
+| `step1` … `step9` | les étapes |

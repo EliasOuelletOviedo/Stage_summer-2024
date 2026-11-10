@@ -17,6 +17,8 @@ python3 step5_irf.py ../SCLM_calibration_2026-11-09
 python3 step6_somas.py ../SCLM_calibration_2026-11-09
 python3 step7_calibration.py ../SCLM_calibration_2026-11-09
 python3 step8_cinetiques.py ../SCLM_calibration_2026-11-09
+python3 step9_flim_deux_canaux.py ../SCLM_calibration_2026-11-09
+python3 step9_flim_deux_canaux.py ../SCLM_calibration_2026-11-09 --transfert 1   # un seul temps de transfert
 ```
 
 **Les résultats portent sur tous les ROIs de Cellpose (`--tout`), sans tri visuel.** Après un
@@ -128,6 +130,71 @@ c'est justement le domaine du basal. Au-delà de 20 mM, une cellule seule ne dit
   le rapport monte et τ baisse régulièrement jusqu'à la fin (rapport 6,1, τ 1,22 ns), **au-delà**
   des FOV à 0 mM pris plus tard (5,4 et 1,41 ns).
 
+### FLIM à deux canaux, soma par soma (étape 9)
+
+Le modèle de `Simulateurs/bayesian_filter` (populations du donneur, fuite, émission sensibilisée, excitation
+directe, η), calibré sur les déclins réunis des somas de 0, 20 et 131 mM, puis lu soma par soma par maximum de
+vraisemblance, sans filtre temporel (fond libre par canal, η partagé par FOV ; choix du 2026-11-10)
+(`results/deux_canaux_calibration.png`, `deux_canaux_lectures.png`, `deux_canaux_tau_mono.png`).
+
+**Calibration.** Déviance/ddl **48** (le simulateur obtenait ~2 en solution) : les résidus se concentrent sur le
+front de montée (±25 à 50), le reste du déclin est à ±5–10. τ1 8,5 ps, τ2 0,58, τD 2,29, τA 2,98 ns ; λ 0,71,
+G 0,17 (dix fois moins qu'en solution), g2 0, κ 0,04, k0 0 : le jaune est surtout la fuite du donneur. La
+population 1 (τ1 ≈ 0, en FRET, presque sans photons bleus) passe de 0,91 à 0,67 entre 0 et 131 mM, la population
+2 de 0,05 à 0,16. Comme en solution pour SCLM régulier, c'est une calibration **empirique** de la forme et du ratio
+en fonction de [Cl⁻], pas une lecture physique des populations. R₁(c) va de 5,2 à 1,4, demi-chemin vers 15–20 mM.
+
+**Lectures** (médiane (IQR des somas), mM ; `results/deux_canaux_resume.csv`). **Les [Cl⁻] négatives sont gardées
+partout** : la grille de c descend jusqu'à la limite du modèle (−15,7 mM, où f1 + f2 = 1 ; aucun soma ne l'atteint),
+et aucune lecture n'est bornée à 0 — les tronquer biaiserait vers le haut les lectures basses. En haut, la grille va
+à 10⁵ mM : une lecture dont le maximum reste au bord n'a pas de maximum fini (forme au-delà de l'asymptote du
+modèle) et est « hors courbe », comptée comme +∞ dans les médianes et les quantiles (l'exclure les biaiserait vers
+le bas ; « — » : quartile hors courbe). Ainsi, les médianes du τ mono retombent exactement sur la calibration de
+l'étape 7. Une grille arrêtée à 300 mM plafonnait l'hybride à 131 mM (135 au lieu de 166 mM).
+
+| Lecture | basal | 0 mM | 20 mM | 131 mM |
+|---|---|---|---|---|
+| τ mono-exp. (étape 6 → isotherme de l'étape 7) | 2,5 (15,2) ; 5 % hors courbe | 0,0 (6,0) ; 1 % hors courbe | 20,0 (30,9) ; 4 % hors courbe | 131,1 (—) ; 37 % hors courbe |
+| temps de vie unique (IRF paramétrique) | −0,9 (18,3) | −4,2 (11,3) | 17,3 (39,3) | 100,5 (169,6) |
+| ratio, η = 1 | 3,9 (5,8) | −0,9 (5,7) | 22,0 (39,4) | 112,9 (95,4) ; 9 % hors courbe |
+| FLIM du système (η libre par soma) | 1,8 (7,3) ; 2 % hors courbe | 0,2 (4,8) | 18,3 (32,5) ; 5 % hors courbe | 236,3 (—) ; 33 % hors courbe |
+| **hybride, η partagé par le FOV** | **2,9 (5,7)** | 1,4 (5,7) | 20,0 (31,2) | 166,1 (220,0) ; 3 % hors courbe |
+
+- **Basal** : toutes les lectures donnent une [Cl⁻]i de −1 à 4 mM (hybride 2,9 mM), comme l'étape 7 (4,4 mM).
+- **Le τ mono-exponentiel** et le temps de vie unique du modèle sont la même lecture (τ presque identiques soma
+  par soma) : bonnes à 0 et 20 mM, ils perdent pied au-dessus (la courbe τ(c) s'aplatit ; 37 % des somas à
+  131 mM hors de la courbe). Le FLIM du système aussi (33 % hors courbe à 131 mM) ; l'hybride n'en perd que 3 %
+  (médiane 166 mM à 131 mM, avec une forte dispersion vers le haut).
+- **À 0 mM, l'hybride lit 1,4 mM** : η du FOV y vaut 1,05–1,16 au lieu de 1. Quand c était bornée à 0, les somas
+  dont le ratio dépasse R₁(0) tiraient η vers le haut et l'hybride lisait 3,6 mM ; garder les négatifs réduit cet
+  effet de bord sans l'annuler.
+- **Figure** (`deux_canaux_lectures.png`, sans le τ unique) : chaque boîte sans ses lectures hors courbe ni celles à
+  plus de 5 σ de sa moyenne (retrait répété) ; axe y commun, le plus petit intervalle qui contient la moyenne ± 5 σ
+  de chaque boîte.
+- **η du FOV** varie de 0,74 à 1,21 ; à 20 mM, les deux FOV pâles ont η̂ 0,91–0,93 contre ~1,0 pour les autres :
+  η absorbe en partie l'écart entre champs relevé plus haut.
+- **Ce qui disperse les somas n'est pas le bruit de photons.** L'intervalle à 95 % d'un soma (hybride) fait 0,7
+  à 2 mM sous 20 mM, alors que l'IQR entre somas d'une même [Cl⁻] imposée est de 6 à 31 mM. Dans une condition,
+  la lecture hybride suit le rapport brut presque exactement (ρ de Spearman −0,95 à −0,99) mais à peine le τ
+  mono (ρ 0,28 à 0,36) : la variation d'une cellule à l'autre est une variation du **rapport** que la durée de
+  vie ne voit pas — sans doute pas du Cl⁻ (expression, maturation de la YFP, pH, autofluorescence).
+
+**Un seul temps de transfert** (`--transfert 1`, sorties `deux_canaux_*_1t`) : une population en FRET au lieu de
+deux (donneur f·e^{−t/τT} + (1 − f)·e^{−t/τD}, une isotherme). La calibration ajuste nettement moins bien
+(déviance/ddl **182** contre 48) : τT 0,27, τD 1,91, τA 2,96 ns, f de 0,61 à 0,23 (K 36 mM), λ 0,62, et le jaune
+devient tout entier de l'excitation directe (G = 0, κ 2,4). Lectures, médiane (±1,48·MAD entre somas ; écart-type
+des médianes de FOV ; % hors courbe) :
+
+| | 2 populations | 1 population |
+|---|---|---|
+| FLIM du système, basal / 0 / 20 / 131 mM | 1,8 / 0,2 / 18,3 (±13 ; FOV 25) / 236 (33 % hc) | 1,2 / −0,1 / 14,2 (±10 ; FOV 11) / 67 (7 % hc) |
+| hybride, basal / 0 / 20 / 131 mM | 2,9 / 1,4 / 20,0 (±15 ; FOV 20) / 166 (3 % hc) | 2,4 / 1,2 / 17,3 (±12 ; FOV 16) / 57 (0 % hc) |
+| ratio (η = 1), mêmes conditions | 3,9 / −0,9 / 22,0 / 113 | 3,8 / −1,0 / 22,2 / 116 |
+
+Avec un seul temps de transfert, les lectures FLIM sont **plus resserrées** jusqu'à 20 mM (dispersion et écart
+entre FOV plus petits, moins de somas hors courbe) mais **biaisées vers le bas en haut de gamme** (60 mM au lieu
+de 131) : le modèle ne décrit pas la forme des déclins à 131 mM. Le basal ne bouge presque pas (1–4 mM).
+
 ### Réserves
 
 1. **Les champs diffèrent autant que les conditions.** À 20 mM, les médianes des FOV vont de 2,0
@@ -168,3 +235,4 @@ c'est justement le domaine du basal. Au-delà de 20 mM, une cellule seule ne dit
 | `results/basal_cellules.csv`, `results/autocoherence.csv` | lectures cellule par cellule |
 | `results/calibration.png`, `basal.png`, `rapport_vs_tau.png`, `temps_mort.png` | figures |
 | `results/transitions_*.csv`, `results/transition_<nom>.png` | cinétiques |
+| `results/deux_canaux_*` | FLIM à deux canaux : calibration (json), lectures par soma, η par FOV, figures |
