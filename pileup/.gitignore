@@ -1,0 +1,4 @@
+# Données brutes (tag Data_pileup) et intermédiaires régénérables
+data/
+resultats/mesures/
+__pycache__/

@@ -1,0 +1,26 @@
+acquisition	etape	dy / detail	dx	NCC	statut
+FOV11/800-001	stim	aucune			
+FOV11/950-001	stim	aucune			
+FOV11/train_stim-002	bloc 1-25	dy=+0	dx=+0	NCC=1.000	ok
+FOV11/train_stim-002	bloc 26-60	dy=+0	dx=+0	NCC=0.985	ok
+FOV11/train_stim-002	bloc 61-85	dy=+0	dx=+0	NCC=0.981	ok
+FOV11/train_stim-002	bloc 86-122	dy=+0	dx=+0	NCC=0.978	ok
+FOV11/train_stim-002	bloc 123-147	dy=+0	dx=+0	NCC=0.974	ok
+FOV11/train_stim-002	bloc 148-184	dy=+0	dx=+0	NCC=0.966	ok
+FOV11/train_stim-002	bloc 185-220	dy=+0	dx=+0	NCC=0.964	ok
+FOV11/train_stim-002	bloc 221-245	dy=+0	dx=+0	NCC=0.960	ok
+FOV11/train_stim-002	bloc 246-270	dy=+0	dx=+0	NCC=0.960	ok
+FOV11/train_stim-002	stim	images 33-218	t=32.9-221.6 s	C2 x1.3	bord/bruit=74
+FOV11/train_stim-003	bloc 1-25	dy=+0	dx=+0	NCC=1.000	ok
+FOV11/train_stim-003	bloc 26-58	dy=+0	dx=+0	NCC=0.985	ok
+FOV11/train_stim-003	bloc 59-83	dy=+0	dx=+0	NCC=0.981	ok
+FOV11/train_stim-003	bloc 84-120	dy=+0	dx=+0	NCC=0.971	ok
+FOV11/train_stim-003	bloc 121-145	dy=+0	dx=+0	NCC=0.965	ok
+FOV11/train_stim-003	bloc 146-187	dy=+0	dx=+0	NCC=0.951	ok
+FOV11/train_stim-003	bloc 188-234	dy=+0	dx=+0	NCC=0.941	ok
+FOV11/train_stim-003	bloc 235-270	dy=+0	dx=+0	NCC=0.918	ok
+FOV11/train_stim-003	stim	images 31-229	t=30.9-232.9 s	C2 x1.3	bord/bruit=49
+FOV11/800-001	FOV -> train_stim-002	dy=+0	dx=+0	NCC=0.969	ok
+FOV11/950-001	FOV -> train_stim-002	dy=+0	dx=+2	NCC=0.516	ok
+FOV11/train_stim-002	FOV -> train_stim-002	dy=+0	dx=+0	NCC=1.000	ref
+FOV11/train_stim-003	FOV -> train_stim-002	dy=+2	dx=-1	NCC=0.943	ok

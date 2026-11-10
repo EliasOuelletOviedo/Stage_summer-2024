@@ -1,0 +1,20 @@
+# Exemple du bloc écrit par `parametres_mesures` après la mesure du canal jaune,
+# ici sur le banc SIMULÉ de l'aller-retour (graine 1) : ne pas recopier tel quel.
+
+[capteur.tau_A]
+valeur = 2.8222
+statut = "mesuré"
+date = "AAAA-MM-JJ"
+incertitude = 0.0111
+source = "canal jaune, step12"
+
+[capteur.Phi_A_eff]
+valeur = 0.5030
+statut = "mesuré"
+date = "AAAA-MM-JJ"
+incertitude = 0.0080
+source = "canal jaune, step12 ; ρ_A × η_BD × Φ_D / η_YA (η_YA des spectres)"
+
+# [optique]
+# eta_YD = { valeur = 0.12888, statut = "mesuré", date = "AAAA-MM-JJ", incertitude = 0.00178, source = "canal jaune, step12 ; ρ_D × η_BD" }
+# epsilon = { valeur = 0.0612, statut = "mesuré", date = "AAAA-MM-JJ", incertitude = 0.0164, source = "canal jaune, step12 (borné à [0 ; 0,15])" }

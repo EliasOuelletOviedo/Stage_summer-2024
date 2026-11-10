@@ -1,0 +1,15 @@
+carte,canal,solution,puissance,methode,temps_mort_ns
+SPC-QC-104,1,toutes,toutes,demi-montée des intervalles entre photons,7.54
+SPC-QC-104,2,toutes,toutes,demi-montée des intervalles entre photons,7.602
+SPC-150N,1,low,10,1/r_TAC − 1/r_CFD (sdt),114.8
+SPC-150N,1,low,15,1/r_TAC − 1/r_CFD (sdt),115.7
+SPC-150N,1,low,20,1/r_TAC − 1/r_CFD (sdt),117.1
+SPC-150N,2,low,20,1/r_TAC − 1/r_CFD (sdt),115.9
+SPC-150N,2,low,25,1/r_TAC − 1/r_CFD (sdt),118.5
+SPC-150N,1,high,20,1/r_TAC − 1/r_CFD (spc),121.2
+SPC-150N,1,high,30,1/r_TAC − 1/r_CFD (spc),119.8
+SPC-150N,1,high,40,1/r_TAC − 1/r_CFD (spc),119.1
+SPC-150N,1,low,10,1/r_TAC − 1/r_CFD (spc),115.2
+SPC-150N,1,low,15,1/r_TAC − 1/r_CFD (spc),115.9
+SPC-150N,1,low,20,1/r_TAC − 1/r_CFD (spc),117.3
+SPC-150N,2,low,20,1/r_TAC − 1/r_CFD (spc),115.9

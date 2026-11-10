@@ -1,0 +1,155 @@
+# params.toml — le seul endroit pour les constantes du filtre bayésien hybride (ratio + FLIM) et de son
+# simulateur, d'après « Mesurer le chlore avec SuperClomeleon : FLIM, ratio et filtre bayésien expliqués.pdf ».
+#
+# La calibration (durées de vie, λ, G, g₂, κ, isothermes, IRF, fonds) n'est PAS ici : step0_calibration.py
+# l'ajuste sur les histogrammes mCer3 du 2026-10-16 et l'écrit dans calibration.json. Ne pas l'éditer à la
+# main, relancer step0.
+
+[donnees]
+# un jeu de données = un fichier de paramètres (ici SCLM_mCer3 ; params_SCLM.toml : SCLM régulier)
+nom = "SCLM_mCer3"
+# histogrammes sommés (8 [Cl⁻] × 2 canaux + IRF) extraits des 900 .sdt de Data/2026-10-16/SCLM_mCer3 (step17)
+dossier = "../FLIM-FRET_2-channels/sorties/declins_purs_2026-10-16_SCLM_mCer3"
+titration = "irf_bruts_mCer3.csv"
+inconnu = "inconnu_bruts_mCer3.csv"
+# le module de calibration qui accompagne ces données (ajustement conjoint, section 9 du document)
+module_calibration = "sclm_hybride.py"
+# écrit par step0, lu par run.py ; dossier des sorties de run.py
+calibration = "calibration.json"
+sorties = "sorties"
+
+[filtre]
+# section 12 : 260 valeurs de [Cl⁻], de 0,5 à 300 mM, pas de 2,5 % ; section 14 : 61 valeurs de η, de 0,6 à 1,8
+c_min_mM = 0.5
+c_max_mM = 300.0
+n_c = 260
+eta_min = 0.6
+eta_max = 1.8
+n_eta = 61
+# section 13 : ln c_k = ln c_{k-1} + ε, ε ~ (1 − w) N(0, s²) + w N(0, s_saut²)
+s = 0.04
+w = 0.03
+s_saut = 0.5
+# Modèle par défaut « 1-2-3 » (src/filtre.py, FiltreTempsReel ; essais : derive_eta/README.md) :
+#   1. η dérive : ln η_k = ln η0 + β·k/1000, θ = (η0, β) statique et inconnu, a priori uniforme sur cette grille :
+#      η0 de eta0_min à eta0_max (n_eta0 valeurs, pas de 0,95 %), β de −derive_max à +derive_max en ln η par 1 000 trames ;
+#   2. θ partagé par les ROI d'un même champ (exact) ;
+#   3. vitesse de c inconnue : un filtre par s_c candidat (s ci-dessus n'est plus utilisé que par le modèle "marche" et
+#      les comparaisons de noyaux), moyennés selon leur vraisemblance marginale (temps réel : trames passées ; lissé :
+#      toute la course).
+# dynamique_eta = "marche" : l'ancien modèle d'une ROI (exemple, section 15) — η en marche aléatoire, s_η candidats, s fixe.
+dynamique_eta = "derive"
+eta0_min = 0.7
+eta0_max = 1.5
+n_eta0 = 81
+derive_max = 0.05
+n_derive = 31
+s_c_candidats = [0.004, 0.013, 0.04]
+# accélérations, toutes causales (README, « Accélérations ») : grille de θ recentrée à ±6 sd de la loi courante (41 × 31
+# points, quasi exacte) ; vitesses de c au poids < seuil_noyaux retirées ; mise à jour fusionnée numba (exacte, si numba
+# est installé)
+adaptatif = true
+elaguer_noyaux = true
+seuil_noyaux = 1.0e-12
+numba = true
+# modèle "marche" : ln η_k = ln η_{k−1} + N(0, s_η²) par trame, s_η inconnu (0 = η constant), moyenne de modèles ;
+# grille de η plus fine (pas de 0,46 %) pour que la marche et la précision de η ne soient pas limitées par le pas.
+n_eta_lisseur = 241
+s_eta_candidats = [0.0, 1.0e-4, 3.0e-4, 1.0e-3, 3.0e-3]
+# section 14 : 16 portes temporelles (η n'est jamais figé : la bascule vers le ratio seul a été retirée)
+portes = 16
+
+[simulation]
+graine = 20261022
+
+[exemple]
+# section 15 : un soma, η = 1,25 inconnu, 5 000 photons par trame, 8 → 22 mM à la trame 61, → 10 mM à la trame 141
+trames = 300
+photons = 5000
+eta = 1.25
+c_base_mM = 8.0
+c_haut_mM = 22.0
+c_fin_mM = 10.0
+trame_montee = 61
+tau_montee_trames = 4.0
+trame_descente = 141
+tau_descente_trames = 25.0
+# l'amplitude A dérive (photoblanchiment) : le ratio et les formes n'en dépendent pas
+derive_A = -0.30
+# la trace détaillée est la répétition 1 ; les suivantes ne donnent que le bilan
+repetitions = 20
+
+[temps_reel]
+# section 14 : 300 trames, η = 1,25 inconnu, [Cl⁻] propre à chaque ROI, erreur mesurée après la trame 100
+trames = 300
+eta = 1.25
+photons = [1000, 3000, 10000]
+n_roi = 10
+trame_debut_erreur = 100
+repetitions = 3
+
+[amincissement]
+# trames tirées des histogrammes MESURÉS (Poisson sur la forme mesurée, fond et défauts du modèle compris) :
+# aucune hypothèse de modèle dans le générateur. Seules les 8 [Cl⁻] de la titration sont disponibles.
+trames = 300
+photons = 5000
+eta = 1.25
+paliers_mM = [10.0, 40.0, 20.0]        # trois paliers de 100 trames
+repetitions = 20
+
+[information]
+# section 10 : borne de Cramér-Rao pour 10 000 photons
+photons = 10000
+concentrations_mM = [0.5, 1.0, 2.5, 5.0, 7.5, 10.0, 15.0, 20.0, 30.0, 40.0, 60.0, 80.0, 100.0, 131.0]
+# vérification par simulation (fin de la section 10) : 400 tirages à 10 mM
+tirages = 400
+c_verif_mM = 10.0
+
+[robustesse]
+# section 16 : biais à 10 mM sur l'histogramme attendu (sans bruit), selon la perturbation
+c_mM = 10.0
+photons = 1.0e8
+eta = 1.2
+autofluo_part = 0.05
+# formes d'autofluorescence ILLUSTRATIVES (à mesurer dans du tissu sans senseur) : NAD(P)H dans le bleu,
+# flavines dans le jaune ; [poids, τ en ns]
+autofluo_bleu = [[0.7, 0.4], [0.3, 2.5]]
+autofluo_jaune = [[0.6, 0.3], [0.4, 2.0]]
+taus_plus_courts = 0.05
+accepteurs_inactifs = 0.10
+decalage_ps = 10.0
+
+[boxplots]
+# boxplots.py : 4 techniques calibrées sur la moitié des .sdt de la titration, testées sur l'autre moitié
+# (python3 boxplots.py ; SCLM_mCer3 seulement : il lit les .sdt bruts à deux blocs de step17)
+sdt = "../FLIM-FRET_2-channels/Data/2026-10-16/SCLM_mCer3"
+sorties = "sorties_boxplots"
+# fichiers à numéro impair (c001, c003, …) pour calibrer, pairs pour tester : entrelacés dans le temps
+photons_bleus = [1000, 3000, 10000, 30000, 100000]
+echantillons = 20000                  # par concentration et par nombre de photons
+# un échantillon : 1 ou plusieurs fichiers de test tirés au hasard, amincis (binomial) à N photons bleus attendus ;
+# assez de fichiers pour que la part gardée reste ≤ 0,5
+part_gardee_max = 0.5
+# hybride : η fixé par un échantillon de contexte de facteur_contexte × N photons bleus, même concentration, tiré par
+# Poisson autour de la forme de l'ensemble des fichiers de test (100 × 100 000 dépasse ce qu'ils contiennent à 0 mM)
+facteur_contexte = 100
+# python3 boxplots.py --eta : η de chaque échantillon (et de son contexte) uniforme dans cet intervalle, sorties à part
+eta_variable = [0.9, 1.1]
+sorties_eta = "sorties_boxplots_eta"
+# grilles des estimateurs (maximum de vraisemblance) : c de 0 à 300 mM, τ mono-exponentiel de 0,5 à 6 ns
+n_c = 2000
+n_tau = 4000
+tau_min_ns = 0.5
+tau_max_ns = 6.0
+graine = 20261023
+
+[exemples]
+# exemples.py : l'exemple de la section 15 sous d'autres conditions → sorties_exemples/
+sorties = "sorties_exemples"
+facteur_trames = 10                          # 3 000 trames, même forme de courbe (montée à 601, descente à 1 401)
+photons = [1000, 3000, 10000, 30000, 100000] # par trame (bleu + jaune)
+# η vrai : constant, ou dérive linéaire de la première à la dernière trame ; inconnu du filtre dans tous les cas
+scenarios = [{ nom = "eta_1", titre = "η = 1", eta_debut = 1.0, eta_fin = 1.0 },
+             { nom = "eta_1p1", titre = "η = 1,1", eta_debut = 1.1, eta_fin = 1.1 },
+             { nom = "eta_derive_1_a_1p1", titre = "η dérive de 1 à 1,1", eta_debut = 1.0, eta_fin = 1.1 }]
+graine = 20261024

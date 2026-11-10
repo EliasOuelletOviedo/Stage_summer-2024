@@ -1,0 +1,36 @@
+K_D = 30.270559755099125
+acquisition_arret_sur_temps = true
+acquisition_duree_s = [10.0]
+chi2_r_global = 1.96111618268821
+chi2_r_libres_moyen = 1.5836115536121136
+date = "2026-10-15"
+intensite_relative_cv = 0.055341528662796305
+n = 1.4619257743667822
+phasor_distance_mediane = 0.0010668797421262291
+phasor_tau_D0 = [0.21860954959906137, 0.4392232550258229]
+phasor_tau_DA = [0.9947578906938197, 0.06817665812630204]
+proteine = "mCer3_Topaz"
+source = "/Users/eliasouellet-oviedo/Documents/Maîtrise/Données/2026-07-20_SCLM/mCer3_Topaz, IRF /Users/eliasouellet-oviedo/Documents/Maîtrise/Données/2026-07-20_SCLM/irf_20260710_16x_sclm.sdt, fenêtre 14–242"
+t0 = -0.015163123236583602
+tau_D0 = 3.6886406941695666
+tau_D0_sigma = 0.002408753856660028
+tau_DA = 0.15149625629161412
+tau_DA_sigma = 0.0014352089252829875
+x0 = 0.4287820402000368
+x_sat = 0.04878830277324447
+
+[isotherme_n1]
+K_D = 28.15156987023174
+x0 = 0.4543727781575125
+x_sat = 0.03171937767251272
+
+[isotherme_sans_F]
+K_D = 56.82277102891117
+n = 0.9406321983362527
+x0 = 0.4442493221841777
+x_sat = -0.10287697824310368
+
+[test_intensite]
+E = 0.9589289744238099
+mesure_sat_sur_0 = 1.6090527045926308
+predit_sat_sur_0 = 1.6188338685539994

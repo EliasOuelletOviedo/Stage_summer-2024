@@ -1,0 +1,15 @@
+date = "2026-10-15"
+eta_YD_spectres = 0.16386928905558354
+reserve = "Images TIFF non photoniques (Bliq) : un décalage d'intensité change K apparent et plage ; à confirmer au banc (step12)"
+
+[par_K_apparent]
+K_mesure_TIFF = 44.20859825739096
+eta_YD = 0.13033216770163172
+facteur = 0.7953422416901057
+plage_mondes_IRF = [0.6218607816850579, 0.8263441399068671]
+
+[par_plage_dynamique]
+eta_YD = 0.11640415888538398
+facteur = 0.7103476164218931
+plage_mesuree_TIFF = 2.9916098393344637
+plage_mondes_IRF = [0.5194051167822216, 0.7479457031673555]

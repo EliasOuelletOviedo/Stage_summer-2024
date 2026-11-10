@@ -1,0 +1,19 @@
+budget_vise = 10000.0
+date = "2026-10-16"
+donnees = "/Users/eliasouellet-oviedo/Documents/Stages/Stage2/Codes/Stage_summer-2024/Simulateurs/FLIM-FRET_2-channels/Data/2026-10-16/calib"
+essai = false
+fond = "niveau avant le pic des IRF (pas de tampon seul)"
+gagnante_750nm_10000 = "1"
+gagnante_750nm_100000 = "5d"
+gagnante_750nm_3000 = "5d"
+gagnante_750nm_30000 = "5d"
+gagnante_800nm_10000 = "5d"
+gagnante_800nm_100000 = "5d"
+gagnante_800nm_3000 = "5d"
+gagnante_800nm_30000 = "5d"
+gagnante_850nm_10000 = "5d"
+gagnante_850nm_100000 = "5d"
+gagnante_850nm_3000 = "5d"
+gagnante_850nm_30000 = "1"
+
+[puissance_mW]

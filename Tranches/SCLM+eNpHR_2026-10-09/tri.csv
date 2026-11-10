@@ -1,0 +1,10 @@
+session,debut,duree_s,gardee,raison,jeu,fov,n_commandes,n_stims_completes,duree_stim_s,puissance_pct,intervalle_s,base_avant_1re_s,apres_derniere_s,n_rois_flimapp,images_par_bloc
+2026-10-09_111845,11:18:46,12.5,False,aucune stim envoyée (enregistrement de 13 s),,,0,0,,,,,,10,17
+2026-10-09_111918,11:19:18,4.3,False,aucune stim envoyée (enregistrement de 4 s),,,0,0,,,,,,10,17
+2026-10-09_111928,11:19:28,16.6,False,aucune stim envoyée (enregistrement de 17 s),,,0,0,,,,,,10,17
+2026-10-09_111946,11:19:46,599.5,True,train de 3 stims,1119_3x10s_100pct,,3,3,10.2,100,180.0,60.0,169.2,10,17
+2026-10-09_114352,11:43:52,400.3,True,train de 2 stims,FOV2_1143_2x10s_25pct,FOV2,2,2,10.2,25,180.0,60.0,150.1,4,17
+2026-10-09_115047,11:50:47,401.4,True,train de 2 stims,FOV2_1150_2x10s_50pct,FOV2,2,2,10.2,50,180.0,60.0,151.1,4,17
+2026-10-09_115803,11:58:03,78.5,True,train de 4 stims ; pas de ligne de base (0.1 s avant la 1re),FOV2_1158_4x10s_100pct,FOV2,4,4,10.1,100,20.1,0.1,8.3,4,17
+2026-10-09_133343,13:33:43,6.4,False,0 stim complète sur 1 (enregistrement de 6 s),,FOV3,1,0,,,,,,12,17
+2026-10-09_133435,13:34:35,780.7,True,train de 4 stims ; 1 stim incomplète ignorée,FOV3_1334_4x20s_50pct,FOV3,5,4,20.1,50,180.0,60.0,160.5,12,17

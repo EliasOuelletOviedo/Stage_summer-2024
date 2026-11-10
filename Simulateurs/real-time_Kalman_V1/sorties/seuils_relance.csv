@@ -1,0 +1,13 @@
+quantite,apres,seuil,tenu
+écart relatif max sur p, avec diffusion (%),1.3e-13,< 0.5,oui
+écart relatif max sur q, avec diffusion (%),4.2e-12,< 0.5,oui
+non-régression sans diffusion, max |p̂ − p|, |q̂ − q|,8.0e-15,< 1.0e-12,oui
+biais d'observable 5a, C = 20, N = 1000 (mM),+0.440,< 0.1,non
+biais d'observable 5a, C = 20, N = 300 (mM),+1.543,< 0.4,non
+σ de 5a, C = 20, N = 1000 (mM),18.02 (+36 %),hausse ≤ 10 %,non
+biais d'inversion 5a, C = 20, N = 1000 (mM),+5.78,dans [2.5, 3.1],non
+biais du Kalman de référence, 5 phases, N = 1000 (mM),+0.51 / +0.32 / +0.13 / -0.37 / +0.39,tous sous ±0.3,non
+P₁₁/err², 5 phases, N = 1000,1.56 / 1.59 / 1.70 / 1.51 / 1.48,dans [0.5, 2.0],oui
+accord Fisher / Monte-Carlo, var J/B, var 5a, cov (%),0.6 / 0.4 / 5.8,< 5.0,non
+échecs de 5a, C = 20, N = 300 (%),30.1,à rapporter,—
+biais du Kalman à N = 300, dérive 0 / 5 / 10 / 20 % (mM),+2.41 / +1.78 / +1.42 / +0.42,monotone,oui

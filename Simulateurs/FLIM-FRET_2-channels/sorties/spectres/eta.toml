@@ -1,0 +1,44 @@
+accepteur = "topaz"
+donneur = "mcerulean3"
+eta_BA = 0.0019327625333491725
+eta_BD = 0.3362918315467836
+eta_YA = 0.589904748621106
+eta_YD = 0.16386928905558354
+filtre_bleu = "Chroma D470/40m (spectre FPbase 4887)"
+filtre_jaune = "Chroma ET530/30m (spectre FPbase 7399)"
+hypotheses = "détection plate ; spectres FPbase traités comme des spectres en photons"
+source = "FPbase (https://www.fpbase.org), téléchargé le 2026-10-15"
+
+[eta_donneur_cerulean]
+eta_BD = 0.26837482957263925
+eta_YD = 0.18420881146594484
+
+[eta_plan_rectangles_460_500_520_560]
+eta_BA = 0.009495840297195872
+eta_BD = 0.5290475419847867
+eta_YA = 0.6601673933997152
+eta_YD = 0.18246773168438685
+
+[proprietes.cerulean]
+em_max = 475
+ex_max = 433
+lifetime = 3.3
+nom = "Cerulean"
+qy = 0.62
+slug = "cerulean"
+
+[proprietes.mcerulean3]
+em_max = 475
+ex_max = 433
+lifetime = 4.1
+nom = "mCerulean3"
+qy = 0.87
+slug = "mcerulean3"
+
+[proprietes.topaz]
+em_max = 527
+ex_max = 514
+lifetime = nan
+nom = "Topaz"
+qy = 0.6
+slug = "topaz"

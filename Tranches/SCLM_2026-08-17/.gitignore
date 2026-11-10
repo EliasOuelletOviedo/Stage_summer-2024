@@ -1,0 +1,4 @@
+# Données intermédiaires lourdes, régénérables par step1/step2
+registered/
+masks/*.npy
+sum_images/*.tif

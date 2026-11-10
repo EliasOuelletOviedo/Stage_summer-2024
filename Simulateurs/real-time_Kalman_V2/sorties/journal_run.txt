@@ -1,0 +1,82 @@
+course 1–2  N = 1000  aucune      fait
+course 1–2  N = 1000  rampe 10 %  fait
+course 1–2  N = 1000  rampe 20 %  fait
+course 1–2  N = 1000  saut 5 %    fait
+course 1–2  N = 3000  aucune      fait
+course 1–2  N = 3000  rampe 10 %  fait
+course 1–2  N = 3000  rampe 20 %  fait
+course 1–2  N = 3000  saut 5 %    fait
+β retenu : 0 (aucun β ne passe tout le test 1 ; plus petit β qui corrige l'innovation moyenne de transitoire)
+course 3–4  N = 1000  aucune      fusion       erreur affichée -0.13  réelle +0.74 mM
+course 3–4  N = 1000  aucune      ratio        erreur affichée -0.07  réelle -0.16 mM
+course 3–4  N = 1000  aucune      ratio_libre  erreur affichée -0.58  réelle +7.37 mM
+course 3–4  N = 1000  rampe 10 %  fusion       erreur affichée -0.12  réelle +0.34 mM
+course 3–4  N = 1000  rampe 10 %  ratio        erreur affichée +0.01  réelle -3.70 mM
+course 3–4  N = 1000  rampe 10 %  ratio_libre  erreur affichée -0.26  réelle +4.79 mM
+course 3–4  N = 1000  rampe 20 %  fusion       erreur affichée -0.12  réelle +0.12 mM
+course 3–4  N = 1000  rampe 20 %  ratio        erreur affichée +0.05  réelle -7.40 mM
+course 3–4  N = 1000  rampe 20 %  ratio_libre  erreur affichée -0.10  réelle +2.13 mM
+course 3–4  N = 1000  saut 5 %    fusion       erreur affichée -0.10  réelle +0.34 mM
+course 3–4  N = 1000  saut 5 %    ratio        erreur affichée +0.03  réelle -1.47 mM
+course 3–4  N = 1000  saut 5 %    ratio_libre  erreur affichée -0.35  réelle +6.41 mM
+course 3–4  N = 3000  aucune      fusion       erreur affichée -0.03  réelle +0.32 mM
+course 3–4  N = 3000  aucune      ratio        erreur affichée -0.00  réelle -0.03 mM
+course 3–4  N = 3000  aucune      ratio_libre  erreur affichée -0.59  réelle +8.49 mM
+course 3–4  N = 3000  rampe 10 %  fusion       erreur affichée -0.02  réelle +0.18 mM
+course 3–4  N = 3000  rampe 10 %  ratio        erreur affichée +0.03  réelle -3.64 mM
+course 3–4  N = 3000  rampe 10 %  ratio_libre  erreur affichée -0.17  réelle +5.97 mM
+course 3–4  N = 3000  rampe 20 %  fusion       erreur affichée -0.01  réelle +0.09 mM
+course 3–4  N = 3000  rampe 20 %  ratio        erreur affichée +0.05  réelle -7.37 mM
+course 3–4  N = 3000  rampe 20 %  ratio_libre  erreur affichée -0.04  réelle +3.28 mM
+course 3–4  N = 3000  saut 5 %    fusion       erreur affichée -0.01  réelle -0.03 mM
+course 3–4  N = 3000  saut 5 %    ratio        erreur affichée +0.08  réelle -1.38 mM
+course 3–4  N = 3000  saut 5 %    ratio_libre  erreur affichée -0.29  réelle +7.64 mM
+course 5  β = 0  Kp = 0.0044 (×0.32)  agitation 0.0044
+course 5  β = 0  Kp = 0.0068 (×0.49)  agitation 0.0068
+course 5  β = 0  Kp = 0.0104 (×0.75)  agitation 0.0104
+course 5  β = 0  Kp = 0.0160 (×1.15)  agitation 0.0155
+course 5  β = 0  Kp = 0.0247 (×1.78)  agitation 0.0225
+course 5  β = 0  Kp = 0.0380 (×2.74)  agitation 0.0317
+course 5  β = 0  Kp = 0.0585 (×4.22)  agitation 0.0440
+course 5  β = 0  Kp = 0.0901 (×6.49)  agitation 0.0606
+course 5  β = 0  Kp = 0.1388 (×10.00)  agitation 0.0834
+course 5  β = 0.25  Kp = 0.0044 (×0.32)  agitation 0.0044
+course 5  β = 0.25  Kp = 0.0068 (×0.49)  agitation 0.0068
+course 5  β = 0.25  Kp = 0.0104 (×0.75)  agitation 0.0104
+course 5  β = 0.25  Kp = 0.0160 (×1.15)  agitation 0.0155
+course 5  β = 0.25  Kp = 0.0247 (×1.78)  agitation 0.0225
+course 5  β = 0.25  Kp = 0.0380 (×2.74)  agitation 0.0318
+course 5  β = 0.25  Kp = 0.0585 (×4.22)  agitation 0.0440
+course 5  β = 0.25  Kp = 0.0901 (×6.49)  agitation 0.0607
+course 5  β = 0.25  Kp = 0.1388 (×10.00)  agitation 0.0834
+course 6  variante A : agitation 0.0136  erreur réelle +0.84
+course 6  variante B : agitation 0.0132  erreur réelle +0.65
+course 6  variante C : agitation 0.0143  erreur réelle +0.79
+course 7  k vrai 0.02 : k̂ final 0.035 ± 0.015
+course 7  k vrai 0.05 : k̂ final 0.058 ± 0.016
+course 7  k vrai 0.15 : k̂ final 0.124 ± 0.016
+robustesse k 0.02 J 8 fusion  : affichée -0.56  réelle -0.28
+robustesse k 0.02 J 8 ratio   : affichée -0.14  réelle -7.67
+robustesse k 0.05 J 8 fusion  : affichée -0.12  réelle +0.12
+robustesse k 0.05 J 8 ratio   : affichée +0.05  réelle -7.40
+robustesse k 0.15 J 8 fusion  : affichée -0.00  réelle +0.20
+robustesse k 0.15 J 8 ratio   : affichée +0.26  réelle -7.02
+robustesse k 0.05 J 4 fusion  : affichée -0.16  réelle +0.06
+robustesse k 0.05 J 4 ratio   : affichée +0.05  réelle -7.40
+robustesse k 0.05 J 16 fusion  : affichée -0.10  réelle +0.11
+robustesse k 0.05 J 16 ratio   : affichée +0.05  réelle -7.40
+
+β retenu 0 ; Kp nominal 0.0139 ; coude aucun (β = 0 : aucun) ; Kp pour τ_BF = 5 s : 0.0073
+issue : A — la fusion gagne
+  innovation moyenne, transitoires, N = 1000 (β retenu)                  -0.001                         < 0,05     oui
+  autocorrélation d'innovation, transitoires / plateaux, N = 1000        -0.203 / -0.192                < 0,10     non
+  hausse de la RMSE sur les plateaux, β retenu contre β = 0              +0.0 % / +0.0 %                ≤ 5 %      oui
+  P₁₁/err² par phase, boucle fermée, N = 1000                            1.55 / 1.71 / 1.47 / 1.62 / 1.24 dans [0,5 ; 2] oui
+  biais du filtre, 5 phases, boucle fermée sans dérive, N = 1000 (mM)    +0.71 / +0.65 / +0.74 / +0.85 / +1.08 < ±0,30    non
+  erreur de régulation établie, sans dérive, fusion (mM)                 -0.13 / -0.03                  < 0,5      oui
+  erreur réelle, rampe 20 %, fusion (mM)                                 +0.12 / +0.09                  < 1,5      oui
+  erreur réelle, rampe 20 %, ratio seul (mM)                             -7.40 / -7.37                  > 4 attendu oui
+  accord Fisher / Monte-Carlo, var J/B et var 5a (%)                     0.7 / 0.4 ; 3.5 / 1.2          < 5        oui
+  ρ₁₂ en boucle fermée contre boucle ouverte, régime établi, N = 1000    0.66 contre 0.67               ≤ BO + 0,1 oui
+  marge de gain avant le coude (Kp coude / Kp nominal)                   > 10.0 (pas de coude dans le balayage) ≥ 3        oui
+  échecs de 5a, C = 5 mM, N = 1000 (%)                                   32.8                           à rapporter —

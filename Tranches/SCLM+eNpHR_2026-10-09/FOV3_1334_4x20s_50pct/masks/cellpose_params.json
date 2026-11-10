@@ -1,0 +1,11 @@
+{
+ "modele": "cpsam",
+ "diametre_px": 75.0,
+ "image": "racine",
+ "flow_threshold": 0.4,
+ "cellprob_threshold": 0.0,
+ "min_size": 300,
+ "max_size_fraction": 0.25,
+ "normalize": true,
+ "n_rois": 19
+}

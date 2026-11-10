@@ -1,0 +1,13 @@
+methode              , palier_mM, biais_mM, sd_mM    , eta_final, eta_final_sd_entre_rep
+ratio (η = 1)        ,        10, -9.6989 ,  0.558334,          ,               
+ratio (η = 1)        ,        40, -20.9909,  2.10427 ,          ,               
+ratio (η = 1)        ,        20, -13.2649,  1.51972 ,          ,               
+durée de vie seule   ,        10, 4.57353 , 19.8066  ,          ,               
+durée de vie seule   ,        40, 17.833  , 58.0342  ,          ,               
+durée de vie seule   ,        20, 8.93312 , 26.6154  ,          ,               
+"filtre, fond connu" ,        10, -1.06584,  0.606167,   1.25058,              0.0211456
+"filtre, fond connu" ,        40, -1.7726 ,  0.808956,   1.25058,              0.0211456
+"filtre, fond connu" ,        20, 0.43448 ,  0.468738,   1.25058,              0.0211456
+"filtre, fond ignoré",        10, 3.82299 ,  0.70325 ,   1.33142,              0.0232827
+"filtre, fond ignoré",        40, 8.82493 ,  1.01342 ,   1.33142,              0.0232827
+"filtre, fond ignoré",        20, 7.4163  ,  0.559036,   1.33142,              0.0232827
