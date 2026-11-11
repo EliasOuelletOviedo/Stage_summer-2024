@@ -1,0 +1,11 @@
+version,forme,correlation_vraie_avec_R
+brut,tm_B,0.3192459741955528
+brut,porte_B,0.3516180749222948
+brut,tphi_B,0.30623301552546084
+brut,gab_B_mc,0.33068521290870434
+brut,tm_queue_B,0.4749604514275684
+corrige,tm_B,0.431604065898044
+corrige,porte_B,0.424131296156565
+corrige,tphi_B,0.35984199526603466
+corrige,gab_B_mc,0.37182250617920004
+corrige,tm_queue_B,0.4845266087310239

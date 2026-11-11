@@ -45,6 +45,9 @@ python3 step9_flim_deux_canaux.py ../<jeu> --transfert 1  # la même avec un seu
 python3 step10_validation_croisee.py ../<jeu>             # ~10 min : validation croisée, ROIs tirés au hasard
 python3 step10_validation_croisee.py ../<jeu> --par-fov   # ~10 min : validation croisée, un FOV de chaque condition par pli
 python3 step11_fond.py ../<jeu>                           # quelques s : le fond explique-t-il l'écart entre champs ?
+python3 step12_banc_essai.py ../<jeu>                     # ~15 min : banc d'essai de 39 lectures (--sans-calcul : notes et figures)
+python3 step13_additif.py ../<jeu>                        # ~10 s : ce que le tissu ajoute dans chaque pixel (après l'étape 12)
+python3 step14_ancrage.py ../<jeu>                        # ~5 s : rapport seul contre rapport ancré par la forme (après l'étape 13)
 ```
 
 Seule l'étape 2 a besoin de Cellpose. Après un tri manuel (étape 3), relancer les étapes 5
@@ -124,6 +127,25 @@ le basal est lu par chaque pli. Critère : erreur de la médiane de chaque FOV l
 corrigé de ce fond, Y·(1 − φ_Y) / (B·(1 − φ_B)) ; validation croisée par FOV de l'isotherme sur le rapport brut et
 sur le rapport corrigé.
 
+**12 — banc d'essai** (`banc.py`). Les mêmes déclins lus de 39 façons — rapports, forme du déclin sans
+ajustement (temps moyen, portes, phaseur), ajustements, **gabarits** (mélange des motifs mesurés à 0 et à 131 mM,
+par maximum de vraisemblance sur une grille, sans IRF ni modèle), apprentissage sur 20 portes temporelles, modèle
+de l'étape 9 — à six niveaux : soma, moitiés de cycles, cycle, somme amincie à 300–10 000 photons, cycles des
+time-lapses, champ entier. Critères fixés d'avance, en mM-équivalents (pente entre 0 et 20 mM) : séparation des
+conditions, écart entre champs, dispersion vraie entre somas (covariance des deux moitiés de cycles), bruit d'un
+cycle et rapport au bruit de photons, précision et biais selon les photons, validation croisée par champ et par
+tirage aléatoire (plis de l'étape 10 ; les lectures apprises sont toujours lues hors de leurs champs), changement
+dans une même cellule, dérive sous illumination. Les valeurs sont gardées dans `mesures/banc_cache.pkl`.
+
+**13 — signal du tissu.** Dans chaque champ, chaque canal de temps est régressé entre somas sur (photons du soma,
+pixels × cycles) : la pente est le motif du capteur seul, l'ordonnée ce qui s'ajoute dans chaque pixel. Retrait
+vérifié hors échantillon (mesuré sur une moitié des somas, retiré de l'autre) ; puis variante cellule par cellule,
+la composante prompte laissée libre dans le mélange de gabarits.
+
+**14 — ancrage.** Rapport seul contre rapport divisé par le η̂ de son champ (η̂ = rapport mesuré / rapport attendu
+d'après la forme du déclin CFP, motif du capteur seul de l'étape 13) ; gabarits et droite R(f) calibrés sur les champs
+d'entraînement à 0 et 131 mM, validation croisée par champ, η du champ lu changé par amincissement binomial.
+
 ## Canaux (2026-11-09)
 
 | Entrée QC-104 | Image Bliq | Fluorophore | Établi par |
@@ -145,5 +167,6 @@ chaque nouveau jeu (`config.ENTREE`).
 | `flim.py` | modèles de déclin (mono, n exponentielles, amplitudes à τ fixées), temps moyen |
 | `mesures.py` | comptes corrigés du temps mort, lectures de la durée de vie CFP |
 | `deux_canaux.py` | modèle FLIM à deux canaux de bayesian_filter : IRF paramétrique, calibration conjointe, lecture d'un soma |
+| `banc.py` | les lectures candidates du banc d'essai (rapports, formes, gabarits, apprentissage, modèle) |
 | `figures.py` | style commun des figures |
-| `step1` … `step11` | les étapes |
+| `step1` … `step14` | les étapes |

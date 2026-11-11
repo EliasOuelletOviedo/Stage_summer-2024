@@ -1,0 +1,8 @@
+{
+ "sB": 1.143411243908568,
+ "sY": 1.0930510055988458,
+ "sB_ecart_type": 0.02296358582983305,
+ "sY_ecart_type": 0.04194826398090063,
+ "pic": 20,
+ "note": "décalage de l'IRF en canaux (3 exponentielles sur les photons réunis de chaque acquisition, médiane) ; pic du déclin CFP réuni, en canaux de la fenêtre"
+}

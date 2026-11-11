@@ -7,3 +7,4 @@
 **/results/mesures_blocs.csv
 **/results/ratio_corrige_par_image.csv
 **/results/filtre_par_trame.csv
+**/mesures/*.pkl

@@ -22,6 +22,9 @@ python3 step9_flim_deux_canaux.py ../SCLM_calibration_2026-11-09 --transfert 1  
 python3 step10_validation_croisee.py ../SCLM_calibration_2026-11-09              # tirage aléatoire des ROIs
 python3 step10_validation_croisee.py ../SCLM_calibration_2026-11-09 --par-fov    # un FOV par pli
 python3 step11_fond.py ../SCLM_calibration_2026-11-09
+python3 step12_banc_essai.py ../SCLM_calibration_2026-11-09      # banc d'essai (~15 min ; --sans-calcul ensuite)
+python3 step13_additif.py ../SCLM_calibration_2026-11-09          # signal du tissu (après l'étape 12)
+python3 step14_ancrage.py ../SCLM_calibration_2026-11-09          # rapport seul contre rapport ancré (après l'étape 13)
 ```
 
 **Les résultats portent sur tous les ROIs de Cellpose (`--tout`), sans tri visuel.** Après un
@@ -77,6 +80,24 @@ Laser à 80,25 MHz ; images 512 × 1024 à 0,509 µm/px (16X), 128 × 128 dans l
   le rapport de +1,3 % et la [Cl⁻]i basale de +0,2 mM (`results/temps_mort.png`).
 
 ## Ce que disent les résultats
+
+### En bref (état après le banc d'essai des étapes 12 et 13)
+
+- **Lecture à retenir : le rapport YFP/CFP**, cellule par cellule et dans le temps. À photons égaux il est 6 à 9 fois
+  plus précis que toute lecture de la forme du déclin (2,4 mM-éq. à 1 000 photons contre 15 à 27), son bruit est le
+  bruit de photons, et il voit un changement dans une même cellule 4 à 5 fois mieux. La forme du déclin CFP sert de
+  **vérification à l'échelle d'un champ** (photons réunis), lue par gabarits mesurés plutôt que par ajustement.
+- **Les champs à 20 mM diffèrent réellement** : le rapport et la forme du déclin CFP, deux mesures indépendantes, leur
+  donnent les mêmes écarts (r = 0,91). L'« erreur par champ » de l'étape 10 n'était pas une erreur de lecture : le
+  clamp n'est pas uniforme, et c'est lui qui limite K (3 à 23 mM selon les champs retenus) et la [Cl⁻]i basale.
+- **Le tissu ajoute une composante prompte dans chaque pixel** (elle arrive avec l'impulsion, dans les deux canaux) :
+  3 à 24 % des photons CFP proches du pic pour un soma médian. Elle fausse les lectures de forme des cellules pâles
+  et faisait paraître ces lectures plus robustes d'un champ à l'autre qu'elles ne le sont. Elle se mesure sans
+  tranche témoin (régression entre cellules) et se retire.
+- **[Cl⁻]i basale : quelques mM** — 3,5 à 4,5 mM par le rapport, 6 à 9 mM par la forme CFP une fois le signal du tissu
+  retiré. Les sections qui suivent gardent l'ordre dans lequel l'analyse a avancé ; celles des étapes 9 à 11 sont à
+  lire avec les révisions des étapes 12 et 13.
+
 
 ### Calibration en tissu
 
@@ -237,6 +258,11 @@ lu par chaque pli. Critère fixé d'avance : erreur de la médiane de chaque FOV
 Réserves : 5 FOV par condition seulement, et l'erreur à 20 mM tient à deux d'entre eux ; les τ communes du modèle
 « 3 populations » (étape 5) et l'IRF paramétrique sont ajustées sur tous les FOV (fuite faible vers les plis).
 
+**Révisé aux étapes 12 et 13** : l'erreur par champ à 20 mM ne mesure pas la justesse d'une lecture. Les deux champs
+« mal lus » ont réellement un autre état du capteur (le rapport et la forme CFP le voient pareil), et les lectures
+de forme n'y paraissaient meilleures que parce que le signal prompt du tissu, plus fort dans ces champs pâles, tirait
+leur lecture vers le bas.
+
 ### Validation croisée par tirage aléatoire des ROIs (étape 10, mode par défaut)
 
 Dans chaque [Cl⁻] imposée, les ROIs sont mélangés (graine fixe) et répartis en 5 plis ; chaque pli calibre sur les
@@ -285,6 +311,160 @@ Hypothèse testée : un fond non lié au capteur, plus lourd dans les champs pâ
   trancher ; c'est une propriété des champs, à contrôler à l'acquisition (suivre chaque champ jusqu'au plateau,
   noter la profondeur).
 
+### Banc d'essai : quelle lecture pour ces tranches ? (étape 12)
+
+Regard neuf sur les mêmes photons : 39 lectures (`../sclm_calibration/banc.py`) — rapports de photons ; forme du
+déclin CFP sans ajustement (temps moyen, portes, phaseur) ou avec (une, deux exponentielles, trois populations) ;
+forme du déclin YFP ; **gabarits** (un déclin lu comme mélange des motifs mesurés à 0 et à 131 mM, sans IRF ni
+modèle) ; apprentissage sur 20 portes temporelles ; modèle de l'étape 9 — notées sur des critères fixés d'avance :
+séparation des conditions soma par soma, écart entre champs, répétabilité d'un cycle à l'autre, précision selon le
+nombre de photons (somme des cycles amincie par tirage binomial), exactitude en validation croisée, changement dans
+une même cellule (time-lapse 20→131), dérive pendant la minute d'illumination. « mM-éq. » : écart de la lecture
+divisé par sa pente moyenne entre 0 et 20 mM. Tout est dans `results/banc_lectures.csv` ; `banc_classement.png`.
+
+| Lecture | AUC 0 / 20 mM | σ à 1 000 photons | biais à 1 000 ph. | bruit d'un cycle | z, 20→131 | dérive par min | dispersion vraie entre somas | ρ avec la brillance | erreur par champ, 0 / 20 mM |
+|---|---|---|---|---|---|---|---|---|---|
+| **R** — rapport YFP/CFP | 0,96 | **2,4** | −0,1 | 0,45 | **6,5** | −0,3 | **5,4** | −0,28 | 2,9 / 31 |
+| R_tard — photons > 1 ns après le pic | 0,96 | 2,7 | −0,2 | 0,48 | 6,1 | −0,2 | 5,3 | −0,24 | 2,6 / 28 |
+| gab_joint — gabarits, formes + rapport | 0,96 | 2,3 | −0,1 | 0,43 | 6,0 | −0,3 | 5,5 | −0,32 | 2,9 / 30 |
+| lda_3 — (ln R, temps moyens) | 0,96 | 4,1 | −0,1 | 0,72 | 4,5 | −0,1 | 5,5 | −0,10 | 2,2 / 26 |
+| gab_B — gabarits, forme CFP | 0,87 | 14,8 | −0,1 | 2,9 | 1,3 | +0,3 | 10,4 | +0,39 | 1,8 / 12 |
+| gab_formes — gabarits, formes des 2 canaux | 0,85 | 10,7 | −1,0 | 1,6 | 2,1 | −0,1 | 8,4 | −0,56 | 4,7 / 22 |
+| tm_B — temps moyen CFP | 0,87 | 21,8 | +0,1 | 3,9 | 1,4 | +0,9 | 10,1 | +0,33 | 2,1 / 8,7 |
+| tphi_B — phaseur CFP | 0,87 | 22,3 | +2,2 | 4,2 | 1,3 | +0,7 | 10,0 | +0,38 | 1,7 / 12 |
+| tau_mono — décalage fixé | 0,86 | 20,7 | +0,5 | 4,3 | 1,3 | +0,6 | 10,1 | +0,40 | 1,5 / 13 |
+| tau_mono_s — décalage libre (FLIMApp) | 0,86 | 23,5 | −0,2 | 4,9 | 1,1 | +0,7 | 10,0 | +0,36 | 1,5 / 12 |
+| tau_bi — deux exponentielles | 0,86 | 26,9 | +5,6 | 6,4 | 0,8 | +1,2 | 10,6 | +0,35 | 1,6 / 11 |
+| tau_3pop — trois populations | 0,87 | 20,5 | −2,8 | 4,0 | 1,2 | +0,6 | 10,1 | +0,37 | 1,5 / 13 |
+| mod1_flim — modèle, 1 population | 0,89 | 20,9 | +6,2 | 3,0 | 0,7 | −0,1 | 10,9 | +0,40 | 0,7 / 12 |
+| mod2_flim — modèle, 2 populations | 0,92 | 19,7 | +5,8 | 2,4 | 1,0 | −0,1 | — | +0,27 | 0,8 / 26 |
+| tm_queue_B — queue du déclin CFP | 0,85 | 52,3 | −1,5 | 9,3 | 1,1 | +1,2 | 10,9 | +0,04 | 2,7 / 7,5 |
+| tm_Y — temps moyen YFP | 0,73 | 20,8 | −0,4 | 3,9 | 0,6 | +0,3 | 16,8 | −0,45 | 14 / 31 |
+| ridge_portes — régression sur 20 portes | 0,95 | 10,5 | −1,4 | 1,8 | 0,8 | −0,2 | 5,1 | −0,29 | 2,2 / 23 |
+| gbr_portes — arbres boostés | 0,96 | 3,6 | +0,1 | 1,1 | 0,3 | −0,1 | 2,3 | −0,14 | 0,2 / 10 |
+
+(mM-éq. sauf AUC, z et ρ ; dérive positive : la lecture monte vers plus de Cl⁻ ; dispersion vraie : covariance des
+deux moitiés de cycles d'un soma, donc sans bruit de photons.)
+
+1. **Le rapport est 6 à 9 fois plus précis à photons égaux** (40 à 85 fois moins de photons pour la même précision) :
+   2,4 mM-éq. à 1 000 photons contre 14,8 pour la meilleure lecture de forme et 21 à 27 pour les ajustements
+   (`banc_precision.png`). Lui ajouter les formes ne gagne que 3 % (gab_joint).
+2. **Son bruit est le bruit de photons** : d'un cycle de 10 s au suivant, le bruit observé vaut 1,05 fois celui que
+   prédit l'amincissement ; d'un cycle au suivant dans les time-lapses (41 s), 0,9 à 1,0 fois le bruit de Poisson
+   (`banc_time_lapses.csv`). Rien d'autre que les photons ne limite le suivi d'une cellule.
+3. **Dans une même cellule**, le changement du time-lapse 20→131 est vu à z = 6,5 par le rapport, 0,7 à 1,6 par les
+   lectures de forme. Les deux familles suivent pourtant le même processus : d'une cellule à l'autre, leurs
+   changements sont corrélés (ρ = −0,44 à −0,55 pour 20→131, −0,67 à −0,77 pour basal→0).
+4. **Parmi les lectures de forme, les gabarits font le mieux** : 1,4 à 1,8 fois plus précis que temps moyen,
+   phaseur ou ajustements, sans biais à bas photons, sans IRF. Les ajustements n'apportent rien et se déplacent
+   quand les photons manquent : deux exponentielles +5,6 mM-éq. à 1 000 photons, modèle de l'étape 9 +6 mM (+25 à
+   300 photons, 8 à 11 % d'échecs). Décalage de l'IRF libre ou fixé : pareil.
+5. **Sans effet** : la correction du temps mort, des ROIs rognés de 3 px ou réduits à leurs pixels brillants
+   (mêmes notes que R) ; le neuropile soustrait dégrade (AUC 0,89). **La forme du déclin YFP ne porte presque rien**
+   (AUC 0,73).
+6. **L'apprentissage ne se transfère pas.** Le discriminant sur les 20 portes échoue hors de ses champs ; les arbres
+   boostés sortent premiers du classement mais **classent au lieu de mesurer** : avec trois concentrations ils
+   n'interpolent pas (z = 0,3 sur le vrai changement 20→131) et, les conditions se suivant dans le temps, ils
+   peuvent reconnaître la séance plutôt que le chlore.
+7. **Les champs à 20 mM diffèrent réellement** (`banc_champs_rapport_forme.csv`, `banc_deux_etats.png`). Photons
+   réunis par champ, en part f du motif « 131 mM » : le rapport donne 0,43 / 0,53 / 0,86 / 0,53 / 0,83 et la forme
+   du déclin CFP 0,44 / 0,44 / 0,83 / 0,63 / 0,73 — r = 0,91, pente 0,9, écart-type commun 0,18 contre 0,04 pour la
+   différence. Deux mesures indépendantes (combien de photons dans chaque canal ; quand ils arrivent dans un seul)
+   s'accordent : par l'isotherme de l'étape 7, ces champs se lisent 11 / 16 / 61 / 16 / 52 mM. À 0 mM, rien de tel
+   (écarts de 0,08, non corrélés). Selon qu'on croit les trois champs « bas » ou les deux « hauts », K vaut 23 ou
+   3 mM et la [Cl⁻]i basale 6,7 ou 1,0 mM : **la calibration est limitée par le clamp à 20 mM, pas par la lecture**.
+8. **D'une cellule à l'autre dans un champ**, la dispersion vraie est de ±5 mM-éq. pour le rapport et ±10 pour la
+   forme CFP, et les deux ne sont que faiblement liées (corrélation vraie 0,3 ; `banc_correlations.csv`) : ce qui
+   distingue les cellules d'un champ n'est pas surtout le chlore. Rapport et forme dépendent de la brillance en
+   sens opposés (ρ = −0,28 et +0,33 à +0,40) : voir l'étape 13.
+9. **Dérive pendant l'illumination** : en une minute, le rapport glisse de −0,3 mM-éq., les lectures de forme de
+   +0,3 à +1,2 (les photons baissent de 12 à 15 %).
+10. **Classement** (moyenne des rangs sur les huit critères fixés d'avance) : arbres boostés (réserve du point 6),
+    puis R_tard, R, gab_joint, lda_3, gab_B. Sans les deux critères qui supposent que chaque champ est à sa [Cl⁻]
+    nominale (invalidés par le point 7) : R_tard, R et gab_joint à égalité avec les arbres, puis lda_3.
+    Sur la moitié la plus brillante des somas de chaque champ (`banc_lectures_brillants.csv`), mêmes conclusions.
+
+### Ce que le tissu ajoute dans chaque pixel (étape 13)
+
+Dans un même champ, les somas pâles ont plus de photons très précoces dans le canal CFP et un temps moyen plus
+court de 0,07 à 0,13 ns — autant que l'effet de 0 → 20 mM. Si chaque pixel reçoit, en plus du capteur, un signal
+qui ne dépend pas de la quantité de capteur, alors pour chaque canal de temps, entre les somas d'un champ :
+photons = σ(t)·(photons du soma) + ι(t)·(pixels × cycles). La régression donne σ, le motif du capteur seul, et ι,
+ce qui s'ajoute (`results/additif_champs.csv`, `additif.png`).
+
+- **Ce qui s'ajoute est une composante prompte** : elle arrive avec l'impulsion, dans les deux canaux, et dure
+  moins de 0,5 ns. Autour du pic (± 0,25 ns), elle vaut 3 à 24 % des photons CFP d'un soma médian (2 à 21 % des
+  YFP), le plus en basal, pris à plus faible puissance — ce qu'on attend d'une lumière qui croît moins vite avec
+  la puissance que la fluorescence à deux photons (diffusion ou fuite de l'excitation ? autofluorescence brève ?).
+- **Vérification hors échantillon** (ι mesuré sur une moitié des somas de chaque champ, retiré de l'autre) :
+
+  | Lecture | ρ avec la brillance, avant → après | erreur par champ à 20 mM | basal (mM) |
+  |---|---|---|---|
+  | rapport R | −0,28 → −0,08 | 31 → 27 | 4,4 → 3,5 |
+  | gabarit CFP | +0,40 → −0,01 | 12 → 27 | 2,4 → 5,9 |
+  | temps moyen CFP | +0,33 → +0,03 | 8,7 → 22 | 5,4 → 9,1 |
+  | phaseur CFP | +0,38 → −0,02 | 12 → 33 | 1,6 → 6,5 |
+
+  La dépendance à la brillance disparaît, et **l'avantage des lectures de forme d'un champ à l'autre disparaît
+  avec elle** : les champs pâles (3 et 5 à 20 mM) portent plus de signal prompt, qui tirait leur lecture de forme
+  vers « moins de Cl⁻ » et compensait en partie leur état réellement différent. La dispersion vraie entre somas,
+  elle, ne baisse pas (±5 et ±10 mM-éq.) : le signal du tissu n'explique pas ce qui distingue les cellules.
+- **Cellule par cellule, sans régression** (`additif_prompt.csv`) : la forme de la composante prompte étant connue,
+  on peut la laisser libre dans le mélange de gabarits (gabp_B). La dépendance à la brillance disparaît aussi
+  (ρ = −0,07) et la corrélation vraie avec le rapport monte de 0,33 à 0,50, au prix d'une précision deux fois
+  moindre (35 mM-éq. à 1 000 photons contre 17). Cette variante enlève aussi la part du signal du capteur qui se
+  trouve près du pic : les champs 3 et 5 à 20 mM y sont lus f ≈ 0,5 à 0,6 au lieu de 0,7 à 0,9. Le début et la
+  suite du déclin ne disent donc pas exactement la même chose dans ces champs : l'état du capteur ne tient pas en
+  un seul nombre (deux populations en FRET, ou [Cl⁻] et pH).
+- **Basal** : une fois le signal du tissu retiré, le rapport donne 3,5 mM et les formes 6 à 9 mM (f = 0,25 contre
+  0,38, photons réunis par champ). Les réglages des cartes sont les mêmes qu'en calibration (seul le
+  déclenchement diffère) ; l'écart reste inexpliqué.
+
+### Rapport seul contre rapport ancré par la forme (étape 14)
+
+Ancrage : pour chaque champ, la forme du déclin CFP (motif du capteur seul, composante prompte retirée) donne la part
+f du motif « 131 mM », d'où le rapport attendu R(f) = R₀·(1 − f) + R₁·f ; η̂ = rapport mesuré / R(f), et chaque soma
+est lu à R / η̂. Gabarits et droite R(f) calibrés sur les champs d'entraînement à 0 et 131 mM ; même isotherme pour les
+deux lectures ; validation croisée par champ. Pour simuler une autre tranche ou un autre réglage, le η du champ lu
+est changé par amincissement binomial d'un canal (`results/ancrage_resume.csv`, `ancrage.png`).
+
+| Erreur de la médiane du champ lu (mM) | η = 0,7 | 0,85 | 1 (données) | 1,15 | 1,3 |
+|---|---|---|---|---|---|
+| 0 mM, rapport seul | 11,9 | 5,9 | **2,9** | 2,8 | 3,9 |
+| 0 mM, rapport ancré | 4,3 | 4,3 | 4,2 | 4,3 | 4,3 |
+| 20 mM, rapport seul | 135 | 56 | 31 | 19 | 15 |
+| 20 mM, rapport ancré | 44 | 44 | 44 | 44 | 43 |
+| basal lu, rapport seul | 17,1 | 9,0 | 4,5 | 1,6 | −0,5 |
+| basal lu, rapport ancré | 7,9 | 7,8 | 7,6 | 7,7 | 7,4 |
+
+- **L'ancrage fait ce qu'on attend** : la lecture ne dépend plus de η (0,7 à 1,3 : moins de 0,4 mM de déplacement en
+  basal, contre −5 à +14 mM pour le rapport seul).
+- **Il coûte quand η ne change pas** : 4,2 mM contre 2,9 à 0 mM. η̂ d'un seul champ est incertain de 10 % à 0 mM,
+  14 % à 20 mM, 6 à 8 % en basal, et inutilisable à 131 mM (64 %) : non par manque de photons, mais parce que la
+  forme varie d'un champ à l'autre. L'ancrage par champ ne gagne que si η change de plus de ~10–15 %.
+- **Il porte un biais qui dépend de l'état** : η̂ vaut 1,02 en moyenne à 0 mM, 0,96 à 20 mM mais **1,15 en basal**
+  (les cinq champs, 1,08 à 1,25). Rapport et forme ne racontent pas la même chose en basal (pH sans ionophores ?
+  puissance quatre fois plus faible ?) ; l'ancrage reporte cet écart sur la lecture : basal 7,6 mM au lieu de 4,5.
+  Rien dans ces données ne dit lequel des deux est juste.
+- **Conséquence** : ancrer au niveau de la tranche ou de la séance (moyenne des η̂ de tous ses champs : ±6 % avec
+  5 champs, ±4 % avec 10), seulement quand η peut avoir changé (autre tranche, autre réglage optique, eNpHR-YFP), et
+  calibrer l'ancrage dans l'état physiologique des mesures — sans ionophores, l'écart de 15 % du basal le montre.
+
+### Quelle lecture retenir
+
+- **Pour suivre une cellule ou comparer des cellules : le rapport YFP/CFP**, en photons bruts, converti par
+  l'isotherme en tissu. Variante sans risque : ne compter que les photons arrivés plus de 1 ns après le pic
+  (R_tard), insensible à la composante prompte pour 10 à 15 % de précision en moins.
+- **Pour corriger un η qui a pu changer (autre tranche, réglage, eNpHR) : ancrer le rapport par la forme au niveau
+  de la tranche**, pas du champ (étape 14).
+- **Pour vérifier le niveau d'un champ ou d'une séance : la forme du déclin CFP par gabarits**, sur les photons
+  réunis (au moins 10⁵ : ±1,5 mM-éq. ; avec la composante prompte libre, ±3,5), comparée au rapport. Un désaccord
+  signale un champ hors de la courbe de calibration.
+- **À éviter cellule par cellule** : les ajustements (biais à bas photons), la forme YFP, l'apprentissage sur trois
+  concentrations.
+- Ce que l'analyse ne peut pas régler : l'état réellement différent des champs à 20 mM, et ce qui distingue les
+  cellules d'un même champ (±5 mM-éq. sur le rapport).
+
 ### Réserves
 
 1. **Les champs diffèrent autant que les conditions.** À 20 mM, les médianes des FOV vont de 2,0
@@ -311,6 +491,17 @@ Hypothèse testée : un fond non lié au capteur, plus lourd dans les champs pâ
    déclins réunis montrent un écart aux deux bords de la fenêtre (avant la montée, et après
    11,5 ns) : effet du TDC près de ses limites, faible au niveau d'un soma.
 
+6. **Une seule tranche.** Le rapport gagne ici, où la transmission relative des deux canaux varie peu d'un champ
+   à l'autre (±3 à 5 % à 0 mM et en basal) ; entre tranches ou préparations elle peut varier davantage, et seule
+   la forme du déclin en est indépendante. Avec eNpHR-YFP dans les cellules (tranches d'octobre), le rapport absolu
+   est dilué par une YFP sans FRET : il ne vaut alors que pour des variations.
+7. **Critères du banc.** Les mM-éq. sont linéaires autour de 0–20 mM ; l'exactitude par champ suppose chaque champ à
+   sa [Cl⁻] nominale, ce que la comparaison rapport / forme contredit à 20 mM. Les conditions se suivent dans le
+   temps (basal, 0, 20, 131 mM) : toute lecture apprise peut confondre le chlore et l'heure.
+8. **Régression entre cellules** (étape 13) : elle suppose les somas d'un champ dans le même état, et cet état
+   indépendant de leur brillance ; vrai sous clamp, à vérifier ailleurs. Une tranche sans capteur dirait
+   directement ce que le tissu ajoute.
+
 ## Sorties
 
 | | |
@@ -329,3 +520,10 @@ Hypothèse testée : un fond non lié au capteur, plus lourd dans les champs pâ
 | `results/validation_croisee_*` | validation croisée par FOV (étape 10, `--par-fov`) |
 | `results/validation_aleatoire_*` | validation croisée par tirage aléatoire des ROIs (étape 10) |
 | `results/fond*` | le fond explique-t-il l'écart entre champs ? (étape 11) |
+| `results/banc_lectures.csv`, `banc_classement.png` | banc d'essai : toutes les notes de chaque lecture (étape 12) |
+| `results/banc_precision.*`, `banc_somas.csv`, `banc_lectures_brillants.csv` | précision selon les photons ; valeurs par soma ; somas brillants |
+| `results/banc_champs*.csv`, `banc_deux_etats.png`, `banc_champs.png` | champs : rapport contre forme, phaseur, lectures en mM |
+| `results/banc_correlations.csv`, `banc_time_lapses.csv` | corrélations vraies entre lectures ; time-lapses cellule par cellule |
+| `results/additif*` | ce que le tissu ajoute dans chaque pixel, notes avant / après (étape 13) |
+| `results/ancrage*` | rapport seul contre rapport ancré par la forme, η simulé (étape 14) |
+| `qc/banc_instrument.json` | décalages de l'IRF et pic utilisés par le banc |
