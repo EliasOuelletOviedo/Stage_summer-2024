@@ -1,0 +1,4 @@
+Figure écrite : /Users/eliasouellet-oviedo/Documents/Stages/Stage2/Codes/Stage_summer-2024/Simulateurs/FLIM-FRET_2-channels/sorties/declins_purs_2026-10-16_SCLM_mCer3_1FRET/contributions_concentration.png
+Figure écrite : /Users/eliasouellet-oviedo/Documents/Stages/Stage2/Codes/Stage_summer-2024/Simulateurs/FLIM-FRET_2-channels/sorties/declins_purs_2026-10-16_SCLM_mCer3_1FRET/contributions_concentration_comptes.png
+Paramètres écrits : /Users/eliasouellet-oviedo/Documents/Stages/Stage2/Codes/Stage_summer-2024/Simulateurs/FLIM-FRET_2-channels/sorties/declins_purs_2026-10-16_SCLM_mCer3_1FRET/parametres_1FRET.json
+Figure écrite : /Users/eliasouellet-oviedo/Documents/Stages/Stage2/Codes/Stage_summer-2024/Simulateurs/FLIM-FRET_2-channels/sorties/declins_purs_2026-10-16_SCLM_mCer3_1FRET/decomposition_histogrammes.png  (déviance/ddl = 10.753)

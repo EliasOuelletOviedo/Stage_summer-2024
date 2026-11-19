@@ -8,3 +8,7 @@
 **/results/ratio_corrige_par_image.csv
 **/results/filtre_par_trame.csv
 **/mesures/*.pkl
+# Valeurs passe par passe du pipeline sclm_realtime (régénérables par ses étapes 1 et 3)
+**/results/series_passes.csv
+**/qc/commandes_creneaux.csv
+**/results/hybride.csv

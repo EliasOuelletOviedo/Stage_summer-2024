@@ -1,0 +1,4 @@
+Figure écrite : contributions_concentration_800nm.png
+Figure écrite : contributions_concentration_800nm_comptes.png
+Paramètres écrits : parametres_1FRET_800nm.json
+Figure écrite : decomposition_histogrammes_800nm.png  (déviance/ddl = 4.416)

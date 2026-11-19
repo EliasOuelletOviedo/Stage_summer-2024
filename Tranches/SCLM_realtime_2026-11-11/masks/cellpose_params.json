@@ -1,0 +1,15 @@
+{
+ "modele": "cpsam",
+ "diametre_px": 50.0,
+ "image": "racine des photons, blocs recal\u00e9s",
+ "lignes_ecartees": [
+  25,
+  22
+ ],
+ "n_rois": 12,
+ "flow_threshold": 0.4,
+ "cellprob_threshold": 0.0,
+ "min_size": 300,
+ "max_size_fraction": 0.25,
+ "normalize": true
+}

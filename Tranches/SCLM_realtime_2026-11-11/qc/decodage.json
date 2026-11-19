@@ -1,0 +1,37 @@
+{
+ "passes": 2416,
+ "validation_frames_csv": true,
+ "ecart_max_debut_s": 5.684341886080802e-14,
+ "tics_par_echantillon": 48824.5575,
+ "echantillon_us": 99.99908977703252,
+ "mode_roi_actif": false,
+ "rois_passes": {
+  "1": 2416
+ },
+ "part_photons_autre_code": 0.0,
+ "galvos_mV": [
+  -0.27096064770484374,
+  -0.2689684545639586
+ ],
+ "galvo_sd_max_mV": 0.4441536730155349,
+ "temps_moyen_ns": {
+  "yfp": 4.420694194184934,
+  "cfp": 3.8487798068164834
+ },
+ "yfp_photons": 209908851,
+ "yfp_gap": 0,
+ "yfp_m0": 2416,
+ "yfp_m3": 2416,
+ "cfp_photons": 34064934,
+ "cfp_gap": 0,
+ "cfp_m0": 2416,
+ "cfp_m3": 2416,
+ "yfp_code_hors_passe": 89070,
+ "yfp_avant_premiere": 47150,
+ "yfp_apres_derniere": 9914,
+ "yfp_code_inattendu": 0,
+ "cfp_code_hors_passe": 14466,
+ "cfp_avant_premiere": 7556,
+ "cfp_apres_derniere": 1594,
+ "cfp_code_inattendu": 0
+}
