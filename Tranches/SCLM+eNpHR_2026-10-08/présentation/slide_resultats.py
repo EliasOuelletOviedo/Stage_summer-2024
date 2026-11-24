@@ -68,16 +68,16 @@ from step7_retour import BORNES_TAU, MESURABLE_TAU  # noqa: E402
 TEXTES = {
     "FR": dict(
         title="SCLm + eNpHR en tranches organotypiques : résultats préliminaires",
-        A="Quatre stimulations, quatre réponses",
+        A="Quatre stimulations, ratio des intensités",
         A_sub="médiane ± écart interquartile, n = {n} cellules",
-        B="Temps de retour τ",
+        B="Temps de retour $t_r$",
         B_sub="un point par cellule\nbarre = médiane ± écart interquartile",
-        C="Quatre stimulations, durée de vie de la CFP",
+        C="Quatre stimulations, temps de vie du Cer",
         C_sub="médiane ± écart interquartile, n = {n} cellules",
-        D="Temps de retour τ, durée de vie de la CFP",
+        D="Temps de retour $t_r$, temps de vie du Cer",
         D_sub="un point par cellule\nbarre = médiane ± écart interquartile",
-        time="temps (s)", y_ratio="ΔR/R₀ YFP/CFP  (%)", y_tau="Δτ CFP  (ps)", stim="stim",
-        tau="τ  (s)", tick="stim {k}\nn = {n}"),
+        time="temps (s)", y_ratio="ΔR/R₀ 530/480  (%)", y_tau="Δτ 480  (ps)", stim="stim",
+        tau="$t_r$  (s)", tick="stim {k}\nn = {n}"),
     "EN": dict(
         title="SCLm + eNpHR in organotypic slices: preliminary results",
         A="Four stimulations, four responses",

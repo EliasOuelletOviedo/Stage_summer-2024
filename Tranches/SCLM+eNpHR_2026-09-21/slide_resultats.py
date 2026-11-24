@@ -90,27 +90,27 @@ def appliquer_theme(suffixe):
 TEXT = {
     "FR": dict(
         title="SCLm + eNpHR en tranches organotypiques : résultats préliminaires",
-        takeaway="L'activation d'eNpHR fait baisser le ratio YFP/CFP — une entrée de Cl⁻ — à chaque "
+        takeaway="L'activation d'eNpHR fait baisser le ratio 530/480 — une entrée de Cl⁻ — à chaque "
                  "stimulation, avec un retour vers la base en ~{tau:.0f} s",
         A="Expression des deux constructions", A_sub="même champ, canal YFP",
         A1="800 nm : SCLm", A2="950 nm : eNpHR",
         B="Une stimulation, puis le retour", B_sub="essai 2 : ligne de base, puis stimulation 2 — "
                                                   "médiane ± écart interquartile, n = {n} cellules",
-        C="Quatre stimulations, quatre réponses",
+        C="Quatre stimulations, ratio des intensités",
         C_sub="médiane ± écart interquartile, n = {n} cellules",
-        D="Temps de retour τ", D_sub="2 essais, un point par cellule et par essai\n"
+        D="Temps de retour $t_r$", D_sub="2 essais, un point par cellule et par essai\n"
                                     "barre = médiane ± écart interquartile",
         stim_k="stim {k}",
-        time="temps (s)", y="ΔR/R₀ YFP/CFP  (%)", stim="stim", tau="τ  (s)",
+        time="temps (s)", y="ΔR/R₀ 530/480  (%)", stim="stim", tau="$t_r$  (s)",
         trial="essai {i}", tick="stim {k}\n{d} s",
-        foot=("Ratio YFP/CFP (canaux C2/C3) ; ΔR/R₀ par rapport à la ligne de base avant la première "
+        foot=("Ratio 530/480 (canaux C2/C3) ; ΔR/R₀ par rapport à la ligne de base avant la première "
               "stimulation ; courbes lissées sur 5 images. Cellules retenues : au moins 10 % plus brillantes "
               "que le neuropile qui les entoure ({n}/{N}). Images acquises pendant la stimulation masquées "
               "(fuite de la lumière de stimulation dans le canal YFP).\n"
               "A : une image par longueur d'onde, contraste propre à chaque image. B–C : essai 1, quatre "
-              "stimulations de 8 à 10 s. D : essais 1 et 2 (essai 2 : 6, 10, 15 et 20 s) ; τ ajusté par "
-              "A·exp(−t/τ) + C sur le retour de chaque cellule jusqu'à la stimulation suivante, retenu si "
-              "la réponse (10 s après − 10 s avant) dépasse 3 fois le bruit de la cellule, R² ≥ 0,3 et τ "
+              "stimulations de 8 à 10 s. D : essais 1 et 2 (essai 2 : 6, 10, 15 et 20 s) ; $t_r$ ajusté par "
+              "A·exp(−t/$t_r$) + C sur le retour de chaque cellule jusqu'à la stimulation suivante, retenu si "
+              "la réponse (10 s après − 10 s avant) dépasse 3 fois le bruit de la cellule, R² ≥ 0,3 et $t_r$ "
               "plus court que la fenêtre d'observation (42 à 53 s)."),
         scale="50 µm"),
     "EN": dict(
