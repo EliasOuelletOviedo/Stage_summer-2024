@@ -33,6 +33,10 @@ julia --project=. -t 8 step14_banc.jl           # sommes des 10 acquisitions, st
 # titration à deux canaux du 2026-10-16 (8 concentrations × 3 λ) : document « modifications du code »
 julia --project=. -t 8 step15_analyse_deux_canaux.jl   # SCLM : règles de lecture et de longueur d'onde, blanchiment, carte, inconnu (15 min)
 julia --project=. -t 8 step15_analyse_deux_canaux.jl --donnees Data/2026-10-16/KIRIN charger global calibrer amincir blanchir agreger   # KIRIN (13 min)
+# validation du simulateur contre la titration en solution (voir la section de l'étape 19)
+julia --project=. step19_validation_simulateur.jl   # SCLM 850 nm : aller-retour sur α, réel contre simulé (2 min)
+julia --project=. step20_autofluorescence.jl        # SCLM 850 nm : biais sur [Cl⁻] sous autofluorescence NADH / FAD (5 min)
+julia --project=. step21_figures_simples.jl         # versions minimalistes des figures 19 et 20, avec légendes (30 s)
 ```
 
 L'étape 5 compte désormais aussi Φ_A effectif, τ_A ±20 %, le retard du jaune, le blanchiment et un
@@ -1278,6 +1282,140 @@ noms de sortie (SCLM : `…_SCLM`).
 - **La diffusion n'est pas constante** d'un échantillon à l'autre (écart-type relatif de 21 à 27 %,
   contre moins de 5 % pour SCLM). Elle reste exclue des populations, mais son niveau varie.
 
+## Étape 19 — validation du simulateur (`step19_validation_simulateur.jl`)
+
+La question qui précède toute discussion des simulations : **comment sait-on que le simulateur est
+juste ?** La figure `sorties/validation_simulateur_2026-10-16_SCLM_850nm/validation_simulateur.png`
+y répond en deux panneaux, sur le canal bleu de SCLM (Cerulean + Topaz) à 850 nm, avec l'IRF mesurée
+`IRF_850_16X.sdt`. Les paramètres viennent de l'ajustement global de l'étape 15 sur les 8
+concentrations (modèle libre) : τ₂ = 0,655 ns, τ₃ = 2,570 ns, t₀ bleu = +30,5 ps, χ²ᵣ global 4,34.
+
+**(a) Aller-retour sur α.** α est la fraction d'amplitude FRET du déclin bleu,
+d(t) = α·e^{−t/τ₂} + (1 − α)·e^{−t/τ₃}. On l'injecte de 0,05 à 0,95 avec le moteur du simulateur
+(`S.forward` : noyau périodisé, convolution par l'IRF, intégration par canal). La diffusion et le fond
+restent aux proportions mesurées. On tire 500 histogrammes de Poisson par point, puis on récupère α
+par maximum de vraisemblance, τ, t₀ et IRF connus.
+
+| N photons bleus | biais maximal de α | écart-type de α |
+| --- | --- | --- |
+| 10³ | 0,032 (à α = 0,05) | 0,011 à 0,105 |
+| 10⁴ | 0,002 | 0,004 à 0,040 |
+| 10⁵ | 0,0004 | 0,001 à 0,014 |
+
+- **La chaîne génération → estimation n'a pas de biais**, sauf à 10³ photons près de α = 0. Là, les
+  amplitudes bornées à zéro tronquent la distribution, ce qui pousse la moyenne vers le haut.
+- **La dispersion décroît en 1/√N**, comme le veut le bruit de Poisson.
+- **Ce panneau teste le code, pas la physique** : le même modèle génère et ajuste.
+
+**(b) Réel contre simulé.** La somme réelle à 20 mM (10 × 1 s, N = 1 387 370 photons bleus) est
+superposée à une décroissance simulée avec les mêmes τ, IRF, t₀, amplitudes et exactement le même N
+(tirage multinomial). Les deux sont comparées au même modèle par leurs résidus de Pearson.
+
+- **Le moteur du simulateur reproduit le modèle de l'ajustement à 1,7·10⁻¹⁶ près.** C'est un contrôle
+  de cohérence, pas une preuve indépendante : les deux passent par `Instrument.jl`.
+- **Le bruit du simulateur est juste** : χ²ᵣ simulé de 0,99 en moyenne sur 200 tirages (0,78 pour le
+  tirage montré ; l'écart-type d'un tirage vaut √(2/181) ≈ 0,11).
+- **La mesure a un défaut de forme que le simulateur n'a pas** : χ²ᵣ réel de 4,03 à 1,4·10⁶ photons.
+  Les résidus se concentrent sur le front montant et la fin de la fenêtre. C'est la signature de l'IRF
+  déjà trouvée à l'étape 15 (premier vecteur singulier des résidus).
+- **Aux N des simulations, réel et simulé sont indiscernables jusqu'à 10⁴ photons.** On amincit le
+  réel par tirage binomial et on le compare au simulé au même N (χ²ᵣ moyen de 200 tirages) :
+
+| N | réel aminci | simulé |
+| --- | --- | --- |
+| 10³ | 0,98 | 0,99 |
+| 10⁴ | 1,02 | 0,99 |
+| 10⁵ | 1,21 | 1,01 |
+
+  À 10⁵ photons, le défaut de forme devient visible : environ 2 écarts-types pour un seul déclin. Au-delà
+  de quelques 10⁴ photons par déclin, les conclusions du simulateur sont donc optimistes pour les lectures
+  qui dépendent de la forme.
+
+**Limites.** Le canal bleu seul ; une seule concentration en (b) ; une seule longueur d'onde. Le jaune
+(émission sensibilisée, excitation directe) n'est pas validé par cette figure.
+
+Sorties : `validation_simulateur.png` / `.pdf`, `aller_retour.csv` (biais et dispersion par N et α),
+`reel_simule.csv` (les deux décroissances, le modèle et les résidus), `khi2_selon_N.csv`.
+
+## Étape 20 — biais sous autofluorescence (`step20_autofluorescence.jl`)
+
+L'argument à démontrer : un ajustement à durées de vie caractérisées peut séparer l'autofluorescence
+du signal du capteur, alors qu'une mesure ratiométrique la confond avec lui. La figure
+`sorties/autofluorescence_2026-10-16_SCLM_850nm/autofluorescence.png` l'éprouve.
+
+**Le monde.** C'est celui de l'étape 19 : SCLM (Cerulean + Topaz) à 850 nm, ajustement global de
+l'étape 15 (τ_DA = 0,655, τ_D = 2,570, τ_J = 1,022, τ_A = 3,223 ns), diffusion, fond et IRF mesurés.
+Entre 0 et 131 mM, c'est un mélange statique des deux états mesurés, de fraction
+g(c) = c(131 + K)/(131(c + K)), avec K = 114 mM ajusté sur les 8 concentrations.
+
+**L'autofluorescence.** Valeurs typiques à deux photons :
+- NAD(P)H dans le bleu : libre 0,4 ns (75 % de l'amplitude), lié 2,0 ns. La littérature donne
+  0,3–0,4 ns libre et 1,9–5,7 ns lié.
+- Flavines (FAD) dans le jaune : liées et éteintes 0,3 ns (75 %), libres 2,6 ns. La littérature donne
+  2,3–2,9 ns libre.
+- Son intensité est indépendante du Cl⁻, exprimée en part des photons du canal à 20 mM. Le niveau de
+  référence est 5 %, soit 6 % des photons à ±0,25 ns du pic. La composante prompte mesurée dans les
+  tranches du 2026-11-09 en vaut 3 à 24 % : les niveaux réalistes vont donc de 5 à 20 %, et les biais
+  sont proportionnels au niveau.
+
+**Les lectures.** Chacune est calibrée sur le monde propre, puis appliquée au monde contaminé. IRF,
+t₀, diffusion et fond du détecteur sont connus pour toutes.
+
+| Lecture | Ce qu'elle ajuste |
+| --- | --- |
+| rapport J/B brut | — |
+| τ du donneur, mono-exponentielle | bleu seul ; τ, amplitude, fond uniforme |
+| 2 canaux, τ caractérisés (témoin) | le 5d de l'étape 15 : fraction et échelle commune, sans terme d'autofluorescence |
+| 2 canaux + τ_auto | le même, plus une amplitude NADH (bleu) et une amplitude FAD (jaune), de signe libre |
+
+**Biais à 5 % d'autofluorescence** ([Cl⁻] lue − vraie, mM, à 5 et 20 mM) :
+
+| Autofluorescence | rapport | τ donneur | 2 canaux | 2 canaux + τ_auto | idem, autofluorescence ≠ supposée |
+| --- | --- | --- | --- | --- | --- |
+| NADH (bleu) | +2,7 / +3,2 | −1,6 / −3,5 | +2,6 / +3,1 | 0 / 0 | +1,9 / +2,2 |
+| FAD (jaune) | −2,0 / −3,0 | 0 / 0 | −1,6 / −2,6 | 0 / 0 | −0,5 / −0,9 |
+| les deux | +0,6 / 0,0 | −1,6 / −3,5 | +0,8 / +0,3 | 0 / 0 | +1,3 / +1,2 |
+
+- **Avec des formes d'autofluorescence connues, le terme τ_auto annule le biais.** C'est vrai par
+  construction : le modèle est alors exact. Ce qui ne l'est pas, c'est le pointillé et le prix.
+- **Le gain vient du terme, pas des durées de vie en soi.** Les 2 canaux sans terme sont presque aussi
+  biaisés que le rapport (84 à 95 %), parce que l'échelle commune lit aussi l'intensité relative J/B.
+- **Formes mal caractérisées** (réelles : NADH 60 % à 0,5 + 40 % à 2,5 ns ; FAD 60 % à 0,4 + 40 % à 2,9 ns) :
+  - pour les flavines, l'ajustement garde 63 à 75 % de son avantage, et le biais tombe à 25–37 % de
+    celui du rapport ;
+  - pour le NADH, il en garde à peine 30 % : ses durées de vie (0,4 et 2,0 ns) recouvrent celles du
+    donneur (0,65 et 2,57 ns), et une erreur de forme passe dans la fraction FRET.
+  - L'argument tient donc pour les flavines, et pour le NADH seulement si sa forme est mesurée sur le
+    tissu lui-même.
+- **Le τ du donneur seul est insensible aux flavines** (elles n'émettent pas dans le bleu, ici), mais
+  le NADH le biaise fortement, et il est 5 à 10 fois plus bruité.
+- **Le rapport est biaisé dans les deux sens** : le NADH le fait lire trop haut, le FAD trop bas. À
+  niveaux égaux, les deux se compensent ; c'est une coïncidence, pas une robustesse.
+- **À 850 nm, le NADH est peu excité** (efficace à 710–780 nm ; 860 nm n'excite que les flavines). Le
+  cas réaliste est donc la ligne FAD.
+
+**Le prix : précision à 10⁴ photons bleus** (écart-type robuste de 600 tirages, de 0 à 80 mM) :
+- rapport : 0,5 à 1,5 mM ;
+- 2 canaux sans terme : 0,5 à 1,5 mM ;
+- 2 canaux + τ_auto : 1,3 à 4,0 mM ;
+- τ du donneur : 2,6 à 15 mM.
+
+Les deux termes d'autofluorescence coûtent un facteur 2 à 3 sur la précision. À 5 % d'autofluorescence,
+le biais du rapport (2 à 3 mM) vaut 3 à 6 fois son bruit à 10⁴ photons : c'est le biais qui domine.
+
+**Limites.**
+- **Isotherme :** à n = 1, avec K = 114 mM. Sous 10 mM, les points mesurés sont 2 à 3 fois moins
+  sensibles que l'isotherme : les mM y sont sous-estimés d'autant, pour toutes les lectures à la fois,
+  et leur classement n'en dépend pas.
+- **Diaphonie spectrale :** aucune (queue du NADH dans le jaune, du FAD dans le bleu).
+- **Composante prompte des tranches :** absente. Elle est ici connue, à travers la diffusion.
+- **Correction du rapport :** il pourrait être corrigé en retranchant un niveau d'autofluorescence
+  mesuré sur un tissu sans capteur. Mais seulement en moyenne : le niveau propre à chaque cellule, que
+  l'ajustement estime à chaque mesure, reste inconnu.
+
+Sorties : `autofluorescence.png` / `.pdf`, `biais_selon_cl.csv`, `biais_selon_niveau.csv` (1 à 20 %),
+`precision.csv`, `monde.toml`.
+
 ## 1. Ta titration et le test de M2 lent (`step1_titration.jl`)
 
 Ajustement global du canal bleu, sur les canaux 14–242 (ton gating ; les canaux 1–13 et 245–256 de tes .sdt
@@ -1735,5 +1873,8 @@ Il est mesuré par rapport au monde nominal tiré avec les mêmes germes. En mM,
 | `sorties/resultats/fusion_*.csv` | fusion ratio + forme : résumé, trajectoire, réponse à un saut de gain |
 | `sorties/banc_2026-10-16/` | banc du 2026-10-16 (étape 14) : acquisitions, IRF, sommes, références, stabilité des techniques (détail dans la section du banc) |
 | `sorties/deux_canaux_2026-10-16_SCLM/`, `…_KIRIN/` | titrations à deux canaux SCLM et KIRIN (étape 15) : le fichier plat `resultats_deux_canaux.csv`, les règles, la carte finale (détail dans la section de l'étape 15) |
+| `sorties/validation_simulateur_2026-10-16_SCLM_850nm/` | validation du simulateur (étape 19) : aller-retour sur α, réel contre simulé, χ²ᵣ selon N |
+| `sorties/autofluorescence_2026-10-16_SCLM_850nm/` | biais sous autofluorescence (étape 20) : biais selon [Cl⁻] et selon le niveau, précision, monde utilisé |
+| `…/validation_simulateur_simple.png`, `…/autofluorescence_simple.png`, `legende_simple.md` | versions minimalistes des figures des étapes 19 et 20 (étape 21, relues dans leurs CSV), avec leur légende d'article |
 | `parametres_deux_canaux.toml` | budget visé, tirages du blanchiment, puissance laser par longueur d'onde (à mesurer) |
 | `src/` | le simulateur : `Types`, `Photophysics`, `Instrument`, `Spectra`, `Generate`, `Fisher`, `Ajustement`, `Utilisateur`, `Ingest`, `Parametres`, `Estimators`, `Calibrate`, `Experiments`, pour la révision `Batterie`, `Reel`, `Incertitude`, `Jaune`, `Fusion`, pour le banc `Banc`, et pour l'étape 15 les sept modules de `deux_canaux/` (`Charger`, `Global`, `Lectures`, `Calibrer`, `Amincir`, `Blanchir`, `Agreger`, plus `Dessins`) ; `Figures`, `Resume` |

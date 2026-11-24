@@ -48,6 +48,8 @@ python3 step11_fond.py ../<jeu>                           # quelques s : le fond
 python3 step12_banc_essai.py ../<jeu>                     # ~15 min : banc d'essai de 39 lectures (--sans-calcul : notes et figures)
 python3 step13_additif.py ../<jeu>                        # ~10 s : ce que le tissu ajoute dans chaque pixel (après l'étape 12)
 python3 step14_ancrage.py ../<jeu>                        # ~5 s : rapport seul contre rapport ancré par la forme (après l'étape 13)
+python3 step15_fraction_fret.py ../<jeu>                  # ~1 min : calibration avec la fraction FRET x du déclin CFP (diffusion exclue)
+python3 step16_autofluorescence.py ../<jeu>               # ~3 min : biais de chaque lecture dû au signal du tissu (après l'étape 13)
 ```
 
 Seule l'étape 2 a besoin de Cellpose. Après un tri manuel (étape 3), relancer les étapes 5
@@ -169,4 +171,4 @@ chaque nouveau jeu (`config.ENTREE`).
 | `deux_canaux.py` | modèle FLIM à deux canaux de bayesian_filter : IRF paramétrique, calibration conjointe, lecture d'un soma |
 | `banc.py` | les lectures candidates du banc d'essai (rapports, formes, gabarits, apprentissage, modèle) |
 | `figures.py` | style commun des figures |
-| `step1` … `step14` | les étapes |
+| `step1` … `step16` | les étapes |

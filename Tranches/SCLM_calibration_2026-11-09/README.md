@@ -450,6 +450,52 @@ est changé par amincissement binomial d'un canal (`results/ancrage_resume.csv`,
   5 champs, ±4 % avec 10), seulement quand η peut avoir changé (autre tranche, autre réglage optique, eNpHR-YFP), et
   calibrer l'ancrage dans l'état physiologique des mesures — sans ionophores, l'écart de 15 % du basal le montre.
 
+### Biais de chaque lecture dû au signal du tissu (étape 16)
+
+La figure A.2 du simulateur (`Simulateurs/FLIM-FRET_2-channels`, étape 20) supposait une autofluorescence
+de la littérature : NADH dans le bleu, flavines dans le jaune, 5 % des photons. `results/autofluorescence_tranches.png`
+la refait avec ce que les tranches mesurent :
+- **le capteur :** motifs du capteur seul de l'étape 13, à 0 et 131 mM, mélangés selon h(c) ; K = 43 mM, tiré du
+  motif à 20 mM. La forme seule relit le basal à 4,1 mM.
+- **le tissu :** partie prompte de ce qui s'ajoute par pixel (−0,3 à +0,6 ns autour du pic), au niveau d'un soma
+  médian. Elle vaut 0,36 % des photons du soma en CFP (1,4 % du CFP) et 0,74 % en YFP (1,0 % du YFP). Selon le
+  champ : 0,14–1,24 % et 0,19–2,80 %.
+
+**Le signal du tissu ne ressemble pas à l'autofluorescence de la littérature.** Il est prompt (< 0,5 ns), sans
+la queue de 2 ns du NADH ou des flavines, et quatre fois plus faible en photons que les 5 % supposés. Mais il
+est concentré au pic, où il fait 7,6 % des photons.
+
+Biais à 20 mM (mM ; tissu du CFP / du YFP, soma médian) :
+
+| Lecture | biais | bruit à 10⁴ photons CFP |
+| --- | --- | --- |
+| rapport YFP/CFP | +0,8 / −0,5 | 0,6 |
+| τ du donneur, mono-exponentielle | **−10,7** / 0 | 4,5 |
+| 2 canaux, motifs du capteur, sans terme | +0,6 / 0,0 | 0,6 |
+| 2 canaux + terme pour le tissu, forme mesurée | 0 / 0 | 0,6 |
+| 2 canaux + terme de forme NADH / flavines | −2,5 / +2,2 | — |
+
+- **Le τ du donneur est la lecture la plus biaisée.** Un pic au temps 0, même petit, raccourcit fortement une
+  mono-exponentielle : −5 mM à 5 mM.
+- **Le rapport l'est peu,** parce que le tissu apporte peu de photons au total. Les deux canaux se compensent
+  en partie : +0,25 mM pour les deux ensemble, au basal.
+- **Le terme de forme mesurée retire le biais sans coût en bruit :** la forme prompte ne ressemble pas aux
+  déclins du capteur. Dans la figure A.2, le terme NADH/flavines coûtait un facteur 2,7.
+- **Un terme de forme NADH/flavines aggrave le biais** au lieu de le corriger (jusqu'à +13 mM à 80 mM dans le
+  jaune). La correction doit prendre la forme mesurée dans le tissu.
+- **Contrôle sur les somas réels (basal) :** biais prédit du rapport +0,3 mM au niveau médian, +0,7 mM au
+  niveau des champs basaux. À l'étape 13, retirer le signal du tissu déplace le rapport de −0,9 mM (4,4 → 3,5) :
+  même sens, même ordre de grandeur. Pour le τ du donneur, la prédiction est −4,7 et −7,4 mM ; les autres
+  lectures de forme bougent de +3,5 à +3,7 mM une fois le tissu retiré, dans le même sens.
+
+**Réserves.**
+- Le tissu mêle diffusion et autofluorescence brève, sans pouvoir les séparer.
+- Seule sa partie prompte est retenue : le reste dépend de la convention Σι ≈ 0, et un signal qui ressemble au
+  capteur ne biaise aucune lecture.
+- K repose sur le seul motif à 20 mM.
+
+Sorties : `autofluorescence_tranches.png`, `_biais.csv`, `_precision.csv`, `_monde.json`.
+
 ### Quelle lecture retenir
 
 - **Pour suivre une cellule ou comparer des cellules : le rapport YFP/CFP**, en photons bruts, converti par

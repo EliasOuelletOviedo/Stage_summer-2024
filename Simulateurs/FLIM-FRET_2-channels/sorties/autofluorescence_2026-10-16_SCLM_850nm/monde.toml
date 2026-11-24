@@ -1,0 +1,12 @@
+# Monde de l'étape 20 (SCLM, 850 nm, titration du 2026-10-16)
+tau_DA = 0.6547
+tau_D = 2.5702
+tau_J = 1.0217
+tau_A = 3.2233
+K_melange_mM = 114.46
+NADH = { alpha = [0.75, 0.25], tau = [0.4, 2.0] }
+FAD = { alpha = [0.75, 0.25], tau = [0.3, 2.6] }
+NADH_autre = { alpha = [0.6, 0.4], tau = [0.5, 2.5] }
+FAD_autre = { alpha = [0.6, 0.4], tau = [0.4, 2.9] }
+niveau_reference = 0.050
+N_bleu_precision = 10000
